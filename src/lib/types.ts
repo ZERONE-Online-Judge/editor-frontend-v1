@@ -31,7 +31,7 @@ export type Statement = {
   show_in_review: boolean;
 };
 export type Language =
-  'cpp17' | 'cpp20' | 'c17' | 'python3' | 'java17' | 'text';
+  'cpp17' | 'cpp20' | 'c17' | 'c99' | 'python3' | 'java17' | 'java8' | 'text';
 export type SourceFile = {
   name: string;
   kind: 'source' | 'resource' | 'aux' | 'statement';
@@ -150,7 +150,7 @@ export type CaseResult = {
   comment: string;
   input_sha: string;
   answer_sha: string;
-  actual_sha: string;
+  actual_sha: string | null;
 };
 export type PreparedTest = Test & {
   validator: string;
@@ -171,6 +171,7 @@ export type Job = {
   started_at: number | null;
   finished_at: number | null;
   result: {
+    runtime?: { backend?: 'editor' | 'zoj'; runtime_revision?: string };
     summary?: string;
     progress?: number;
     error?: string;
@@ -192,6 +193,20 @@ export type Job = {
         blocked: boolean;
         complete: boolean;
         policy: string;
+      }[];
+      complete?: boolean;
+      judge_runs?: {
+        id: string;
+        testset: string;
+        status: string;
+        node_name: string | null;
+        agent_version: string | null;
+        testcase_count: number;
+        runtime_ms: number | null;
+        memory_kb: number | null;
+        failed_testcase_order: number | null;
+        compile_message: string | null;
+        judge_message: string | null;
       }[];
     }[];
     testsets?: Record<string, PreparedTest[]>;

@@ -66,8 +66,10 @@ export const languages = {
   cpp17: 'C++17',
   cpp20: 'C++20',
   c17: 'C17',
+  c99: 'C99 · ZOJ 채점기',
   python3: 'Python 3',
   java17: 'Java 17',
+  java8: 'Java 8 · ZOJ 채점기',
   text: '텍스트',
 };
 export const tags = {

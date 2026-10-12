@@ -21,6 +21,17 @@ import {
   Notice,
   SectionHeading,
 } from '../../components/ui';
+const judgeLabels: Record<string, string> = {
+  accepted: '정답',
+  wrong_answer: '오답',
+  compile_error: '컴파일 오류',
+  runtime_error: '실행 오류',
+  time_limit_exceeded: '시간 초과',
+  memory_limit_exceeded: '메모리 초과',
+  output_limit_exceeded: '출력 초과',
+  system_error: '시스템 오류',
+  cancelled: '취소',
+};
 export default function Executions({
   stress = false,
   packages = false,
@@ -61,6 +72,28 @@ export default function Executions({
       : Object.keys(doc.statements)[0] || 'korean',
   );
   const [caseResult, setCaseResult] = useState<CaseResult | null>(null);
+  const [executionBackend, setExecutionBackend] = useState<
+    'editor' | 'zoj' | null
+  >(null);
+  const [zojConfigured, setZojConfigured] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void api<{ default_backend: 'editor' | 'zoj'; zoj_configured: boolean }>(
+      '/execution-environment',
+    )
+      .then((value) => {
+        if (active) {
+          setExecutionBackend(value.default_backend);
+          setZojConfigured(value.zoj_configured);
+        }
+      })
+      .catch((e) => {
+        if (active) notify((e as Error).message, true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [notify]);
   const fetchRows = useCallback(async () => {
     const values = await api<Job[]>(`/problems/${data.problem.id}/jobs`);
     setRows(values);
@@ -134,7 +167,10 @@ export default function Executions({
   ) {
     setBusy(true);
     try {
-      const result = await run(kind, options);
+      const result = await run(kind, {
+        ...options,
+        ...(executionBackend ? { execution_backend: executionBackend } : {}),
+      });
       setSelected(result.id);
       setJob(result);
       await fetchRows();
@@ -196,6 +232,36 @@ export default function Executions({
           )
         }
       />
+      {!stress && (
+        <section className="card">
+          <label>
+            풀이 검증 환경
+            <select
+              value={executionBackend ?? ''}
+              onChange={(e) =>
+                setExecutionBackend(e.target.value as 'editor' | 'zoj')
+              }
+            >
+              <option value="" disabled>
+                검증 환경 확인 중…
+              </option>
+              <option value="zoj" disabled={!zojConfigured}>
+                ZOJ 실제 채점기 · 대회와 같은 환경
+              </option>
+              <option value="editor">
+                Editor 격리 실행 · 제작 기능 전체 지원
+              </option>
+            </select>
+          </label>
+          <p className="muted">
+            {executionBackend === null
+              ? '서버에서 기본 검증 환경을 확인하고 있습니다.'
+              : executionBackend === 'zoj'
+                ? '풀이를 기존 ZOJ 채점 큐에 보내 판정과 시간·메모리를 기록합니다. C++17·C99·Python 3.13·Java 8을 지원하고, 대회와 같은 언어별 보정을 적용합니다. 테스트 준비·생성기·PDF 작업은 Editor에서 처리합니다.'
+                : 'Editor 서버의 별도 격리 컨테이너에서 실행합니다. 대화형·그룹 점수 등 제작 기능을 검증할 수 있으며, 시간·메모리는 ZOJ 대회 채점 환경의 측정값과 다를 수 있습니다.'}
+          </p>
+        </section>
+      )}
       {stress ? (
         <section className="card">
           <fieldset disabled={!editable || busy} className="form-grid">
@@ -513,6 +579,62 @@ export default function Executions({
                   {solution.total_score != null && (
                     <p>점수 {solution.total_score.toLocaleString()}</p>
                   )}
+                  {solution.judge_runs?.length ? (
+                    <div className="section-stack">
+                      <p className="muted">
+                        실제 ZOJ 채점 기록입니다. 아래 시간·메모리는 각 요청에서
+                        채점기가 반환한 최댓값이며, 개별 테스트의 값으로 대신
+                        표시하지 않습니다.
+                      </p>
+                      {solution.judge_runs.map((record) => (
+                        <details className="card" key={record.id}>
+                          <summary>
+                            {record.testset} · {record.testcase_count}개 테스트
+                            · {record.node_name ?? '채점기 정보 없음'} ·{' '}
+                            {record.agent_version ?? '버전 정보 없음'}
+                          </summary>
+                          <div className="inline-tags">
+                            <Badge>
+                              {judgeLabels[record.status] ?? record.status}
+                            </Badge>
+                            <span>
+                              최대 실행 시간{' '}
+                              {record.runtime_ms == null
+                                ? '전달되지 않음'
+                                : `${record.runtime_ms}ms`}
+                            </span>
+                            <span>
+                              최대 메모리{' '}
+                              {record.memory_kb == null
+                                ? '전달되지 않음'
+                                : bytes(record.memory_kb * 1024)}
+                            </span>
+                            {record.failed_testcase_order != null && (
+                              <span>실패 #{record.failed_testcase_order}</span>
+                            )}
+                          </div>
+                          {(record.compile_message || record.judge_message) && (
+                            <CodeEditor
+                              value={
+                                record.compile_message ||
+                                record.judge_message ||
+                                ''
+                              }
+                              readOnly
+                              label="채점기 원본 기록"
+                              rows={5}
+                            />
+                          )}
+                        </details>
+                      ))}
+                      {solution.complete === false && (
+                        <Notice tone="info">
+                          첫 실패로 채점이 종료되어 나머지 테스트의 판정은
+                          확인하지 않았습니다.
+                        </Notice>
+                      )}
+                    </div>
+                  ) : null}
                   {solution.groups?.length ? (
                     <div className="inline-tags">
                       {solution.groups.map((g) => (
@@ -535,14 +657,18 @@ export default function Executions({
                       <button
                         key={`${result.testset}-${result.index}`}
                         className={`case-chip ${result.verdict === 'AC' ? 'accepted' : result.verdict === 'JUDGE_ERROR' ? 'error' : 'rejected'}`}
-                        title={`${result.testset} #${result.index} · ${result.cpu_ms ?? '계측 불가'}ms CPU · ${result.memory_kb ?? '계측 불가'}KiB`}
+                        title={`${result.testset} · ${result.index ? `#${result.index}` : '컴파일·실행 환경'} · CPU ${result.cpu_ms == null ? '개별 값 미제공' : `${result.cpu_ms}ms`} · 메모리 ${result.memory_kb == null ? '개별 값 미제공' : `${result.memory_kb}KiB`}`}
                         onClick={() => setCaseResult(result)}
                       >
-                        <span>#{result.index}</span>
+                        <span>
+                          {result.index ? `#${result.index}` : '환경'}
+                        </span>
                         <strong>{result.verdict}</strong>
                         <small>
                           {result.cpu_ms === null
-                            ? '계측 불가'
+                            ? solution.judge_runs?.length
+                              ? '개별 시간 미제공'
+                              : '계측 불가'
                             : `${result.cpu_ms}ms`}
                         </small>
                       </button>
@@ -716,7 +842,7 @@ export default function Executions({
       {caseResult && (
         <Modal
           wide
-          title={`${caseResult.testset} · 테스트 #${caseResult.index}`}
+          title={`${caseResult.testset} · ${caseResult.index ? `테스트 #${caseResult.index}` : '컴파일·실행 환경'}`}
           onClose={() => setCaseResult(null)}
           footer={
             <button className="button" onClick={() => setCaseResult(null)}>
@@ -731,19 +857,19 @@ export default function Executions({
             <span>
               CPU{' '}
               {caseResult.cpu_ms === null
-                ? '계측 불가'
+                ? '개별 값 미제공'
                 : `${caseResult.cpu_ms}ms`}
             </span>
             <span>
               경과 시간{' '}
               {caseResult.wall_ms === null
-                ? '계측 불가'
+                ? '개별 값 미제공'
                 : `${caseResult.wall_ms}ms`}
             </span>
             <span>
               메모리{' '}
               {caseResult.memory_kb === null
-                ? '계측 불가'
+                ? '개별 값 미제공'
                 : bytes(caseResult.memory_kb * 1024)}
             </span>
           </div>
@@ -775,13 +901,23 @@ export function CodeEvidence({
   problemId: string;
   input: string;
   answer: string;
-  actual: string;
+  actual: string | null;
 }) {
   const [values, setValues] = useState<string[]>([]);
   const [error, setError] = useState('');
   useEffect(() => {
     let active = true;
-    Promise.all([input, answer, actual].map((sha) => blobText(problemId, sha)))
+    Promise.all(
+      [input, answer, actual].map((sha, index) =>
+        sha
+          ? blobText(problemId, sha)
+          : Promise.resolve(
+              index === 2
+                ? '채점기가 개별 출력 전문을 제공하지 않습니다. 채점기 원본 기록을 확인하세요.'
+                : '개별 테스트가 지정되지 않은 판정입니다.',
+            ),
+      ),
+    )
       .then((value) => {
         if (active) setValues(value);
       })

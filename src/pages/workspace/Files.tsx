@@ -472,7 +472,9 @@ function FileEditor({
           </label>
         )}
         {!solutions &&
-          ['cpp17', 'cpp20', 'c17', 'java17'].includes(language) && (
+          ['cpp17', 'cpp20', 'c17', 'c99', 'java17', 'java8'].includes(
+            language,
+          ) && (
             <label className="checkbox">
               <input
                 type="checkbox"
@@ -482,7 +484,7 @@ function FileEditor({
               풀이와 함께 컴파일 (grader)
             </label>
           )}
-        {language === 'java17' && (
+        {(language === 'java17' || language === 'java8') && (
           <label>
             Java 진입 클래스
             <input
@@ -490,6 +492,11 @@ function FileEditor({
               onChange={(e) => setEntryClass(e.target.value)}
               placeholder="자동 감지 · 필요하면 package.Main"
             />
+            {language === 'java8' && (
+              <small>
+                ZOJ 채점기에서는 package 없이 public class Main을 사용합니다.
+              </small>
+            )}
           </label>
         )}
       </fieldset>
