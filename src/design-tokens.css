@@ -1,0 +1,42 @@
+/* Shared by public pages, participant workspaces, management and dialogs.
+   Use a soft outer card, white inner surfaces, and an accent border for selection.
+   Semantic result colors and dark presentation/hero artwork remain independent. */
+:root {
+  --zoj-surface: #f7f8fd;
+  --zoj-surface-raised: #ffffff;
+  --zoj-surface-hover: #eef2ff;
+  --zoj-border: #e0e5f3;
+  --zoj-border-selected: #a5b4fc;
+  --zoj-accent: #4f46e5;
+  --zoj-accent-hover: #4338ca;
+  --zoj-ink: #0f172a;
+  --zoj-muted: #5b6b82;
+  --zoj-focus: #818cf8;
+  --zoj-radius-card: 1rem;
+  --zoj-radius-inset: 0.75rem;
+  --zoj-radius-control: 0.625rem;
+  --zoj-card-padding: clamp(1rem, 2vw, 1.5rem);
+  --zoj-card-title: 1rem;
+  --zoj-card-copy: 0.875rem;
+  --zoj-card-hint: 0.75rem;
+  --zoj-card-shadow: 0 1px 3px #312e810a;
+}
+
+@layer components {
+  .zoj-card {
+    min-width: 0;
+    border: 1px solid var(--zoj-border);
+    border-radius: var(--zoj-radius-card);
+    background: var(--zoj-surface);
+    padding: var(--zoj-card-padding);
+    color: var(--zoj-ink);
+  }
+
+  .zoj-inset {
+    min-width: 0;
+    border: 1px solid var(--zoj-border);
+    border-radius: var(--zoj-radius-inset);
+    background: var(--zoj-surface-raised);
+    padding: 1rem;
+  }
+}
