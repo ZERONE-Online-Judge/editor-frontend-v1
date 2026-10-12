@@ -383,7 +383,7 @@ export default function Problems() {
                             />
                           </td>
                         )}
-                        <td>
+                        <td className="problem-name-cell">
                           {p.deleted ? (
                             <strong className="problem-title">{p.name}</strong>
                           ) : (
@@ -439,7 +439,7 @@ export default function Problems() {
                           )}
                         </td>
                         <td className="subtext">{time(p.updated_at)}</td>
-                        <td>
+                        <td className="problem-name-cell">
                           {p.deleted ? (
                             <button
                               className="button small"

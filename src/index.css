@@ -677,9 +677,24 @@ svg {
 .problem-title:hover {
   color: var(--zoj-accent);
 }
-.problems-table td:first-child {
-  min-width: 280px;
-  width: 38%;
+.problems-table {
+  min-width: 710px;
+}
+.problems-table td {
+  white-space: nowrap;
+  padding: 18px 12px;
+}
+.problems-table th {
+  padding: 13px 12px;
+}
+.problems-table td.check-cell {
+  min-width: 32px;
+  width: 32px;
+}
+.problems-table .problem-name-cell {
+  min-width: 190px;
+  width: 32%;
+  white-space: normal;
 }
 .revision-cell {
   display: flex;
