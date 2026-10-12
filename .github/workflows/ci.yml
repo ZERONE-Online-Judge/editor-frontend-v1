@@ -15,6 +15,25 @@ jobs:
       - run: npm test
       - run: npm run lint
       - run: npm run build
+      - name: Verify logo serving from a private checkout
+        run: |
+          chmod 600 public/zoj-logo.png
+          docker build -t zoj-editor-frontend:ci .
+          trap 'docker rm -f editor-assets-ci >/dev/null 2>&1 || true' EXIT
+          docker run -d --name editor-assets-ci --network none \
+            --add-host api:127.0.0.1 \
+            -e EDITOR_INGRESS_CIDR=127.0.0.1/32 \
+            -e NGINX_ENVSUBST_FILTER=EDITOR_ zoj-editor-frontend:ci
+          for attempt in $(seq 1 15); do
+            if docker exec editor-assets-ci wget -qO- \
+              'http://127.0.0.1/zoj-logo.png?v=2' > /tmp/editor-served-logo.png; then
+              cmp public/zoj-logo.png /tmp/editor-served-logo.png
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'Nginx could not serve the actual logo from a private checkout.' >&2
+          exit 1
   deploy:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

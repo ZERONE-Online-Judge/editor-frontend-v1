@@ -49,7 +49,7 @@ function Layout() {
     <div className="editor-app">
       <header className="app-header">
         <Link className="brand" to="/problems">
-          <img src="/zoj-logo.png" alt="" />
+          <img src="/zoj-logo.png?v=2" alt="" width="32" height="32" />
           <strong>
             ZOJ <span>Editor</span>
           </strong>
