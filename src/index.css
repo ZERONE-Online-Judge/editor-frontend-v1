@@ -2640,3 +2640,61 @@ svg {
     flex-wrap: wrap;
   }
 }
+
+.login-methods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 24px 0 16px;
+}
+.login-methods [aria-selected='true'] {
+  border-color: var(--zoj-accent);
+  background: var(--zoj-surface-hover);
+  color: var(--zoj-accent);
+}
+.password-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+.password-settings {
+  margin-top: 20px;
+  border-top: 1px solid var(--zoj-border);
+  padding-top: 16px;
+}
+.password-settings summary {
+  cursor: pointer;
+  font-weight: 650;
+  color: var(--zoj-accent);
+}
+
+.login-selected-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 20px 0;
+  padding: 14px 16px;
+  border-radius: var(--zoj-radius-inset);
+  background: var(--zoj-surface);
+  font-size: 13px;
+}
+.login-selected-account span { overflow-wrap: anywhere; }
+.account-security-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--zoj-border);
+  border-radius: var(--zoj-radius-inset);
+  background: var(--zoj-surface);
+  text-align: left;
+}
+.account-security-card:hover { border-color: var(--zoj-border-selected); background: var(--zoj-surface-hover); }
+.account-security-icon { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 12px; background: var(--zoj-surface-hover); color: var(--zoj-accent); }
+.account-security-card strong { display: block; }
+.account-security-card small { display: block; margin-top: 5px; font-weight: 400; color: var(--zoj-muted); }
+.account-security-card > svg { margin-left: auto; flex: none; color: var(--zoj-accent); }
+.editor-modal.password-modal { width: 720px; }

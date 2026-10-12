@@ -1,5 +1,6 @@
 export type User = {
   id: string;
+  account_id?: string | null;
   email: string;
   handle: string;
   display_name: string;

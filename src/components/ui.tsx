@@ -160,12 +160,14 @@ export function Modal({
   onClose,
   footer,
   wide = false,
+  className = '',
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
   wide?: boolean;
+  className?: string;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -187,7 +189,7 @@ export function Modal({
   return (
     <dialog
       ref={dialogRef}
-      className={`editor-modal ${wide ? 'wide' : ''}`}
+      className={`editor-modal ${wide ? 'wide' : ''} ${className}`}
       aria-labelledby={titleId}
       onCancel={(e) => {
         e.preventDefault();

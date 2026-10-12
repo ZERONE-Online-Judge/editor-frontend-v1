@@ -21,14 +21,18 @@ import {
   SectionHeading,
 } from './components/ui';
 import Login from './pages/Login';
+import PasswordForm from './components/PasswordForm';
 import Problems from './pages/Problems';
 const ProblemWorkspace = lazy(() => import('./pages/Workspace'));
 function Layout() {
   const { user, setUser } = useAuth();
   const [profile, setProfile] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordBusy, setPasswordBusy] = useState(false);
   const [name, setName] = useState(user?.display_name || '');
   const [handle, setHandle] = useState(user?.handle || '');
   const [error, setError] = useState('');
+  const navigate = useNavigate();
   async function saveProfile() {
     try {
       const result = await patch<User>('/auth/profile', {
@@ -92,9 +96,38 @@ function Layout() {
           <Icon name="arrow" size={12} />
         </a>
       </footer>
+      {passwordOpen && (
+        <Modal
+          title="비밀번호 등록 · 변경"
+          className="password-modal"
+          onClose={() => {
+            if (!passwordBusy) setPasswordOpen(false);
+          }}
+          footer={
+            <button
+              className="button"
+              disabled={passwordBusy}
+              onClick={() => setPasswordOpen(false)}
+            >
+              닫기
+            </button>
+          }
+        >
+          <PasswordForm
+            mode="set"
+            email={user?.email || ''}
+            onBusyChange={setPasswordBusy}
+            onDone={() => {
+              setPasswordOpen(false);
+              setUser(null);
+              navigate('/login?password=changed');
+            }}
+          />
+        </Modal>
+      )}
       {profile && (
         <Modal
-          title="내 프로필"
+          title="내 정보 · 설정"
           onClose={() => setProfile(false)}
           footer={
             <>
@@ -127,6 +160,33 @@ function Layout() {
             <input value={user?.email || ''} disabled />
           </label>
           {error && <Notice tone="error">{error}</Notice>}
+          <button
+            className="account-security-card"
+            type="button"
+            onClick={() => {
+              setProfile(false);
+              setPasswordOpen(true);
+            }}
+          >
+            <span className="account-security-icon" aria-hidden="true">
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <rect x="5" y="10" width="14" height="11" rx="3" />
+                <path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" />
+              </svg>
+            </span>
+            <span>
+              <strong>비밀번호 관리</strong>
+              <small>ZOJ·Editor 공통 비밀번호 등록 및 변경</small>
+            </span>
+            <Icon name="arrow" />
+          </button>
         </Modal>
       )}
     </div>

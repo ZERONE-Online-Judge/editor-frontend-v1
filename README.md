@@ -16,12 +16,12 @@ http://127.0.0.1:5190 에서 열립니다. `/api` 요청은 `VITE_API_PROXY` 또
 기본 http://127.0.0.1:8011 로 프록시합니다. ZOJ 전송은 Editor 서버를 통해
 권한을 확인하므로 브라우저에 연동 키나 ZOJ 로그인 토큰을 넣지 않습니다.
 백엔드의 `deploy/dev.sh`로 API·워커·프런트엔드를 함께 실행할 수 있습니다.
-이메일 OTP 계정은 기존 ZOJ와 별도이며 로컬 개발 인증번호는 백엔드의
+ZOJ와 이메일·비밀번호·로그인 세션을 공유합니다. 독립 개발 모드의 인증번호는 백엔드의
 `data/preview/development-mail`에 저장됩니다.
 
 ## 화면
 
-- 로그인 폼 중심의 독립 이메일 인증·재발송·FAQ
+- 로그인 폼 중심의 공통 이메일 인증·비밀번호·찾기·재발송·FAQ
 - 내 문제/공유 문제 목록, 개인 폴더·하위 폴더·일괄 이동·끌어 놓기
 - ZIP 가져오기, 새 문제, 휴지통 복원
 - 문제 작업 공간: 지문, 파일, checker, validator, interactor, 테스트, 풀이
@@ -72,3 +72,5 @@ Polygon 공개 명세의 대응 범위와 차이는 백엔드의
 - `feature/project-folders`: 개인 폴더·하위 폴더·선택 이동 UI
 - `feature/zoj-publishing`: ZOJ 패키지·대회 등록·전송 기록 UI
 - `feature/self-hosted-deployment`: 전용 서버 러너·검증 후 자동 배포
+
+- `feature/shared-login`: ZOJ 공통 로그인과 내 정보 비밀번호 설정

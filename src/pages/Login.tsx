@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Navigate } from 'react-router-dom';
-import { post } from '../lib/api';
+import { Navigate, useSearchParams } from 'react-router-dom';
+import { post, ApiError } from '../lib/api';
 import { useAuth } from '../lib/authContext';
 import type { User } from '../lib/types';
-import { Icon, Notice } from '../components/ui';
+import { Icon, Notice, Modal } from '../components/ui';
+import PasswordLogin from '../components/PasswordLogin';
 export default function Login() {
+  const [params] = useSearchParams();
   const { user, loading, setUser } = useAuth();
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -13,6 +15,8 @@ export default function Login() {
   const [error, setError] = useState('');
   const [sentAt, setSentAt] = useState(0);
   const [clock, setClock] = useState(() => Date.now());
+  const [method, setMethod] = useState<'email' | 'otp' | 'password'>('email');
+  const [conflict, setConflict] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 1000);
@@ -25,11 +29,28 @@ export default function Login() {
   if (user) return <Navigate to="/problems" replace />;
   const cooldown = Math.max(0, 30 - Math.floor((clock - sentAt) / 1000));
   const expiry = Math.max(0, 300 - Math.floor((clock - sentAt) / 1000));
+  async function next() {
+    setBusy(true);
+    setError('');
+    try {
+      const options = await post<{ password_available: boolean }>(
+        '/auth/login-options',
+        { email },
+      );
+      if (options.password_available) setMethod('password');
+      else await request();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function request() {
     setBusy(true);
     setError('');
     try {
       await post('/auth/code', { email });
+      setMethod('otp');
       setStep(true);
       setSentAt(Date.now());
       setClock(Date.now());
@@ -40,13 +61,24 @@ export default function Login() {
       setBusy(false);
     }
   }
-  async function verify() {
+  async function verify(forceNewSession = false) {
     setBusy(true);
     setError('');
     try {
-      const profile = await post<User>('/auth/verify', { email, code });
+      const profile = await post<User>('/auth/verify', {
+        email,
+        code,
+        force_new_session: forceNewSession,
+      });
+      setConflict(false);
       setUser(profile);
     } catch (e) {
+      if (
+        e instanceof ApiError &&
+        e.code === 'session_conflict' &&
+        !forceNewSession
+      )
+        setConflict(true);
       setError((e as Error).message);
     } finally {
       setBusy(false);
@@ -54,6 +86,45 @@ export default function Login() {
   }
   return (
     <div className="login-page">
+      {conflict && (
+        <Modal
+          title="기존 로그인 연결을 끊을까요?"
+          onClose={() => {
+            if (!busy) {
+              setConflict(false);
+              setCode('');
+            }
+          }}
+          footer={
+            <>
+              <button
+                type="button"
+                className="button"
+                disabled={busy}
+                onClick={() => {
+                  setConflict(false);
+                  setCode('');
+                }}
+              >
+                이전 세션 유지
+              </button>
+              <button
+                type="button"
+                className="button primary"
+                disabled={busy}
+                onClick={() => void verify(true)}
+              >
+                이 브라우저에서 사용
+              </button>
+            </>
+          }
+        >
+          <p>
+            다른 브라우저 또는 기기에서 로그인 중입니다. 계속하면 기존
+            ZOJ·Editor 로그인은 함께 해제됩니다.
+          </p>
+        </Modal>
+      )}
       <div className="login-panel">
         <div className="login-icon">
           <Icon name="code" size={28} />
@@ -64,78 +135,120 @@ export default function Login() {
           <br />
           아이디어를 검증된 문제로 완성하세요.
         </p>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void (step ? verify() : request());
-          }}
-        >
-          <label>
-            이메일
-            <input
-              type="email"
-              autoComplete="email"
-              placeholder="name@example.com"
-              required
-              disabled={busy}
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setStep(false);
-                setCode('');
-                setSentAt(0);
-                setError('');
-              }}
-            />
-          </label>
-          {step && (
-            <label>
-              <span className="field-row">
-                인증번호
-                <small>
-                  남은 시간 {Math.floor(expiry / 60)}:
-                  {String(expiry % 60).padStart(2, '0')}
-                </small>
-              </span>
-              <input
-                ref={ref}
-                autoComplete="one-time-code"
-                inputMode="numeric"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                placeholder="6자리 인증번호"
-                value={code}
-                required
-                disabled={busy}
-                onChange={(e) => setCode(e.target.value)}
-              />
-            </label>
-          )}
-          <button
-            className="button primary large"
-            disabled={busy || !email || (step && expiry <= 0)}
-          >
-            {busy ? '처리 중…' : step ? '로그인' : '이메일 인증번호 받기'}
-            <Icon name="arrow" />
-          </button>
-          {step && (
+        {params.get('password') === 'changed' && (
+          <Notice>
+            ZOJ 공통 비밀번호가 변경되었습니다. 기존 로그인은 모두 해제되었으며,
+            새 비밀번호로 로그인할 수 있습니다.
+          </Notice>
+        )}
+        {method !== 'email' && (
+          <div className="login-selected-account">
+            <span>{email}</span>
             <button
               className="text-button"
               type="button"
-              disabled={busy || cooldown > 0}
-              onClick={() => void request()}
+              disabled={busy}
+              onClick={() => {
+                setMethod('email');
+                setStep(false);
+                setCode('');
+                setError('');
+              }}
             >
-              {cooldown > 0
-                ? `${cooldown}초 후 다시 받기`
-                : '인증번호 다시 받기'}
+              다른 이메일 사용
             </button>
-          )}
-          {error && <Notice tone="error">{error}</Notice>}
-        </form>
+          </div>
+        )}
+        {method === 'password' ? (
+          <PasswordLogin
+            email={email}
+            onEmailChange={setEmail}
+            onEmailLogin={() => void request()}
+          />
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void (method === 'email' ? next() : step ? verify() : request());
+            }}
+          >
+            {method === 'email' && (
+              <label>
+                이메일
+                <input
+                  type="email"
+                  autoComplete="email"
+                  placeholder="name@example.com"
+                  required
+                  disabled={busy}
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setStep(false);
+                    setCode('');
+                    setSentAt(0);
+                    setError('');
+                  }}
+                />
+              </label>
+            )}
+            {step && (
+              <label>
+                <span className="field-row">
+                  인증번호
+                  <small>
+                    남은 시간 {Math.floor(expiry / 60)}:
+                    {String(expiry % 60).padStart(2, '0')}
+                  </small>
+                </span>
+                <input
+                  ref={ref}
+                  autoComplete="one-time-code"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  placeholder="6자리 인증번호"
+                  value={code}
+                  required
+                  disabled={busy}
+                  onChange={(e) => setCode(e.target.value)}
+                />
+              </label>
+            )}
+            <button
+              className="button primary large"
+              disabled={
+                busy || !email || (method === 'otp' && step && expiry <= 0)
+              }
+            >
+              {busy
+                ? '처리 중…'
+                : method === 'email'
+                  ? '다음'
+                  : step
+                    ? '로그인'
+                    : '이메일 인증번호 받기'}
+              <Icon name="arrow" />
+            </button>
+            {step && (
+              <button
+                className="text-button"
+                type="button"
+                disabled={busy || cooldown > 0}
+                onClick={() => void request()}
+              >
+                {cooldown > 0
+                  ? `${cooldown}초 후 다시 받기`
+                  : '인증번호 다시 받기'}
+              </button>
+            )}
+            {error && <Notice tone="error">{error}</Notice>}
+          </form>
+        )}
         <div className="login-info">
-          처음 로그인하면 Editor 계정이 만들어집니다.
+          ZOJ와 같은 계정으로 로그인합니다.
           <br />
-          ZOJ 대회 계정과 별도로 관리됩니다.
+          비밀번호와 로그인 유지·로그아웃이 두 서비스에 함께 적용됩니다.
         </div>
       </div>
       <details className="login-help">
