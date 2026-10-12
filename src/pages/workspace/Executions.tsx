@@ -485,6 +485,13 @@ export default function Executions({
                   {statusLabels[job.status]}
                 </Badge>
               </div>
+              <p className="muted small">
+                저장된 검증 환경 ·{' '}
+                {(job.result.runtime?.backend ??
+                  job.options.execution_backend) === 'zoj'
+                  ? 'ZOJ 실제 채점기'
+                  : 'Editor 격리 실행'}
+              </p>
               {stale && (
                 <Notice>
                   현재 작업 사본과 다른 자료의 실행 기록입니다. 이 결과는 당시
