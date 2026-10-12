@@ -94,6 +94,7 @@ export type ProblemDocument = {
   materials: Record<string, Material>;
 };
 export type Problem = {
+  folder_id: string | null;
   id: string;
   slug: string;
   name: string;
@@ -116,6 +117,11 @@ export type Caution = {
   message: string;
   section: string;
   blocking: boolean;
+};
+export type Folder = {
+  id: string;
+  parent_id: string | null;
+  name: string;
 };
 export type WorkspaceData = {
   problem: Problem;
