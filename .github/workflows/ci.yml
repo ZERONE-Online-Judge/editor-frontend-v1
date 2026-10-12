@@ -1,5 +1,7 @@
 name: Editor Frontend CI
 on: [push, pull_request]
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,3 +15,19 @@ jobs:
       - run: npm test
       - run: npm run lint
       - run: npm run build
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, zoj-editor, editor-frontend]
+    environment: production
+    timeout-minutes: 90
+    concurrency:
+      group: editor-frontend-production
+      cancel-in-progress: false
+    steps:
+      - name: Load the shared deploy script from trusted backend main
+        run: |
+          repository=/srv/editor-source/editor_backend_v1
+          git -C "$repository" fetch origin main
+          git -C "$repository" show refs/remotes/origin/main:deploy/deploy-main.sh > "$RUNNER_TEMP/editor-deploy.sh"
+          bash "$RUNNER_TEMP/editor-deploy.sh" frontend "$GITHUB_SHA"

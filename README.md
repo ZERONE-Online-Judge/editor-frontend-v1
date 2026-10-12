@@ -55,7 +55,9 @@ Dockerfile과 `deploy/nginx.conf.template`을 제공합니다. 백엔드 저장�
 ## 브랜치
 
 각 기능 브랜치는 앞 브랜치를 기반으로 쌓았습니다.
-`integration/editor-v1`에 전체 구현이 있습니다. 자동 운영 배포는 없습니다.
+`integration/editor-v1`에 전체 구현이 있습니다. 운영 `main` 푸시는 빌드와
+테스트를 통과한 뒤 전용 Editor 러너에서 배포합니다. 기능 브랜치와 PR은
+GitHub 호스팅 러너에서 검증하며 운영 서버에서 실행하지 않습니다.
 
 - `feature/interface-foundation`: 독립 도구·디자인 토큰·공통 UI
 - `feature/email-login`: 인증번호 로그인·프로필·서비스 탐색
@@ -69,3 +71,4 @@ Polygon 공개 명세의 대응 범위와 차이는 백엔드의
 
 - `feature/project-folders`: 개인 폴더·하위 폴더·선택 이동 UI
 - `feature/zoj-publishing`: ZOJ 패키지·대회 등록·전송 기록 UI
+- `feature/self-hosted-deployment`: 전용 서버 러너·검증 후 자동 배포
