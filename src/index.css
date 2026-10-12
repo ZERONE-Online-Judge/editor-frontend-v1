@@ -2572,3 +2572,71 @@ svg {
     display: none;
   }
 }
+.zoj-publish-card {
+  margin: 20px 0;
+  padding: 24px;
+  border-color: #c7d2fe;
+  background: linear-gradient(120deg, #fff, #f8f9ff);
+}
+.zoj-publish-card .section-heading {
+  margin-bottom: 12px;
+}
+.zoj-publish-ready {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #64748b;
+  font-size: 12px;
+}
+.zoj-account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #eef2ff;
+  color: #4338ca;
+  padding: 15px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+.zoj-account small {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #64748b;
+}
+.publication-history {
+  margin-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+  font-size: 13px;
+}
+.publication-history summary {
+  cursor: pointer;
+  color: #64748b;
+}
+.publication-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid #eef2f6;
+}
+.publication-row small {
+  display: block;
+  color: #94a3b8;
+  margin-top: 5px;
+}
+@media (max-width: 600px) {
+  .zoj-publish-card {
+    padding: 18px;
+  }
+  .zoj-account strong {
+    overflow-wrap: anywhere;
+  }
+  .publication-row {
+    flex-wrap: wrap;
+  }
+}

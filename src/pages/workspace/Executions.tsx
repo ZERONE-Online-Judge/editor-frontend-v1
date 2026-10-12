@@ -11,6 +11,7 @@ import {
 } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
 import type { CaseResult, Job } from '../../lib/types';
+import ZojPublishing from './ZojPublishing';
 import {
   Badge,
   CodeEditor,
@@ -53,6 +54,12 @@ export default function Executions({
     Object.keys(doc.testsets)[0] || 'tests',
   );
   const [busy, setBusy] = useState(false);
+  const [exportFormat, setExportFormat] = useState('zoj');
+  const [statementLanguage, setStatementLanguage] = useState(
+    Object.keys(doc.statements).includes('korean')
+      ? 'korean'
+      : Object.keys(doc.statements)[0] || 'korean',
+  );
   const [caseResult, setCaseResult] = useState<CaseResult | null>(null);
   const fetchRows = useCallback(async () => {
     const values = await api<Job[]>(`/problems/${data.problem.id}/jobs`);
@@ -174,6 +181,12 @@ export default function Executions({
                 void start(packages ? 'package' : 'verify', {
                   testset: setName,
                   verify: true,
+                  ...(packages
+                    ? {
+                        export_format: exportFormat,
+                        statement_language: statementLanguage,
+                      }
+                    : {}),
                 })
               }
             >
@@ -251,13 +264,72 @@ export default function Executions({
           </fieldset>
         </section>
       ) : packages ? (
-        <div className="workspace-guide">
-          <Icon name="branch" />
-          <p>
-            내 작업 사본을 먼저 커밋하세요. 모든 입력을 검증하고 풀이
-            태그·checker·validator 자체 테스트를 확인한 뒤 ZIP을 만듭니다.
-          </p>
-        </div>
+        <>
+          <section className="card compact">
+            <div className="form-grid">
+              <label>
+                패키지 형식
+                <select
+                  value={exportFormat}
+                  onChange={(e) => setExportFormat(e.target.value)}
+                >
+                  <option value="zoj">ZOJ 문제 ZIP · 대회에 등록</option>
+                  <option value="editor">
+                    Editor / Polygon 형식 · 작업 자료
+                  </option>
+                </select>
+              </label>
+              {exportFormat === 'zoj' && (
+                <>
+                  <label>
+                    ZOJ에 표시할 지문
+                    <select
+                      value={statementLanguage}
+                      onChange={(e) => setStatementLanguage(e.target.value)}
+                    >
+                      {Object.entries(doc.statements).map(
+                        ([language, statement]) => (
+                          <option key={language} value={language}>
+                            {language} · {statement.name || doc.info.name}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </label>
+                  <label>
+                    ZOJ에서 사용할 테스트 세트
+                    <select
+                      value={setName}
+                      onChange={(e) => setSetName(e.target.value)}
+                    >
+                      {Object.keys(doc.testsets).map((name) => (
+                        <option key={name}>{name}</option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
+            </div>
+            <p className="muted">
+              {exportFormat === 'zoj'
+                ? '지문·예제·전체 입력과 정답·검증 코드·checker·validator를 ZOJ 가져오기 형식으로 내보냅니다. 다른 지문 언어와 원본 Editor 자료도 함께 보관합니다. 그룹·부분 점수 등 ZOJ가 지원하지 않는 채점 방식은 생성 전에 안내합니다.'
+                : 'Editor에서 다시 열 수 있는 작업 자료와 problem.xml, 생성된 테스트, 모든 지문 언어를 포함합니다.'}
+            </p>
+          </section>
+          <div className="workspace-guide">
+            <Icon name="branch" />
+            <p>
+              내 작업 사본을 먼저 커밋하세요. 모든 입력을 검증하고 풀이
+              태그·checker·validator 자체 테스트를 확인한 뒤 ZIP을 만듭니다.
+            </p>
+          </div>
+          <ZojPublishing
+            problemId={data.problem.id}
+            owner={data.problem.role === 'OWNER'}
+            job={job}
+            stale={stale || dirty}
+          />
+        </>
       ) : (
         <section className="card compact">
           <div className="inline-form">

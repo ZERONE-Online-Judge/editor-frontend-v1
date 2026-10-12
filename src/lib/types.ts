@@ -212,6 +212,7 @@ export type Job = {
     } | null;
     iterations?: number;
     package?: {
+      format?: 'editor' | 'zoj';
       filename: string;
       size: number;
       verified: boolean;
@@ -222,6 +223,22 @@ export type Job = {
       { html: string; pdf: string; pdf_size?: number; message?: string }
     >;
   };
+};
+export type ZojContest = {
+  id: string;
+  title: string;
+  status: string;
+  locked: boolean;
+  divisions: { id: string; name: string; code: string }[];
+};
+export type Publication = {
+  operation_id: string;
+  job_id: string;
+  contest_id: string;
+  division_id: string;
+  problem_code: string;
+  created_at: number;
+  result: { problem_id: string; title: string; revision: number; url: string };
 };
 export type Access = {
   user_id: string;

@@ -1,0 +1,317 @@
+import { useEffect, useState } from 'react';
+import { api, post, time } from '../../lib/api';
+import { useAuth } from '../../lib/authContext';
+import type { Job, Publication, ZojContest } from '../../lib/types';
+import { Badge, Icon, Modal, Notice } from '../../components/ui';
+
+export default function ZojPublishing({
+  problemId,
+  owner,
+  job,
+  stale,
+}: {
+  problemId: string;
+  owner: boolean;
+  job: Job | null;
+  stale: boolean;
+}) {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  const [contests, setContests] = useState<ZojContest[]>([]);
+  const [contestId, setContestId] = useState('');
+  const [divisionId, setDivisionId] = useState('');
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [published, setPublished] = useState<Publication | null>(null);
+  const [history, setHistory] = useState<Publication[]>([]);
+  const ready =
+    job?.status === 'completed' &&
+    job.result.package?.format === 'zoj' &&
+    job.result.package.verified &&
+    !stale;
+  const contest = contests.find((c) => c.id === contestId);
+  useEffect(() => {
+    let active = true;
+    api<Publication[]>(`/problems/${problemId}/zoj-publications`)
+      .then((rows) => {
+        if (active) setHistory(rows);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [problemId]);
+  async function show() {
+    setOpen(true);
+    setBusy(true);
+    setError('');
+    setPublished(null);
+    setConfigured(null);
+    setContests([]);
+    setContestId('');
+    setDivisionId('');
+    setCode('');
+    try {
+      const result = await api<{
+        configured: boolean;
+        email: string;
+        contests: ZojContest[];
+      }>('/zoj/contests');
+      setConfigured(result.configured);
+      setContests(result.contests);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function publish() {
+    if (
+      !job ||
+      !ready ||
+      !contest ||
+      contest.locked ||
+      !divisionId ||
+      !code.trim()
+    )
+      return;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await post<Publication>(
+        `/problems/${problemId}/publish-zoj`,
+        {
+          job_id: job.id,
+          contest_id: contestId,
+          division_id: divisionId,
+          problem_code: code,
+        },
+      );
+      setPublished(result);
+      setHistory(
+        await api<Publication[]>(`/problems/${problemId}/zoj-publications`),
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="card zoj-publish-card">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">READY FOR ZOJ</span>
+          <h2>내 문제를 대회로 보내기</h2>
+          <p>
+            같은 이메일의 ZOJ 운영자 계정으로 등록할 수 있는 대회를 선택하세요.
+          </p>
+        </div>
+        <button
+          className="button primary"
+          disabled={!owner || !ready}
+          onClick={() => void show()}
+        >
+          <Icon name="upload" />
+          ZOJ에 바로 등록
+        </button>
+      </div>
+      {!owner ? (
+        <p className="muted">
+          문제 소유자가 자신의 ZOJ 업로드 권한으로 전송할 수 있습니다.
+        </p>
+      ) : !ready ? (
+        <p className="muted">
+          변경사항을 커밋한 뒤, ZOJ 형식의 검증된 패키지를 생성하고 실행
+          기록에서 선택하세요.
+        </p>
+      ) : (
+        <div className="zoj-publish-ready">
+          <Badge tone="success">전송 준비 완료</Badge>
+          <span>
+            리비전 r{job?.revision} · {job?.result.package?.filename}
+          </span>
+        </div>
+      )}
+      {history.length > 0 && (
+        <details className="publication-history">
+          <summary>ZOJ 전송 기록 {history.length}개</summary>
+          {history.map((row) => (
+            <div className="publication-row" key={row.operation_id}>
+              <div>
+                <strong>
+                  {row.problem_code}. {row.result.title}
+                </strong>
+                <small>
+                  r{row.result.revision} · {time(row.created_at)}
+                </small>
+              </div>
+              <a
+                className="button small"
+                href={row.result.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                ZOJ에서 보기
+                <Icon name="arrow" size={14} />
+              </a>
+            </div>
+          ))}
+        </details>
+      )}
+      {open && (
+        <Modal
+          title="ZOJ 대회에 문제 등록"
+          onClose={() => {
+            if (!busy) setOpen(false);
+          }}
+          footer={
+            published ? (
+              <>
+                <button className="button" onClick={() => setOpen(false)}>
+                  닫기
+                </button>
+                <a
+                  className="button primary"
+                  href={published.result.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  ZOJ에서 확인
+                </a>
+              </>
+            ) : (
+              <>
+                <button
+                  className="button"
+                  disabled={busy}
+                  onClick={() => setOpen(false)}
+                >
+                  취소
+                </button>
+                <button
+                  className="button primary"
+                  disabled={
+                    busy ||
+                    !configured ||
+                    !contest ||
+                    contest.locked ||
+                    !divisionId ||
+                    !code.trim() ||
+                    !ready
+                  }
+                  onClick={() => void publish()}
+                >
+                  {busy ? '처리 중…' : '이 대회에 새 문제 등록'}
+                </button>
+              </>
+            )
+          }
+        >
+          {published ? (
+            <Notice tone="success">
+              {published.problem_code}. {published.result.title} 문제를
+              등록했습니다. 입력·정답·checker·validator를 전송했으며 채점 번들
+              준비가 자동으로 요청되었습니다.
+            </Notice>
+          ) : (
+            <>
+              <div className="zoj-account">
+                <Icon name="shield" />
+                <div>
+                  <strong>{user?.email}</strong>
+                  <small>
+                    Editor에서 인증한 같은 이메일 · ZOJ의 현재 문제 등록 권한
+                    확인
+                  </small>
+                </div>
+              </div>
+              {busy && configured === null && (
+                <p className="muted">
+                  등록할 수 있는 대회를 확인하고 있습니다.
+                </p>
+              )}
+              {configured === false && (
+                <Notice>
+                  ZOJ 연결을 아직 설정하지 않았습니다. 서비스 관리자가 양쪽
+                  서버의 연동 설정을 완료하면 바로 전송할 수 있습니다. 지금은
+                  ZOJ ZIP을 다운로드해 기존 문제 가져오기로 등록할 수 있습니다.
+                </Notice>
+              )}
+              {configured && contests.length === 0 && (
+                <Notice>
+                  문제 등록 권한이 있는 대회가 없습니다. ZOJ에서 대회 운영자
+                  권한을 확인해 주세요.
+                </Notice>
+              )}
+              {configured && contests.length > 0 && (
+                <>
+                  <label>
+                    대회
+                    <select
+                      value={contestId}
+                      disabled={busy}
+                      onChange={(e) => {
+                        setContestId(e.target.value);
+                        setDivisionId('');
+                      }}
+                    >
+                      <option value="">대회를 선택하세요</option>
+                      {contests.map((c) => (
+                        <option key={c.id} value={c.id} disabled={c.locked}>
+                          {c.title}
+                          {c.locked ? ' · 진행 중, 등록 불가' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    참가 유형
+                    <select
+                      value={divisionId}
+                      disabled={busy || !contest}
+                      onChange={(e) => setDivisionId(e.target.value)}
+                    >
+                      <option value="">참가 유형을 선택하세요</option>
+                      {contest?.divisions.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name} ({d.code})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {contest && !contest.divisions.length && (
+                    <Notice>이 대회에 참가 유형을 먼저 추가해 주세요.</Notice>
+                  )}
+                  <label>
+                    문제 번호
+                    <input
+                      value={code}
+                      disabled={busy}
+                      maxLength={16}
+                      placeholder="예: A"
+                      onChange={(e) => setCode(e.target.value)}
+                    />
+                  </label>
+                  <p className="muted">
+                    선택한 대회에 리비전 r{job?.revision}을 새 문제로
+                    등록합니다. 동일한 문제 번호가 있으면 등록을 중단하며,
+                    재시도한 전송 요청은 중복 생성하지 않습니다.
+                  </p>
+                  <Notice>
+                    Editor의 검증 결과는 함께 보관됩니다. 실제 대회 제출은 ZOJ의
+                    언어 환경과 자동 자원 보정으로 채점되므로 ZOJ에서도 검증
+                    코드를 확인하세요.
+                  </Notice>
+                </>
+              )}
+            </>
+          )}
+          {error && <Notice tone="error">{error}</Notice>}
+        </Modal>
+      )}
+    </section>
+  );
+}
