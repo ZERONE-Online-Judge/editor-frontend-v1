@@ -56,12 +56,14 @@ function source(relative) {
   loaded.paths = Module._nodeModulePaths(path.dirname(file));
   const native = loaded.require.bind(loaded);
   loaded.require = (id) =>
-    mocks[id] ||
+    (id.endsWith('.css') ? {} : mocks[id]) ||
     (id.startsWith('.')
       ? source(
           path.relative(
             path.resolve(__dirname, '../src'),
-            path.resolve(path.dirname(file), id + '.tsx'),
+            ['.tsx', '.ts']
+              .map((ext) => path.resolve(path.dirname(file), id + ext))
+              .find((candidate) => fs.existsSync(candidate)),
           ),
         )
       : native(id));

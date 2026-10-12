@@ -4,6 +4,7 @@ import type { User } from '../lib/types';
 import { useAuth } from '../lib/authContext';
 import { Notice, Modal } from './ui';
 import PasswordForm from './PasswordForm';
+import { PasswordInput } from './PasswordInput';
 
 export default function PasswordLogin({
   email,
@@ -115,18 +116,15 @@ export default function PasswordLogin({
           </p>
         </Modal>
       )}
-      <label>
-        비밀번호
-        <input
-          type="password"
-          autoComplete="current-password"
-          maxLength={128}
-          required
-          value={password}
-          disabled={busy}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-      </label>
+      <PasswordInput
+        label="비밀번호"
+        autoComplete="current-password"
+        maxLength={128}
+        required
+        value={password}
+        disabled={busy}
+        onChange={(e) => setPassword(e.target.value)}
+      />
       <button className="button primary large" disabled={busy}>
         {busy ? '로그인 중…' : '비밀번호로 로그인'}
       </button>

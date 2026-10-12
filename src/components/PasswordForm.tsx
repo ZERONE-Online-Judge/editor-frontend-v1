@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api, post } from '../lib/api';
 import { Notice } from './ui';
+import {
+  PasswordInput,
+  PasswordRequirements,
+  PasswordMatch,
+} from './PasswordInput';
+import { validNewPassword } from './passwordPolicy';
 
 export default function PasswordForm({
   mode,
@@ -67,6 +73,10 @@ export default function PasswordForm({
     }
   }
   async function save() {
+    if (!validNewPassword(password)) {
+      setError('비밀번호 조건을 모두 충족해 주세요.');
+      return;
+    }
     if (password !== confirm) {
       setError('새 비밀번호가 서로 일치하지 않습니다.');
       return;
@@ -153,38 +163,42 @@ export default function PasswordForm({
               onChange={(e) => setCode(e.target.value)}
             />
           </label>
-          <label>
-            새 비밀번호
-            <input
-              type="password"
-              autoComplete="new-password"
-              minLength={15}
-              maxLength={128}
-              required
-              value={password}
-              disabled={busy}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </label>
-          <label>
-            새 비밀번호 확인
-            <input
-              type="password"
-              autoComplete="new-password"
-              minLength={15}
-              maxLength={128}
-              required
-              value={confirm}
-              disabled={busy}
-              onChange={(e) => setConfirm(e.target.value)}
-            />
-          </label>
+          <PasswordInput
+            label="새 비밀번호"
+            autoComplete="new-password"
+            minLength={8}
+            maxLength={128}
+            required
+            value={password}
+            disabled={busy}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <PasswordRequirements value={password} />
+          <PasswordInput
+            label="새 비밀번호 확인"
+            autoComplete="new-password"
+            minLength={8}
+            maxLength={128}
+            required
+            value={confirm}
+            disabled={busy}
+            onChange={(e) => setConfirm(e.target.value)}
+          />
+          <PasswordMatch password={password} repeat={confirm} />
           <p className="muted">
-            15~128자이며 공백·한글을 사용할 수 있습니다. 변경하면 ZOJ·Editor의
-            기존 로그인은 모두 해제됩니다. 이메일 인증번호 로그인도 계속 사용할
-            수 있습니다.
+            변경하면 ZOJ·Editor의 기존 로그인은 모두 해제됩니다. 이메일 인증번호
+            로그인도 계속 사용할 수 있습니다.
           </p>
-          <button className="button primary" disabled={busy || expires <= 0}>
+          <button
+            className="button primary"
+            disabled={
+              busy ||
+              expires <= 0 ||
+              !validNewPassword(password) ||
+              password !== confirm ||
+              !/^[0-9]{6}$/.test(code)
+            }
+          >
             {busy
               ? '저장 중…'
               : mode === 'reset'
