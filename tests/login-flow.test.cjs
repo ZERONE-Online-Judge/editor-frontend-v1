@@ -1,4 +1,5 @@
 const { test, after } = require('node:test');
+const { URLSearchParams } = require('node:url');
 const assert = require('node:assert/strict');
 const fs = require('node:fs'),
   path = require('node:path'),
