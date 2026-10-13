@@ -52,11 +52,39 @@ export default function Executions({
     dirty,
   } = useWorkspace();
   const [rows, setRows] = useState<Job[]>([]);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const requestedJob = searchParams.get('job') || '';
-  const [selected, setSelected] = useState(requestedJob);
+  const mode = packages ? 'package' : stress ? 'stress' : 'all';
+  const [defaultSelection, setDefaultSelection] = useState({
+    problemId: data.problem.id,
+    mode,
+    id: '',
+  });
+  const visible = rows.filter((row) =>
+    packages ? row.kind === 'package' : stress ? row.kind === 'stress' : true,
+  );
+  const selected =
+    requestedJob ||
+    (defaultSelection.problemId === data.problem.id &&
+    defaultSelection.mode === mode &&
+    visible.some((row) => row.id === defaultSelection.id)
+      ? defaultSelection.id
+      : visible[0]?.id) ||
+    '';
   const [autoApply, setAutoApply] = useState(false);
-  const [job, setJob] = useState<Job | null>(null);
+  const [loadedJob, setJob] = useState<Job | null>(null);
+  const job = loadedJob?.id === selected ? loadedJob : null;
+  const [jobError, setJobError] = useState<{
+    id: string;
+    message: string;
+  } | null>(null);
+  function selectJob(id: string) {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set('job', id);
+      return next;
+    });
+  }
   const [generator, setGenerator] = useState('');
   const [reference, setReference] = useState(
     Object.keys(doc.solutions).find((n) => doc.solutions[n].tag === 'MA') || '',
@@ -101,15 +129,7 @@ export default function Executions({
   const fetchRows = useCallback(async () => {
     const values = await api<Job[]>(`/problems/${data.problem.id}/jobs`);
     setRows(values);
-    setSelected(
-      (previous) =>
-        previous ||
-        values.find((j) =>
-          packages ? j.kind === 'package' : stress ? j.kind === 'stress' : true,
-        )?.id ||
-        '',
-    );
-  }, [data.problem.id, packages, stress]);
+  }, [data.problem.id]);
   useEffect(() => {
     let active = true;
     const poll = async () => {
@@ -117,17 +137,23 @@ export default function Executions({
         const values = await api<Job[]>(`/problems/${data.problem.id}/jobs`);
         if (active) {
           setRows(values);
-          setSelected(
-            (previous) =>
-              previous ||
-              values.find((j) =>
-                packages
-                  ? j.kind === 'package'
-                  : stress
-                    ? j.kind === 'stress'
-                    : true,
-              )?.id ||
-              '',
+          const candidates = values.filter((row) =>
+            packages
+              ? row.kind === 'package'
+              : stress
+                ? row.kind === 'stress'
+                : true,
+          );
+          setDefaultSelection((previous) =>
+            previous.problemId === data.problem.id &&
+            previous.mode === mode &&
+            candidates.some((row) => row.id === previous.id)
+              ? previous
+              : {
+                  problemId: data.problem.id,
+                  mode,
+                  id: candidates[0]?.id || '',
+                },
           );
         }
       } catch (e) {
@@ -140,7 +166,7 @@ export default function Executions({
       active = false;
       window.clearInterval(timer);
     };
-  }, [data.problem.id, packages, stress, notify]);
+  }, [data.problem.id, packages, stress, mode, notify]);
   useEffect(() => {
     if (!selected) return;
     let active = true;
@@ -148,9 +174,10 @@ export default function Executions({
     async function refresh() {
       try {
         const value = await api<Job>(
-          `/problems/${data.problem.id}/jobs/${selected}`,
+          `/problems/${data.problem.id}/jobs/${encodeURIComponent(selected)}`,
         );
         if (active) {
+          setJobError(null);
           setJob(value);
           if (
             value.status === 'queued' ||
@@ -162,7 +189,10 @@ export default function Executions({
             timer = window.setTimeout(() => void refresh(), 1800);
         }
       } catch (e) {
-        if (active) notify((e as Error).message, true);
+        if (active) {
+          setJobError({ id: selected, message: (e as Error).message });
+          notify((e as Error).message, true);
+        }
       }
     }
     void refresh();
@@ -181,7 +211,7 @@ export default function Executions({
         ...options,
         ...(executionBackend ? { execution_backend: executionBackend } : {}),
       });
-      setSelected(result.id);
+      selectJob(result.id);
       setJob(result);
       await fetchRows();
     } catch (e) {
@@ -190,9 +220,6 @@ export default function Executions({
       setBusy(false);
     }
   }
-  const visible = rows.filter((row) =>
-    packages ? row.kind === 'package' : stress ? row.kind === 'stress' : true,
-  );
   const stale = Boolean(job && job.document_hash !== data.document_hash);
   async function apply() {
     if (!job) return;
@@ -209,6 +236,34 @@ export default function Executions({
       notify((e as Error).message, true);
     }
   }
+  const environmentPanel = (
+    <section className="card">
+      <label>
+        풀이 검증 환경
+        <select
+          value={executionBackend ?? ''}
+          onChange={(e) =>
+            setExecutionBackend(e.target.value as 'editor' | 'zoj')
+          }
+        >
+          <option value="" disabled>
+            검증 환경 확인 중…
+          </option>
+          <option value="zoj" disabled={!zojConfigured}>
+            ZOJ 실제 채점기 · 대회와 같은 환경
+          </option>
+          <option value="editor">Editor 격리 실행 · 제작 기능 전체 지원</option>
+        </select>
+      </label>
+      <p className="muted">
+        {executionBackend === null
+          ? '서버에서 기본 검증 환경을 확인하고 있습니다.'
+          : executionBackend === 'zoj'
+            ? '풀이를 기존 ZOJ 채점 큐에 보내 판정과 시간·메모리를 기록합니다. C++17·C99·Python 3.13·Java 8을 지원하고, 대회와 같은 언어별 보정을 적용합니다. 테스트 준비·생성기·PDF 작업은 Editor에서 처리합니다.'
+            : 'Editor 서버의 별도 격리 컨테이너에서 실행합니다. 대화형·그룹 점수 등 제작 기능을 검증할 수 있으며, 시간·메모리는 ZOJ 대회 채점 환경의 측정값과 다를 수 있습니다.'}
+      </p>
+    </section>
+  );
   return (
     <div className="section-stack">
       <SectionHeading
@@ -218,62 +273,29 @@ export default function Executions({
             ? '커밋된 리비전을 검증하고 배포 가능한 문제 패키지를 생성합니다.'
             : stress
               ? '생성기와 기준 풀이를 사용해 비교할 풀이의 유효한 반례를 찾습니다.'
-              : '검증 결과와 자원 사용량을 서버에 보관하고 동료와 공유합니다.'
+              : '각 탭에서 요청한 작업의 진행 상황과 완료 결과를 확인합니다. 아래 작업 기록에서 확인할 실행을 선택하세요.'
         }
         actions={
-          !stress && (
+          packages && (
             <button
               className="button primary"
               disabled={!editable || busy}
               onClick={() =>
-                void start(packages ? 'package' : 'verify', {
+                void start('package', {
                   testset: setName,
                   verify: true,
-                  ...(packages
-                    ? {
-                        export_format: exportFormat,
-                        statement_language: statementLanguage,
-                      }
-                    : {}),
+                  export_format: exportFormat,
+                  statement_language: statementLanguage,
                 })
               }
             >
               <Icon name="play" />
-              {packages ? '검증 후 패키지 생성' : '전체 풀이 검증'}
+              검증 후 패키지 생성
             </button>
           )
         }
       />
-      {!stress && (
-        <section className="card">
-          <label>
-            풀이 검증 환경
-            <select
-              value={executionBackend ?? ''}
-              onChange={(e) =>
-                setExecutionBackend(e.target.value as 'editor' | 'zoj')
-              }
-            >
-              <option value="" disabled>
-                검증 환경 확인 중…
-              </option>
-              <option value="zoj" disabled={!zojConfigured}>
-                ZOJ 실제 채점기 · 대회와 같은 환경
-              </option>
-              <option value="editor">
-                Editor 격리 실행 · 제작 기능 전체 지원
-              </option>
-            </select>
-          </label>
-          <p className="muted">
-            {executionBackend === null
-              ? '서버에서 기본 검증 환경을 확인하고 있습니다.'
-              : executionBackend === 'zoj'
-                ? '풀이를 기존 ZOJ 채점 큐에 보내 판정과 시간·메모리를 기록합니다. C++17·C99·Python 3.13·Java 8을 지원하고, 대회와 같은 언어별 보정을 적용합니다. 테스트 준비·생성기·PDF 작업은 Editor에서 처리합니다.'
-                : 'Editor 서버의 별도 격리 컨테이너에서 실행합니다. 대화형·그룹 점수 등 제작 기능을 검증할 수 있으며, 시간·메모리는 ZOJ 대회 채점 환경의 측정값과 다를 수 있습니다.'}
-          </p>
-        </section>
-      )}
+      {packages && environmentPanel}
       {stress ? (
         <section className="card">
           <fieldset disabled={!editable || busy} className="form-grid">
@@ -408,50 +430,18 @@ export default function Executions({
             stale={stale || dirty}
           />
         </>
-      ) : (
-        <section className="card compact">
-          <div className="inline-form">
-            <label>
-              검증 테스트 세트
-              <select
-                value={setName}
-                onChange={(e) => setSetName(e.target.value)}
-              >
-                {Object.keys(doc.testsets).map((name) => (
-                  <option key={name}>{name}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              className="button"
-              disabled={!editable || busy}
-              onClick={() =>
-                void start('prepare', {
-                  testset: setName,
-                  auto_apply: autoApply,
-                })
-              }
-            >
-              <Icon name="tests" />
-              입력·정답 생성
-            </button>
-          </div>
-          <label className="checkbox generation-auto-apply">
-            <input
-              type="checkbox"
-              checked={autoApply}
-              disabled={!editable || busy}
-              onChange={(e) => setAutoApply(e.target.checked)}
-            />
-            성공하면 내 작업 사본에 자동 반영
-          </label>
-          <p className="muted small">
-            실행 이후 저장된 작업 사본이 바뀌면 자동 반영하지 않습니다. 반영된
-            자료는 커밋하기 전까지 나에게만 보입니다.
-          </p>
-        </section>
-      )}
-      <div className="execution-layout">
+      ) : null}
+      <div className="execution-history-heading">
+        <Icon name="history" />
+        <div>
+          <h3>작업 기록 · 결과 보기</h3>
+          <p>기록을 선택하면 해당 작업의 진행 상황과 결과가 표시됩니다.</p>
+        </div>
+      </div>
+      <section
+        className="execution-layout execution-history"
+        aria-label="저장된 실행 기록"
+      >
         <section className="card execution-list no-padding">
           <div className="card-heading">
             <h3>
@@ -463,7 +453,8 @@ export default function Executions({
               <button
                 className={row.id === selected ? 'job-row selected' : 'job-row'}
                 key={row.id}
-                onClick={() => setSelected(row.id)}
+                aria-pressed={row.id === selected}
+                onClick={() => selectJob(row.id)}
               >
                 <div>
                   <strong>{jobLabels[row.kind]}</strong>
@@ -539,6 +530,13 @@ export default function Executions({
                   ? 'ZOJ 실제 채점기'
                   : 'Editor 격리 실행'}
               </p>
+              {job.status !== 'queued' &&
+                job.status !== 'running' &&
+                job.result.summary && (
+                  <p className="execution-result-summary">
+                    {job.result.summary}
+                  </p>
+                )}
               {stale && (
                 <Notice>
                   현재 작업 사본과 다른 자료의 실행 기록입니다. 이 결과는 당시
@@ -895,19 +893,115 @@ export default function Executions({
                 </details>
               ) : null}
               <div className="run-footnote">
-                CPU 시간과 메모리는 Editor 격리 워커의 실제 실행 값입니다. 실행
-                결과는 자료 해시와 함께 보관됩니다.
+                결과는 실행 당시 자료 해시·검증 환경과 함께 보관됩니다.
+                시간·메모리는 해당 실행 환경에서 반환한 값입니다.
               </div>
             </>
+          ) : jobError?.id === selected ? (
+            <Notice tone="error">{jobError.message}</Notice>
           ) : (
             <Empty
               icon="play"
-              title="기록을 선택하세요."
-              description="실제 판정과 실행 과정을 확인할 수 있습니다."
+              title={
+                selected
+                  ? '실행 결과를 불러오는 중입니다.'
+                  : '기록을 선택하세요.'
+              }
+              description="기록을 선택하면 저장된 결과를 표시합니다."
             />
           )}
         </section>
-      </div>
+      </section>
+      {!packages && !stress && (
+        <details className="card execution-launcher">
+          <summary>
+            <Icon name="plus" />
+            <div>
+              <strong>새 작업 시작</strong>
+              <span>
+                전체 풀이 검증 또는 입력·정답 생성을 추가로 요청합니다.
+              </span>
+            </div>
+            <Icon name="down" size={16} />
+          </summary>
+          <div className="execution-launcher-content">
+            <p className="muted">
+              작업 기록과 결과는 위에서 확인합니다. 아래 버튼은 새 실행을
+              요청합니다.
+            </p>
+            {environmentPanel}
+            <div className="execution-launcher-grid">
+              <section
+                className="execution-launcher-option"
+                aria-label="새 전체 풀이 검증"
+              >
+                <h3>전체 풀이 검증</h3>
+                <p>
+                  선택한 테스트 세트에서 등록된 풀이의 실제 판정과 기대 판정을
+                  비교합니다. NR 태그 풀이는 실행하지 않습니다.
+                </p>
+                <label>
+                  검증 테스트 세트
+                  <select
+                    value={setName}
+                    onChange={(e) => setSetName(e.target.value)}
+                  >
+                    {Object.keys(doc.testsets).map((name) => (
+                      <option key={name}>{name}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="button primary"
+                  disabled={!editable || busy}
+                  onClick={() =>
+                    void start('verify', { testset: setName, verify: true })
+                  }
+                >
+                  <Icon name="play" />
+                  전체 풀이 검증 시작
+                </button>
+              </section>
+              <section
+                className="execution-launcher-option"
+                aria-label="새 입력·정답 생성"
+              >
+                <h3>입력·정답 생성</h3>
+                <p>
+                  모든 테스트 세트의 생성기를 실행하고 Validator와 Main 풀이로
+                  입력·정답을 준비합니다.
+                </p>
+                <label className="checkbox generation-auto-apply">
+                  <input
+                    type="checkbox"
+                    checked={autoApply}
+                    disabled={!editable || busy}
+                    onChange={(e) => setAutoApply(e.target.checked)}
+                  />
+                  성공하면 내 작업 사본에 자동 반영
+                </label>
+                <p className="muted small">
+                  실행 이후 저장된 자료가 바뀌면 자동 반영하지 않습니다. 반영된
+                  자료는 커밋하기 전까지 나에게만 보입니다.
+                </p>
+                <button
+                  className="button"
+                  disabled={!editable || busy}
+                  onClick={() =>
+                    void start('prepare', {
+                      testset: setName,
+                      auto_apply: autoApply,
+                    })
+                  }
+                >
+                  <Icon name="tests" />
+                  입력·정답 생성 시작
+                </button>
+              </section>
+            </div>
+          </div>
+        </details>
+      )}
       {caseResult && (
         <Modal
           wide

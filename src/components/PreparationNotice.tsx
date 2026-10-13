@@ -83,7 +83,7 @@ export default function PreparationNotice({
               className="button"
               to={`/problems/${data.problem.id}/invocations?job=${rows[0].id}`}
             >
-              결과 확인
+              실행 결과로 이동
             </Link>
             <button
               className="button primary"

@@ -8,14 +8,8 @@ import {
   lazy,
   Suspense,
 } from 'react';
-import {
-  Link,
-  NavLink,
-  useBlocker,
-  useParams,
-  useLocation,
-} from 'react-router-dom';
-import { api, post, put, ApiError } from '../lib/api';
+import { Link, NavLink, useBlocker, useParams } from 'react-router-dom';
+import { api, post, put, ApiError, jobLabels } from '../lib/api';
 import type {
   Job,
   JobKind,
@@ -23,6 +17,7 @@ import type {
   WorkspaceData,
 } from '../lib/types';
 import { WorkspaceContext } from '../lib/workspace';
+import type { NoticeAction } from '../lib/workspace';
 import { Badge, Icon, Modal, Notice } from '../components/ui';
 import PreparationNotice from '../components/PreparationNotice';
 import { preparationCautions } from '../lib/readiness';
@@ -72,12 +67,13 @@ const sections = [
 ];
 export default function ProblemWorkspace() {
   const { problemId = '', tab = 'overview' } = useParams();
-  const location = useLocation();
   const [data, setData] = useState<WorkspaceData | null>(null);
   const [doc, setDoc] = useState<ProblemDocument | null>(null);
   const dirtyRef = useRef(false);
+  const activeProblem = useRef(problemId);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [messageAction, setMessageAction] = useState<NoticeAction | null>(null);
   const [isError, setIsError] = useState(false);
   const [commitModal, setCommitModal] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
@@ -128,6 +124,8 @@ export default function ProblemWorkspace() {
         if (active) {
           setData(value);
           setDoc(structuredClone(value.document));
+          setMessage('');
+          setMessageAction(null);
         }
       })
       .catch((e) => {
@@ -145,7 +143,8 @@ export default function ProblemWorkspace() {
   );
   useLayoutEffect(() => {
     dirtyRef.current = dirty;
-  }, [dirty]);
+    activeProblem.current = problemId;
+  }, [dirty, problemId]);
   const cautions = useMemo(() => (doc ? preparationCautions(doc) : []), [doc]);
   const required = cautions.filter((c) => c.blocking).length;
   const recommended = cautions.length - required;
@@ -181,10 +180,14 @@ export default function ProblemWorkspace() {
     ({ nextLocation }) =>
       dirty && nextLocation.pathname.split('/')[2] !== problemId,
   );
-  const notify = useCallback((value: string, error = false) => {
-    setMessage(value);
-    setIsError(error);
-  }, []);
+  const notify = useCallback(
+    (value: string, error = false, action?: NoticeAction) => {
+      setMessage(value);
+      setIsError(error);
+      setMessageAction(error ? null : action || null);
+    },
+    [],
+  );
   const updatePreparations = useCallback(
     (rows: NonNullable<WorkspaceData['pending_preparations']>) => {
       setData((previous) =>
@@ -239,9 +242,15 @@ export default function ProblemWorkspace() {
         options,
         reuse: false,
       });
-      notify(
-        `${kind === 'package' ? '패키지 생성' : '검증 작업'}을 요청했습니다. 실행 결과에서 진행을 확인하세요.`,
-      );
+      if (activeProblem.current === problemId)
+        notify(
+          `${jobLabels[kind]} 작업을 요청했습니다. 요청한 작업의 진행 상황과 결과를 확인하세요.`,
+          false,
+          {
+            label: '실행 결과로 이동',
+            to: `/problems/${problemId}/invocations?job=${encodeURIComponent(result.id)}`,
+          },
+        );
       return result;
     },
     [problemId, save, notify],
@@ -351,9 +360,9 @@ export default function ProblemWorkspace() {
     validator: <ComponentTests kind="validator" />,
     interactor: <ComponentTests kind="interactor" />,
     tests: <Tests />,
-    invocations: <Executions key={location.search} />,
-    stress: <Executions stress />,
-    packages: <Executions packages />,
+    invocations: <Executions key="invocations" />,
+    stress: <Executions key="stress" stress />,
+    packages: <Executions key="packages" packages />,
     issues: <Collaboration />,
     access: <Collaboration access />,
     revisions: <Revisions />,
@@ -488,6 +497,14 @@ export default function ProblemWorkspace() {
             {message && (
               <Notice tone={isError ? 'error' : 'success'}>
                 {message}
+                {messageAction && (
+                  <div className="notice-action">
+                    <Link className="button small" to={messageAction.to}>
+                      <Icon name="play" size={15} />
+                      {messageAction.label}
+                    </Link>
+                  </div>
+                )}
                 {conflicts.length > 0 && (
                   <div>
                     <button
@@ -508,7 +525,10 @@ export default function ProblemWorkspace() {
                 <button
                   className="notice-close icon-button"
                   aria-label="안내 닫기"
-                  onClick={() => setMessage('')}
+                  onClick={() => {
+                    setMessage('');
+                    setMessageAction(null);
+                  }}
                 >
                   <Icon name="close" size={15} />
                 </button>

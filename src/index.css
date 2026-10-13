@@ -1283,6 +1283,92 @@ svg {
 .group-row > .form-grid {
   margin-top: 16px;
 }
+.notice-action {
+  margin-top: 10px;
+}
+.execution-history {
+  min-width: 0;
+}
+.execution-history-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.execution-history-heading > svg {
+  color: var(--zoj-accent);
+  margin-top: 2px;
+}
+.execution-history-heading h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.execution-history-heading p {
+  margin: 5px 0 0;
+  color: #7b86a0;
+  font-size: 12px;
+}
+.execution-launcher > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.execution-launcher > summary::-webkit-details-marker {
+  display: none;
+}
+.execution-launcher > summary > div {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.execution-launcher > summary span {
+  color: #7b86a0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.execution-launcher[open] > summary > svg:last-child {
+  transform: rotate(180deg);
+}
+.execution-launcher-content {
+  display: grid;
+  gap: 18px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--zoj-border);
+}
+.execution-launcher-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 16px;
+}
+.execution-launcher-option {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 12px;
+  min-width: 0;
+}
+.execution-launcher-option h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.execution-launcher-option p {
+  margin: 0;
+  font-size: 12px;
+  color: #7b86a0;
+  line-height: 1.7;
+}
+.execution-launcher-option .button {
+  justify-self: start;
+  white-space: normal;
+  height: auto;
+  min-height: 38px;
+}
 .execution-layout {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
@@ -1334,6 +1420,12 @@ svg {
   display: grid;
   gap: 20px;
   min-height: 300px;
+}
+.execution-result-summary {
+  margin: 0;
+  color: #485775;
+  font-size: 13px;
+  line-height: 1.7;
 }
 .execution-detail > .section-heading {
   margin-bottom: 0;

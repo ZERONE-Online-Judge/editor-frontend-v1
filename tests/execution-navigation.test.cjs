@@ -1,0 +1,409 @@
+const { test, beforeEach, afterEach, after } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const Module = require('node:module');
+const ts = require('typescript');
+const { JSDOM } = require('jsdom');
+const dom = new JSDOM('<body></body>', {
+  url: 'http://editor.test',
+  pretendToBeVisual: true,
+});
+global.window = dom.window;
+global.document = dom.window.document;
+global.IS_REACT_ACT_ENVIRONMENT = true;
+const React = require('react');
+const { act } = React;
+const { createRoot } = require('react-dom/client');
+const Router = require('react-router-dom');
+const h = React.createElement;
+let state, jobs, requests, requestError, detailGate;
+const cache = new Map();
+function source(relative) {
+  const file = path.resolve(__dirname, '../src', relative);
+  if (cache.has(file)) return cache.get(file).exports;
+  const loaded = new Module(file, module);
+  loaded.filename = file;
+  loaded.paths = Module._nodeModulePaths(path.dirname(file));
+  const native = loaded.require.bind(loaded);
+  loaded.require = (id) => {
+    if (id === 'react-router-dom')
+      return { ...Router, useBlocker: () => ({ state: 'unblocked' }) };
+    if (id.endsWith('/api') || id === '../lib/api')
+      return {
+        ...source('lib/api.ts'),
+        api: get,
+        post: post,
+        put: async () => {
+          throw new Error('Unexpected save');
+        },
+      };
+    if (
+      /\/workspace\/(Overview|Collaboration|Revisions|Review|Materials)$/.test(
+        id,
+      ) ||
+      id === './ZojPublishing'
+    )
+      return { __esModule: true, default: () => null };
+    if (id.endsWith('/Markdown'))
+      return { __esModule: true, default: () => null };
+    if (id.startsWith('.')) {
+      const next = ['.ts', '.tsx']
+        .map((ext) => path.resolve(path.dirname(file), id + ext))
+        .find((p) => fs.existsSync(p));
+      return source(path.relative(path.resolve(__dirname, '../src'), next));
+    }
+    return native(id);
+  };
+  cache.set(file, loaded);
+  loaded._compile(
+    ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        jsx: ts.JsxEmit.ReactJSX,
+        target: ts.ScriptTarget.ES2022,
+      },
+    }).outputText,
+    file,
+  );
+  return loaded.exports;
+}
+const WorkspacePage = source('pages/Workspace.tsx').default;
+function job(id, kind, summary) {
+  return {
+    id,
+    problem_id: 'p',
+    kind,
+    status: 'completed',
+    options: { testset: 'tests', execution_backend: 'editor' },
+    created_at: 1778506713,
+    revision: 1,
+    document_hash: 'current',
+    result: { summary },
+  };
+}
+async function get(url) {
+  if (url === '/execution-environment')
+    return { default_backend: 'zoj', zoj_configured: true };
+  if (url === '/problems/p') return JSON.parse(JSON.stringify(state));
+  if (url.endsWith('/preparation-status'))
+    return { version: 1, pending_preparations: [] };
+  if (url === '/problems/p/jobs') return [...jobs];
+  const id = url.split('/jobs/')[1];
+  if (id) {
+    if (detailGate?.id === id) return detailGate.promise;
+    const value = jobs.find((row) => row.id === id);
+    if (!value) throw new Error('기록을 찾을 수 없습니다.');
+    return value;
+  }
+  throw new Error('Unexpected GET ' + url);
+}
+async function post(url, body) {
+  requests.push({ url, body });
+  if (requestError) throw new Error(requestError);
+  assert.equal(url, '/problems/p/jobs');
+  const result = job(
+    'new-' + body.kind,
+    body.kind,
+    '방금 요청한 ' + body.kind + ' 결과',
+  );
+  jobs.unshift(result);
+  return result;
+}
+let root, host;
+beforeEach(() => {
+  requests = [];
+  requestError = null;
+  detailGate = null;
+  const main = {
+    name: 'main.py',
+    kind: 'source',
+    language: 'python3',
+    sha256: 'main',
+    size: 20,
+    tag: 'MA',
+    extra_tags: {},
+  };
+  state = {
+    problem: {
+      id: 'p',
+      name: '화면 점검',
+      slug: 'navigation',
+      role: 'OWNER',
+      revision: 1,
+      modified: false,
+    },
+    version: 1,
+    base_revision: 1,
+    document_hash: 'current',
+    cautions: [],
+    pending_preparations: [],
+    document: {
+      info: { name: '합', tags: [], points_enabled: false, interactive: false },
+      statements: {
+        korean: {
+          name: '합',
+          legend: '두 정수의 합',
+          input: '',
+          output: '',
+          scoring: '',
+          interaction: '',
+          notes: '',
+          tutorial: '',
+        },
+      },
+      files: {
+        'validator.cpp': {
+          name: 'validator.cpp',
+          kind: 'source',
+          language: 'cpp17',
+          sha256: 'validator',
+          size: 30,
+          roles: ['validator'],
+        },
+      },
+      solutions: { 'main.py': main },
+      checker: 'std::wcmp',
+      validator: 'validator.cpp',
+      interactor: '',
+      extra_validators: [],
+      testsets: {
+        tests: { tests: {}, groups: {}, script: '', groups_enabled: false },
+        extra: { tests: {}, groups: {}, script: '', groups_enabled: false },
+      },
+      validator_tests: {},
+      checker_tests: {},
+      materials: {},
+    },
+  };
+  jobs = [
+    job('latest', 'verify', '다른 최신 검증 결과'),
+    job('old', 'prepare', '이전 입력·정답 결과'),
+  ];
+  host = document.createElement('div');
+  document.body.append(host);
+  root = createRoot(host);
+});
+afterEach(async () => {
+  await act(() => root.unmount());
+  host.remove();
+});
+after(() => dom.window.close());
+function Observer() {
+  const location = Router.useLocation();
+  const navigate = Router.useNavigate();
+  return h(
+    React.Fragment,
+    null,
+    h('output', { id: 'location' }, location.pathname + location.search),
+    h('button', { onClick: () => navigate(-1) }, '뒤로 이동'),
+  );
+}
+async function flush() {
+  await act(async () => {
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+  });
+}
+async function mount(tab) {
+  await act(async () =>
+    root.render(
+      h(
+        Router.MemoryRouter,
+        { initialEntries: ['/problems/p/' + tab] },
+        h(Observer),
+        h(
+          Router.Routes,
+          null,
+          h(Router.Route, {
+            path: '/problems/:problemId/:tab',
+            element: h(WorkspacePage),
+          }),
+        ),
+      ),
+    ),
+  );
+  await flush();
+}
+async function click(label) {
+  const el = [...host.querySelectorAll('button')].find(
+    (el) => el.textContent.trim() === label,
+  );
+  assert.ok(el, label);
+  await act(async () => el.click());
+  await flush();
+}
+for (const [tab, button, kind] of [
+  ['tests', '입력·정답 생성', 'prepare'],
+  ['validator', '테스트 실행', 'validator-tests'],
+  ['checker', '테스트 실행', 'checker-tests'],
+  ['statements', 'HTML · PDF 렌더링', 'render'],
+  ['solutions', '전체 풀이 검증', 'verify'],
+]) {
+  test(
+    tab +
+      ' request card links directly to that saved execution without starting verification',
+    async () => {
+      await mount(tab);
+      await click(button);
+      const link = [...host.querySelectorAll('.notice a')].find(
+        (a) => a.textContent.trim() === '실행 결과로 이동',
+      );
+      assert.ok(link);
+      assert.equal(
+        link.getAttribute('href'),
+        '/problems/p/invocations?job=new-' + kind,
+      );
+      await act(async () => link.click());
+      await flush();
+      assert.ok(host.textContent.includes('방금 요청한 ' + kind + ' 결과'));
+      assert.equal(
+        host
+          .querySelector('.job-row[aria-pressed="true"]')
+          ?.textContent.includes('방금 요청한'),
+        true,
+      );
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0].body.kind, kind);
+      assert.equal(host.querySelector('.execution-launcher').open, false);
+      const sections = [
+        ...host.querySelectorAll('.execution-history,.execution-launcher'),
+      ];
+      assert.ok(sections[0].classList.contains('execution-history'));
+    },
+  );
+}
+test('changing job URLs preserves query options, hides old actions during loading, and supports browser back', async () => {
+  await mount('invocations?job=old&view=team');
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /이전 입력·정답 결과/,
+  );
+  let resolve;
+  detailGate = {
+    id: 'latest',
+    promise: new Promise((r) => {
+      resolve = r;
+    }),
+  };
+  const row = [...host.querySelectorAll('.job-row')].find((el) =>
+    el.textContent.includes('다른 최신 검증 결과'),
+  );
+  await act(async () => row.click());
+  await flush();
+  assert.match(
+    host.querySelector('#location').textContent,
+    /job=latest&view=team/,
+  );
+  assert.doesNotMatch(
+    host.querySelector('.execution-detail').textContent,
+    /이전 입력·정답 결과|작업 사본에 반영/,
+  );
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /불러오는 중/,
+  );
+  await act(() => resolve(jobs[0]));
+  await flush();
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /다른 최신 검증 결과/,
+  );
+  await click('뒤로 이동');
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /이전 입력·정답 결과/,
+  );
+  assert.deepEqual(requests, []);
+});
+test('viewing a failed record keeps its error visible and never starts a new execution', async () => {
+  jobs[0] = {
+    ...jobs[0],
+    status: 'failed',
+    result: { summary: 'Validator 입력 조건 불일치' },
+  };
+  await mount('invocations?job=latest');
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /Validator 입력 조건 불일치/,
+  );
+  assert.deepEqual(requests, []);
+});
+test('explicit verification starts once with the chosen testset and environment', async () => {
+  await mount('invocations?job=old');
+  const launcher = host.querySelector('.execution-launcher');
+  assert.equal(launcher.open, false);
+  await act(() => {
+    launcher.open = true;
+  });
+  const select = host.querySelector('.execution-launcher-option select');
+  await act(() => {
+    select.value = 'extra';
+    select.dispatchEvent(new window.Event('change', { bubbles: true }));
+  });
+  await click('전체 풀이 검증 시작');
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].body.options, {
+    testset: 'extra',
+    verify: true,
+    execution_backend: 'zoj',
+  });
+  assert.match(host.querySelector('#location').textContent, /job=new-verify/);
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /방금 요청한 verify 결과/,
+  );
+});
+test('read-only users can view records while new execution buttons stay disabled', async () => {
+  state.problem.role = 'READ';
+  await mount('invocations?job=old');
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /이전 입력·정답 결과/,
+  );
+  const buttons = [...host.querySelectorAll('.execution-launcher button')];
+  assert.equal(buttons.length, 2);
+  assert.ok(buttons.every((el) => el.disabled));
+  assert.deepEqual(requests, []);
+});
+test('a rejected request shows no misleading result link', async () => {
+  requestError = '실행 요청이 거부되었습니다.';
+  await mount('tests');
+  await click('입력·정답 생성');
+  assert.match(
+    host.querySelector('[role="alert"]').textContent,
+    /실행 요청이 거부/,
+  );
+  assert.equal(host.querySelector('.notice a'), null);
+});
+
+test('polling new jobs does not replace the record currently being viewed', async () => {
+  const nativeInterval = window.setInterval;
+  let refresh;
+  window.setInterval = (callback) => {
+    refresh = callback;
+    return 0;
+  };
+  try {
+    await mount('invocations');
+    assert.match(
+      host.querySelector('.execution-detail').textContent,
+      /다른 최신 검증 결과/,
+    );
+    jobs.unshift(job('another-user', 'verify', '동료의 새로운 검증'));
+    await act(async () => {
+      await refresh();
+    });
+    await flush();
+    assert.match(
+      host.querySelector('.execution-detail').textContent,
+      /다른 최신 검증 결과/,
+    );
+    assert.doesNotMatch(
+      host.querySelector('.execution-detail').textContent,
+      /동료의 새로운 검증/,
+    );
+    assert.deepEqual(requests, []);
+  } finally {
+    window.setInterval = nativeInterval;
+  }
+});
