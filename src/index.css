@@ -1176,9 +1176,6 @@ svg {
   grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
-.statement-section.with-preview {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
 .statement-section h3 {
   margin-bottom: 16px;
 }
@@ -1960,9 +1957,6 @@ svg {
   }
   .execution-layout {
     grid-template-columns: 220px minmax(0, 1fr);
-  }
-  .statement-section.with-preview {
-    grid-template-columns: 1fr;
   }
   .evidence-grid {
     grid-template-columns: 1fr;

@@ -141,10 +141,7 @@ export default function Statements() {
               (field) => field.key !== 'interaction' || doc.info.interactive,
             )
             .map((field) => (
-              <section
-                className={`statement-section ${preview ? 'with-preview' : ''}`}
-                key={field.key}
-              >
+              <section className="statement-section" key={field.key}>
                 <div className="card">
                   <h3>{field.title}</h3>
                   <CodeEditor
