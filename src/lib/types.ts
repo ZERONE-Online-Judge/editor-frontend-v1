@@ -232,6 +232,7 @@ export type Job = {
       }[];
     }[];
     testsets?: Record<string, PreparedTest[]>;
+    processed_testsets?: string[];
     unit_tests?: {
       id: string;
       expected: string;

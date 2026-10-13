@@ -89,6 +89,21 @@ export default function Tests() {
               <Icon name="play" />
               입력·정답 생성
             </button>
+            {Object.keys(doc.testsets).length > 1 && (
+              <button
+                className="button"
+                disabled={!editable || busy}
+                onClick={() =>
+                  void run('prepare', {
+                    testset: selected,
+                    all_testsets: true,
+                    auto_apply: autoApply,
+                  }).catch((e) => notify(e.message, true))
+                }
+              >
+                전체 테스트 세트 생성
+              </button>
+            )}
             <Link
               className="button"
               to={`/problems/${data.problem.id}/invocations`}
@@ -98,6 +113,9 @@ export default function Tests() {
           </>
         }
       />
+      <p className="muted small">
+        ‘입력·정답 생성’은 현재 선택한 <strong>{selected}</strong> 세트만 처리합니다.
+      </p>
       <label className="checkbox generation-auto-apply">
         <input
           type="checkbox"

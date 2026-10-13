@@ -542,6 +542,11 @@ export default function Executions({
                     {job.result.summary}
                   </p>
                 )}
+              {job.result.processed_testsets?.length ? (
+                <p className="muted small">
+                  실제 처리한 테스트 세트: {job.result.processed_testsets.join(', ')}
+                </p>
+              ) : null}
               {job.result.execution_runs?.length ? (
                 <details className="notice neutral">
                   <summary>
