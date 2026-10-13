@@ -22,6 +22,7 @@ import {
 } from './components/ui';
 import Login from './pages/Login';
 import PasswordForm from './components/PasswordForm';
+import PasswordSetupGuidance from './components/PasswordSetupGuidance';
 import Problems from './pages/Problems';
 const ProblemWorkspace = lazy(() => import('./pages/Workspace'));
 function Layout() {
@@ -86,6 +87,15 @@ function Layout() {
           )}
         </div>
       </header>
+      {user && (
+        <PasswordSetupGuidance
+          key={user.id}
+          onSetup={() => {
+            setProfile(false);
+            setPasswordOpen(true);
+          }}
+        />
+      )}
       <main className="app-main">
         <Outlet />
       </main>
