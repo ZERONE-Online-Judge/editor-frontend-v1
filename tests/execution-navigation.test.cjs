@@ -84,7 +84,8 @@ function job(id, kind, summary) {
 }
 async function get(url) {
   if (url === '/execution-environment')
-    return { default_backend: 'zoj', zoj_configured: true };
+    return { default_backend: 'zoj', zoj_configured: true,
+      limits: { stress_iterations: 73, stress_seconds: 300, counterexample_targets: [1, 5, 10] } };
   if (url === '/problems/p') return JSON.parse(JSON.stringify(state));
   if (url.endsWith('/preparation-status'))
     return { version: 1, pending_preparations: [] };
@@ -376,6 +377,31 @@ test('a read-only reviewer can verify the committed revision without a working-c
   assert.equal(requests[0].body.revision, state.problem.revision);
   const generation = [...host.querySelectorAll('.execution-launcher button')].find((el) => el.textContent.includes('입력·정답 생성 시작'));
   assert.equal(generation.disabled, true);
+});
+test('stress runs selected solutions against shared inputs with time and collection options', async () => {
+  const main = state.document.solutions['main.py'];
+  state.document.solutions['wrong.py'] = { ...main, name: 'wrong.py', tag: 'WA' };
+  state.document.solutions['slow.py'] = { ...main, name: 'slow.py', tag: 'TL' };
+  await mount('stress');
+  const field = (label) => [...host.querySelectorAll('.stress-controls label')].find((el) => el.textContent.startsWith(label)).querySelector('input,select');
+  await act(() => {
+    const input = field('생성기 명령');
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, 'gen {seed}');
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    for (const [label, value] of [['실행 기준', 'duration'], ['반례 발견 후', 'collect']]) {
+      const select = field(label); select.value = value;
+      select.dispatchEvent(new window.Event('change', { bubbles: true }));
+    }
+  });
+  await flush();
+  assert.equal(field('최대 반복 횟수').max, '73');
+  await click('스트레스 테스트 시작');
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].body.options.candidates, ['wrong.py', 'slow.py']);
+  assert.equal(requests[0].body.options.duration_seconds, 30);
+  assert.equal(requests[0].body.options.counterexample_limit, 5);
+  assert.equal(requests[0].body.options.stop_on_first, false);
+  assert.deepEqual(requests[0].body.options.counterexample_verdicts, ['WA', 'TLE', 'MLE', 'RE']);
 });
 test('a rejected request shows no misleading result link', async () => {
   requestError = '실행 요청이 거부되었습니다.';

@@ -14,8 +14,10 @@ import { useWorkspace } from '../../lib/workspace';
 import type { CaseResult, Job } from '../../lib/types';
 import ZojPublishing from './ZojPublishing';
 import InvocationComments from './InvocationComments';
+import StressControls from './StressControls';
+import StressCounterexamples from './StressCounterexamples';
 import { useAuth } from '../../lib/authContext';
-import type { Language, SolutionTag } from '../../lib/types';
+import type { ExecutionEnvironment, Language, SolutionTag } from '../../lib/types';
 import {
   Badge,
   CodeEditor,
@@ -51,7 +53,6 @@ export default function Executions({
     notify,
     reload,
     save,
-    mutate,
     dirty,
   } = useWorkspace();
   const { user } = useAuth();
@@ -94,14 +95,6 @@ export default function Executions({
       return next;
     });
   }
-  const [generator, setGenerator] = useState('');
-  const [reference, setReference] = useState(
-    Object.keys(doc.solutions).find((n) => doc.solutions[n].tag === 'MA') || '',
-  );
-  const [candidate, setCandidate] = useState(
-    Object.keys(doc.solutions).find((n) => doc.solutions[n].tag !== 'MA') || '',
-  );
-  const [iterations, setIterations] = useState(50);
   const [setName, setSetName] = useState(
     Object.keys(doc.testsets)[0] || 'tests',
   );
@@ -117,15 +110,17 @@ export default function Executions({
     'editor' | 'zoj' | null
   >(null);
   const [zojConfigured, setZojConfigured] = useState(false);
+  const [environment, setEnvironment] = useState<ExecutionEnvironment | null>(null);
   useEffect(() => {
     let active = true;
-    void api<{ default_backend: 'editor' | 'zoj'; zoj_configured: boolean }>(
+    void api<ExecutionEnvironment>(
       '/execution-environment',
     )
       .then((value) => {
         if (active) {
           setExecutionBackend(value.default_backend);
           setZojConfigured(value.zoj_configured);
+          setEnvironment(value);
         }
       })
       .catch((e) => {
@@ -218,7 +213,7 @@ export default function Executions({
     try {
       const result = await run(kind, {
         ...options,
-        ...(executionBackend ? { execution_backend: executionBackend } : {}),
+        ...(executionBackend && (kind === 'verify' || kind === 'package') ? { execution_backend: executionBackend } : {}),
       });
       selectJob(result.id);
       setJob(result);
@@ -308,72 +303,8 @@ export default function Executions({
       />
       {packages && environmentPanel}
       {stress ? (
-        <section className="card">
-          <fieldset disabled={!canInvoke || busy} className="form-grid">
-            <label className="span-2">
-              생성기 명령
-              <input
-                value={generator}
-                onChange={(e) => setGenerator(e.target.value)}
-                placeholder="gen 100 {seed}"
-              />
-              <small>
-                {'{seed}'}가 반복 번호로 바뀝니다. 생략하면 마지막 인자로 반복
-                번호가 추가됩니다.
-              </small>
-            </label>
-            <label>
-              기준 풀이
-              <select
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-              >
-                <option value="">Main 풀이</option>
-                {Object.keys(doc.solutions).map((n) => (
-                  <option key={n}>{n}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              비교할 풀이
-              <select
-                value={candidate}
-                onChange={(e) => setCandidate(e.target.value)}
-              >
-                <option value="">선택하세요</option>
-                {Object.keys(doc.solutions).map((n) => (
-                  <option key={n}>{n}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              반복 횟수
-              <input
-                type="number"
-                min={1}
-                max={1000}
-                value={iterations}
-                onChange={(e) => setIterations(Number(e.target.value))}
-              />
-            </label>
-            <button
-              className="button primary align-end"
-              disabled={!generator || !candidate}
-              onClick={() =>
-                void start('stress', {
-                  generator,
-                  reference,
-                  candidate,
-                  iterations,
-                  testset: setName,
-                })
-              }
-            >
-              <Icon name="play" />
-              스트레스 테스트 시작
-            </button>
-          </fieldset>
-        </section>
+        <StressControls document={doc} limits={environment?.limits} allowed={canInvoke}
+          busy={busy} start={(options) => void start('stress', options)} />
       ) : packages ? (
         <>
           <section className="card compact">
@@ -847,58 +778,18 @@ export default function Executions({
                   </tbody>
                 </table>
               ) : null}
-              {job.kind === 'stress' &&
-                job.status === 'completed' &&
-                (job.result.counterexample ? (
-                  <div className="counterexample">
-                    <Notice tone="success">
-                      Validator를 통과한 입력에서{' '}
-                      {job.result.counterexample.verdict} 반례를 찾았습니다.
-                    </Notice>
-                    <CodeEvidence
-                      problemId={data.problem.id}
-                      input={job.result.counterexample.input_sha}
-                      answer={job.result.counterexample.answer_sha}
-                      actual={job.result.counterexample.actual_sha}
-                    />
-                    <button
-                      className="button primary"
-                      disabled={!editable}
-                      onClick={() => {
-                        const ce = job.result.counterexample!;
-                        mutate((d) => {
-                          const index =
-                            Math.max(
-                              0,
-                              ...Object.values(d.testsets[setName].tests).map(
-                                (t) => t.index,
-                              ),
-                            ) + 1;
-                          d.testsets[setName].tests[String(index)] = {
-                            index,
-                            input_sha: ce.input_sha,
-                            answer_sha: ce.answer_sha,
-                            command: '',
-                            group: '',
-                            points: 0,
-                            description: `스트레스 반례 · 반복 ${ce.iteration}`,
-                            sample: false,
-                          };
-                        });
-                        notify(
-                          '반례를 테스트에 추가했습니다. 작업 사본을 저장하세요.',
-                        );
-                      }}
-                    >
-                      반례를 테스트로 추가
-                    </button>
-                  </div>
-                ) : (
-                  <p className="muted">
-                    {job.result.iterations}회에서 반례를 찾지 못했습니다. 전체
-                    입력에 대한 올바름을 보장하지는 않습니다.
-                  </p>
-                ))}
+              {job.kind === 'stress' && (
+                <StressCounterexamples job={job} problemId={data.problem.id}
+                  testsets={Object.keys(doc.testsets)}
+                  allowed={editable && !dirty && (!stale || job.application?.document_hash === data.document_hash)}
+                  save={save} applied={async () => {
+                    await reload(true);
+                    setJob(await api<Job>(`/problems/${data.problem.id}/jobs/${job.id}`));
+                    await fetchRows();
+                  }}
+                  evidence={(example, finding) => <CodeEvidence problemId={data.problem.id}
+                    input={example.input_sha} answer={example.answer_sha} actual={finding.actual_sha} />} />
+              )}
               {job.result.package && job.status === 'completed' && (
                 <div className="package-download">
                   <Icon name="box" size={34} />

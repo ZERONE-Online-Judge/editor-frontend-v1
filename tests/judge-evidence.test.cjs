@@ -30,6 +30,8 @@ loaded.require = (id) => {
     id === '../../lib/workspace' ||
     id === '../../lib/authContext' ||
     id === './InvocationComments' ||
+    id === './StressControls' ||
+    id === './StressCounterexamples' ||
     id === './ZojPublishing' ||
     id === 'react-router-dom'
   )
