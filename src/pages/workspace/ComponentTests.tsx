@@ -124,7 +124,7 @@ export default function ComponentTests({
             <div className="actions">
               <button
                 className="button"
-                disabled={!editable || !doc[kind]}
+                disabled={(!editable && !data.problem.reviewer) || !doc[kind]}
                 onClick={() =>
                   void run(
                     kind === 'checker' ? 'checker-tests' : 'validator-tests',

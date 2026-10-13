@@ -141,7 +141,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
             {solutions && (
               <button
                 className="button"
-                disabled={!editable}
+                disabled={!editable && !data.problem.reviewer}
                 onClick={() =>
                   void run('verify').catch((e) => notify(e.message, true))
                 }

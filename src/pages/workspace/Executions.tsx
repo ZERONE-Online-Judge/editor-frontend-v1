@@ -13,6 +13,9 @@ import {
 import { useWorkspace } from '../../lib/workspace';
 import type { CaseResult, Job } from '../../lib/types';
 import ZojPublishing from './ZojPublishing';
+import InvocationComments from './InvocationComments';
+import { useAuth } from '../../lib/authContext';
+import type { Language, SolutionTag } from '../../lib/types';
 import {
   Badge,
   CodeEditor,
@@ -51,6 +54,12 @@ export default function Executions({
     mutate,
     dirty,
   } = useWorkspace();
+  const { user } = useAuth();
+  const canInvoke = editable || data.problem.reviewer;
+  const [reviewName, setReviewName] = useState('review.py');
+  const [reviewLanguage, setReviewLanguage] = useState<Language>('python3');
+  const [reviewTag, setReviewTag] = useState<SolutionTag>('OK');
+  const [reviewCode, setReviewCode] = useState('');
   const [rows, setRows] = useState<Job[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedJob = searchParams.get('job') || '';
@@ -220,7 +229,7 @@ export default function Executions({
       setBusy(false);
     }
   }
-  const stale = Boolean(job && job.document_hash !== data.document_hash);
+  const stale = Boolean(job && (job.options.source_document_hash || job.document_hash) !== data.document_hash);
   async function apply() {
     if (!job) return;
     try {
@@ -300,7 +309,7 @@ export default function Executions({
       {packages && environmentPanel}
       {stress ? (
         <section className="card">
-          <fieldset disabled={!editable || busy} className="form-grid">
+          <fieldset disabled={!canInvoke || busy} className="form-grid">
             <label className="span-2">
               생성기 명령
               <input
@@ -619,7 +628,7 @@ export default function Executions({
                   <strong>
                     {job.result.summary || '실행 자리를 기다리고 있습니다.'}
                   </strong>
-                  {editable && (
+                  {(editable || (data.problem.reviewer && job.requested_by === user?.id)) && (
                     <button
                       className="text-button"
                       onClick={() =>
@@ -961,6 +970,7 @@ export default function Executions({
                 결과는 실행 당시 자료 해시·검증 환경과 함께 보관됩니다.
                 시간·메모리는 해당 실행 환경에서 반환한 값입니다.
               </div>
+              <InvocationComments problemId={data.problem.id} jobId={job.id} allowed={canInvoke} />
             </>
           ) : jobError?.id === selected ? (
             <Notice tone="error">{jobError.message}</Notice>
@@ -995,6 +1005,9 @@ export default function Executions({
               요청합니다.
             </p>
             {environmentPanel}
+            {!editable && data.problem.reviewer && (
+              <Notice>검수 실행은 커밋된 리비전 r{data.problem.revision}의 입력·기대 출력과 판정 태그를 사용합니다. 결과와 임시 코드는 실행 기록에만 보관됩니다.</Notice>
+            )}
             <div className="execution-launcher-grid">
               <section
                 className="execution-launcher-option"
@@ -1018,7 +1031,7 @@ export default function Executions({
                 </label>
                 <button
                   className="button primary"
-                  disabled={!editable || busy}
+                  disabled={!canInvoke || busy}
                   onClick={() =>
                     void start('verify', { testset: setName, verify: true })
                   }
@@ -1026,6 +1039,23 @@ export default function Executions({
                   <Icon name="play" />
                   전체 풀이 검증 시작
                 </button>
+                {canInvoke && <details className="invocation-review-code">
+                  <summary>내 임시 검수 코드 실행</summary>
+                  <p className="muted small">기존 파일을 덮어쓰지 않으며 문제 자료와 기대 판정은 유지합니다. 작성한 코드는 이 실행에만 포함됩니다.</p>
+                  <label>파일명<input value={reviewName} onChange={(e) => setReviewName(e.target.value)} /></label>
+                  <label>언어<select value={reviewLanguage} onChange={(e) => setReviewLanguage(e.target.value as Language)}>
+                    {['python3', 'cpp17', 'cpp20', 'c99', 'c17', 'java8', 'java17'].map((language) => <option key={language}>{language}</option>)}
+                  </select></label>
+                  <label>이 코드의 기대 판정<select value={reviewTag} onChange={(e) => setReviewTag(e.target.value as SolutionTag)}>
+                    {Object.entries(tags).filter(([tag]) => tag !== 'MA').map(([tag, title]) => <option value={tag} key={tag}>{title}</option>)}
+                  </select></label>
+                  <CodeEditor label="임시 검수 코드" value={reviewCode} onChange={setReviewCode} readOnly={!canInvoke} rows={10} />
+                  <button className="button" disabled={!canInvoke || busy || !reviewCode.trim() || !reviewName}
+                    onClick={() => void start('verify', {
+                      testset: setName, solutions: [reviewName],
+                      temporary_solutions: [{ name: reviewName, language: reviewLanguage, tag: reviewTag, content: reviewCode }],
+                    })}>임시 코드 검증 시작</button>
+                </details>}
               </section>
               <section
                 className="execution-launcher-option"

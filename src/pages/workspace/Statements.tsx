@@ -43,7 +43,7 @@ export default function Statements() {
             </button>
             <button
               className="button"
-              disabled={!canEdit || busy}
+              disabled={(!canEdit && !data.problem.reviewer) || busy}
               onClick={() =>
                 void run('render').catch((e) => notify(e.message, true))
               }

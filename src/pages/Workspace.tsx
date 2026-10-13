@@ -235,11 +235,14 @@ export default function ProblemWorkspace() {
   }, [problemId, notify, data, doc]);
   const run = useCallback(
     async (kind: JobKind, options: Record<string, unknown> = {}) => {
-      const version = await save();
+      const committed = options.snapshot === 'committed' ||
+        (data?.problem.role === 'READ' && data.problem.reviewer);
+      const version = committed ? data!.version : await save();
       const result = await post<Job>(`/problems/${problemId}/jobs`, {
         kind,
         version,
-        options,
+        ...(committed ? { revision: data!.problem.revision } : {}),
+        options: { ...options, ...(committed ? { snapshot: 'committed' } : {}) },
         reuse: false,
       });
       if (activeProblem.current === problemId)
@@ -253,7 +256,7 @@ export default function ProblemWorkspace() {
         );
       return result;
     },
-    [problemId, save, notify],
+    [problemId, save, notify, data],
   );
   async function openResolution() {
     try {

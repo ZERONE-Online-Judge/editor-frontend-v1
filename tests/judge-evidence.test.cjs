@@ -28,6 +28,8 @@ loaded.require = (id) => {
     };
   if (
     id === '../../lib/workspace' ||
+    id === '../../lib/authContext' ||
+    id === './InvocationComments' ||
     id === './ZojPublishing' ||
     id === 'react-router-dom'
   )

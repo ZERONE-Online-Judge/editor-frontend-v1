@@ -89,6 +89,7 @@ async function get(url) {
   if (url.endsWith('/preparation-status'))
     return { version: 1, pending_preparations: [] };
   if (url === '/problems/p/jobs') return [...jobs];
+  if (url.endsWith('/comments')) return [];
   const id = url.split('/jobs/')[1];
   if (id) {
     if (detailGate?.id === id) return detailGate.promise;
@@ -364,6 +365,17 @@ test('read-only users can view records while new execution buttons stay disabled
   assert.equal(buttons.length, 2);
   assert.ok(buttons.every((el) => el.disabled));
   assert.deepEqual(requests, []);
+});
+test('a read-only reviewer can verify the committed revision without a working-copy save', async () => {
+  state.problem.role = 'READ';
+  state.problem.reviewer = true;
+  await mount('invocations?job=old');
+  await click('전체 풀이 검증 시작');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.options.snapshot, 'committed');
+  assert.equal(requests[0].body.revision, state.problem.revision);
+  const generation = [...host.querySelectorAll('.execution-launcher button')].find((el) => el.textContent.includes('입력·정답 생성 시작'));
+  assert.equal(generation.disabled, true);
 });
 test('a rejected request shows no misleading result link', async () => {
   requestError = '실행 요청이 거부되었습니다.';

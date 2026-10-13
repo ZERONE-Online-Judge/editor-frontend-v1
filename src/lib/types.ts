@@ -169,6 +169,7 @@ export type Job = {
   } | null;
   id: string;
   problem_id: string;
+  requested_by?: string;
   kind: JobKind;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
   document_hash: string;
