@@ -16,8 +16,9 @@ import ZojPublishing from './ZojPublishing';
 import InvocationComments from './InvocationComments';
 import StressControls from './StressControls';
 import StressCounterexamples from './StressCounterexamples';
+import InvocationControls from './InvocationControls';
 import { useAuth } from '../../lib/authContext';
-import type { ExecutionEnvironment, Language, SolutionTag } from '../../lib/types';
+import type { ExecutionEnvironment, InvocationScope } from '../../lib/types';
 import {
   Badge,
   CodeEditor,
@@ -57,10 +58,6 @@ export default function Executions({
   } = useWorkspace();
   const { user } = useAuth();
   const canInvoke = editable || data.problem.reviewer;
-  const [reviewName, setReviewName] = useState('review.py');
-  const [reviewLanguage, setReviewLanguage] = useState<Language>('python3');
-  const [reviewTag, setReviewTag] = useState<SolutionTag>('OK');
-  const [reviewCode, setReviewCode] = useState('');
   const [rows, setRows] = useState<Job[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedJob = searchParams.get('job') || '';
@@ -225,6 +222,7 @@ export default function Executions({
     }
   }
   const stale = Boolean(job && (job.options.source_document_hash || job.document_hash) !== data.document_hash);
+  const scope = (job?.result.scope || job?.options.scope) as InvocationScope | undefined;
   async function apply() {
     if (!job) return;
     try {
@@ -399,7 +397,7 @@ export default function Executions({
                 onClick={() => selectJob(row.id)}
               >
                 <div>
-                  <strong>{jobLabels[row.kind]}</strong>
+                  <strong>{typeof row.options.name === 'string' && row.options.name ? row.options.name : jobLabels[row.kind]}</strong>
                   {row.kind === 'prepare' && row.status === 'completed' && (
                     <Badge
                       tone={
@@ -448,7 +446,7 @@ export default function Executions({
             <>
               <div className="section-heading">
                 <div>
-                  <h3>{jobLabels[job.kind]}</h3>
+                  <h3>{typeof job.options.name === 'string' && job.options.name ? job.options.name : jobLabels[job.kind]}</h3>
                   <p>
                     {time(job.created_at)} · r{job.revision}
                   </p>
@@ -475,6 +473,9 @@ export default function Executions({
                     ? '채점 에이전트 제작용 격리 실행'
                     : 'Editor 격리 실행 (이전 기록)'}
               </p>
+              <p className="muted small">자료 기준: {job.options.snapshot === 'committed' ? `커밋된 리비전 r${job.revision}` : '요청 당시 작업 사본'}</p>
+              {scope && <p className="muted small">요청 범위: {scope.testset} · 풀이 {scope.solutions.length}개 · 테스트 {scope.test_count}개{scope.test_indices.length ? ` (#${scope.test_indices.join(', #')})` : ' (세트 전체)'}</p>}
+              {typeof job.options.note === 'string' && job.options.note && <p className="notice neutral" style={{ whiteSpace: 'pre-wrap' }}>{job.options.note}</p>}
               {job.status !== 'queued' &&
                 job.status !== 'running' &&
                 job.result.summary && (
@@ -651,6 +652,7 @@ export default function Executions({
                   {solution.total_score != null && (
                     <p>점수 {solution.total_score.toLocaleString()}</p>
                   )}
+                  {solution.score_scope_complete === false && <p className="muted small">일부 테스트만 실행했으므로 세트 전체 점수는 계산하지 않았습니다.</p>}
                   {solution.judge_runs?.length ? (
                     <div className="section-stack">
                       <p className="muted">
@@ -904,49 +906,9 @@ export default function Executions({
                 className="execution-launcher-option"
                 aria-label="새 전체 풀이 검증"
               >
-                <h3>전체 풀이 검증</h3>
-                <p>
-                  선택한 테스트 세트에서 등록된 풀이의 실제 판정과 기대 판정을
-                  비교합니다. NR 태그 풀이는 실행하지 않습니다.
-                </p>
-                <label>
-                  검증 테스트 세트
-                  <select
-                    value={setName}
-                    onChange={(e) => setSetName(e.target.value)}
-                  >
-                    {Object.keys(doc.testsets).map((name) => (
-                      <option key={name}>{name}</option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  className="button primary"
-                  disabled={!canInvoke || busy}
-                  onClick={() =>
-                    void start('verify', { testset: setName, verify: true })
-                  }
-                >
-                  <Icon name="play" />
-                  전체 풀이 검증 시작
-                </button>
-                {canInvoke && <details className="invocation-review-code">
-                  <summary>내 임시 검수 코드 실행</summary>
-                  <p className="muted small">기존 파일을 덮어쓰지 않으며 문제 자료와 기대 판정은 유지합니다. 작성한 코드는 이 실행에만 포함됩니다.</p>
-                  <label>파일명<input value={reviewName} onChange={(e) => setReviewName(e.target.value)} /></label>
-                  <label>언어<select value={reviewLanguage} onChange={(e) => setReviewLanguage(e.target.value as Language)}>
-                    {['python3', 'cpp17', 'cpp20', 'c99', 'c17', 'java8', 'java17'].map((language) => <option key={language}>{language}</option>)}
-                  </select></label>
-                  <label>이 코드의 기대 판정<select value={reviewTag} onChange={(e) => setReviewTag(e.target.value as SolutionTag)}>
-                    {Object.entries(tags).filter(([tag]) => tag !== 'MA').map(([tag, title]) => <option value={tag} key={tag}>{title}</option>)}
-                  </select></label>
-                  <CodeEditor label="임시 검수 코드" value={reviewCode} onChange={setReviewCode} readOnly={!canInvoke} rows={10} />
-                  <button className="button" disabled={!canInvoke || busy || !reviewCode.trim() || !reviewName}
-                    onClick={() => void start('verify', {
-                      testset: setName, solutions: [reviewName],
-                      temporary_solutions: [{ name: reviewName, language: reviewLanguage, tag: reviewTag, content: reviewCode }],
-                    })}>임시 코드 검증 시작</button>
-                </details>}
+                <InvocationControls problemId={data.problem.id} document={doc} revision={data.problem.revision}
+                  limits={environment?.limits} allowed={canInvoke} writer={editable} busy={busy}
+                  start={(options) => void start('verify', options)} />
               </section>
               <section
                 className="execution-launcher-option"
@@ -954,9 +916,12 @@ export default function Executions({
               >
                 <h3>입력·정답 생성</h3>
                 <p>
-                  모든 테스트 세트의 생성기를 실행하고 Validator와 Main 풀이로
+                  선택한 테스트 세트의 생성기를 실행하고 Validator와 Main 풀이로
                   입력·정답을 준비합니다.
                 </p>
+                <label>생성할 테스트 세트<select value={setName} onChange={(e) => setSetName(e.target.value)}>
+                  {Object.keys(doc.testsets).map((name) => <option key={name}>{name}</option>)}
+                </select></label>
                 <label className="checkbox generation-auto-apply">
                   <input
                     type="checkbox"

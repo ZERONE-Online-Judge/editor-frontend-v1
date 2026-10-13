@@ -85,8 +85,9 @@ function job(id, kind, summary) {
 async function get(url) {
   if (url === '/execution-environment')
     return { default_backend: 'zoj', zoj_configured: true,
-      limits: { stress_iterations: 73, stress_seconds: 300, counterexample_targets: [1, 5, 10] } };
+      limits: { tests_per_set: 10, stress_iterations: 73, stress_seconds: 300, counterexample_targets: [1, 5, 10] } };
   if (url === '/problems/p') return JSON.parse(JSON.stringify(state));
+  if (url.startsWith('/problems/p/revisions/')) return JSON.parse(JSON.stringify(state.document));
   if (url.endsWith('/preparation-status'))
     return { version: 1, pending_preparations: [] };
   if (url === '/problems/p/jobs') return [...jobs];
@@ -337,7 +338,7 @@ test('explicit verification starts once with the chosen testset and environment'
   await act(() => {
     launcher.open = true;
   });
-  const select = host.querySelector('.execution-launcher-option select');
+  const select = [...host.querySelectorAll('.invocation-controls label')].find((el) => el.textContent.startsWith('검증 테스트 세트')).querySelector('select');
   await act(() => {
     select.value = 'extra';
     select.dispatchEvent(new window.Event('change', { bubbles: true }));
@@ -345,6 +346,7 @@ test('explicit verification starts once with the chosen testset and environment'
   await click('전체 풀이 검증 시작');
   assert.equal(requests.length, 1);
   assert.deepEqual(requests[0].body.options, {
+    name: '', note: '', snapshot: 'working_copy', test_indices: [], solutions: [],
     testset: 'extra',
     verify: true,
     execution_backend: 'zoj',
@@ -354,6 +356,35 @@ test('explicit verification starts once with the chosen testset and environment'
     host.querySelector('.execution-detail').textContent,
     /방금 요청한 verify 결과/,
   );
+});
+test('selected verification submits exact solution names and a normalized test range', async () => {
+  state.document.solutions['wrong.py'] = { ...state.document.solutions['main.py'], name: 'wrong.py', tag: 'WA' };
+  await mount('invocations?job=old');
+  const field = (label) => [...host.querySelectorAll('.invocation-controls label')].find((el) => el.textContent.startsWith(label)).querySelector('input,select,textarea');
+  await act(() => {
+    for (const [label, value] of [['대상 풀이', 'selected'], ['테스트 범위', 'range']]) {
+      const select = field(label); select.value = value; select.dispatchEvent(new window.Event('change', { bubbles: true }));
+    }
+  });
+  await flush();
+  await act(() => {
+    const label = [...host.querySelectorAll('.invocation-select-list label')].find((el) => el.textContent.includes('wrong.py'));
+    label.querySelector('input').click();
+    for (const [title, value] of [['테스트 번호·범위', '1-3, 2, 5'], ['실행 이름', '경계 확인']]) {
+      const input = field(title); Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, value);
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    }
+  });
+  await click('선택 범위 검증 시작');
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].body.options.solutions, ['wrong.py']);
+  assert.deepEqual(requests[0].body.options.test_indices, [1, 2, 3, 5]);
+  assert.equal(requests[0].body.options.name, '경계 확인');
+});
+test('test range parsing rejects invalid bounds and deduplicates overlap', () => {
+  const { parseTestIndices } = source('lib/invocationOptions.ts');
+  assert.deepEqual(parseTestIndices('1-3,2,5~6', 10), [1, 2, 3, 5, 6]);
+  for (const value of ['', '0', '10-2', '11', '1; rm', '2.5']) assert.throws(() => parseTestIndices(value, 10));
 });
 test('read-only users can view records while new execution buttons stay disabled', async () => {
   state.problem.role = 'READ';

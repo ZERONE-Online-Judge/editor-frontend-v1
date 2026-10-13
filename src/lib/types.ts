@@ -181,6 +181,7 @@ export type Counterexample = {
   id: string; iteration: number; command: string; input_sha: string; answer_sha: string;
   findings: CounterexampleFinding[];
 };
+export type InvocationScope = { testset: string; solutions: string[]; test_indices: number[]; test_count: number };
 export type Job = {
   application?: {
     applied_at: number;
@@ -200,6 +201,7 @@ export type Job = {
   started_at: number | null;
   finished_at: number | null;
   result: {
+    scope?: InvocationScope;
     auto_apply?: { status: 'applied' | 'blocked'; message?: string };
     runtime?: {
       backend?: 'editor' | 'zoj' | 'agent';
@@ -228,6 +230,7 @@ export type Job = {
       skipped: boolean;
       cases: CaseResult[];
       total_score?: number | null;
+      score_scope_complete?: boolean;
       groups?: {
         name: string;
         testset: string;

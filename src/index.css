@@ -626,6 +626,51 @@ svg {
 .table-scroll {
   overflow: auto;
 }
+.invocation-select-list {
+  display: grid;
+  gap: 10px;
+  max-height: 320px;
+  min-width: 0;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 12px;
+  background: #fafbff;
+}
+.stress-verdict-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+.invocation-controls fieldset,
+.stress-controls fieldset {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.invocation-review-code {
+  padding-top: 16px;
+  border-top: 1px solid var(--zoj-border);
+}
+.invocation-review-code > summary {
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+.invocation-review-code .form-grid {
+  margin: 12px 0;
+}
+.invocation-comments {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--zoj-border);
+}
+.stress-results details > section {
+  margin-top: 16px;
+}
 .data-table {
   width: 100%;
   border-collapse: collapse;
