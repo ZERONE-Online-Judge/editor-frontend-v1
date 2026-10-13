@@ -193,7 +193,7 @@ function Layout() {
             </span>
             <span>
               <strong>비밀번호 관리</strong>
-              <small>ZOJ·Editor 공통 비밀번호 등록 및 변경</small>
+              <small>이메일 인증 후 비밀번호 등록·변경</small>
             </span>
             <Icon name="arrow" />
           </button>

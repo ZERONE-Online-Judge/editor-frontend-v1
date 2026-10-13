@@ -120,8 +120,8 @@ export default function Login() {
           }
         >
           <p>
-            다른 브라우저 또는 기기에서 로그인 중입니다. 계속하면 기존
-            ZOJ·Editor 로그인은 함께 해제됩니다.
+            다른 브라우저 또는 기기에서 로그인 중입니다. 계속하면 기존 로그인이
+            해제됩니다.
           </p>
         </Modal>
       )}
@@ -129,16 +129,16 @@ export default function Login() {
         <div className="login-icon">
           <Icon name="code" size={28} />
         </div>
-        <h1>ZOJ Editor 로그인</h1>
+        <h1>ZOJ 로그인</h1>
         <p>
-          ZOJ Editor에 로그인하고
+          ZOJ 계정으로 로그인하고
           <br />
           아이디어를 검증된 문제로 완성하세요.
         </p>
         {params.get('password') === 'changed' && (
           <Notice>
-            ZOJ 공통 비밀번호가 변경되었습니다. 기존 로그인은 모두 해제되었으며,
-            새 비밀번호로 로그인할 수 있습니다.
+            비밀번호가 변경되었습니다. 기존 로그인은 모두 해제되었으며, 새
+            비밀번호로 로그인할 수 있습니다.
           </Notice>
         )}
         {method !== 'email' && (
@@ -246,9 +246,9 @@ export default function Login() {
           </form>
         )}
         <div className="login-info">
-          ZOJ와 같은 계정으로 로그인합니다.
+          ZOJ 계정으로 로그인합니다.
           <br />
-          비밀번호와 로그인 유지·로그아웃이 두 서비스에 함께 적용됩니다.
+          이메일 인증번호 또는 등록한 비밀번호로 로그인할 수 있습니다.
         </div>
       </div>
       <details className="login-help">

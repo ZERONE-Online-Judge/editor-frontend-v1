@@ -112,7 +112,7 @@ export default function PasswordForm({
         void (sent ? save() : request());
       }}
     >
-      <p className="muted">ZOJ와 Editor가 함께 사용하는 비밀번호입니다.</p>
+      <p className="muted">ZOJ 로그인에 사용할 비밀번호입니다.</p>
       <p className="muted">
         {mode === 'set'
           ? hasPassword
@@ -186,8 +186,8 @@ export default function PasswordForm({
           />
           <PasswordMatch password={password} repeat={confirm} />
           <p className="muted">
-            변경하면 ZOJ·Editor의 기존 로그인은 모두 해제됩니다. 이메일 인증번호
-            로그인도 계속 사용할 수 있습니다.
+            변경하면 기존 로그인은 모두 해제됩니다. 이메일 인증번호 로그인도
+            계속 사용할 수 있습니다.
           </p>
           <button
             className="button primary"

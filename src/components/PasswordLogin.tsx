@@ -111,9 +111,7 @@ export default function PasswordLogin({
             </>
           }
         >
-          <p>
-            계속하면 다른 브라우저·기기의 ZOJ와 Editor 로그인은 함께 해제됩니다.
-          </p>
+          <p>계속하면 다른 브라우저·기기의 기존 로그인이 해제됩니다.</p>
         </Modal>
       )}
       <PasswordInput

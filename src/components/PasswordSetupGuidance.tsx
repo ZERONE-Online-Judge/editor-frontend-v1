@@ -36,8 +36,7 @@ export default function PasswordSetupGuidance({
       <div className="password-setup-guidance-copy">
         <strong>비밀번호로도 로그인할 수 있어요</strong>
         <p>
-          비밀번호를 등록하면 ZOJ·Editor에서 이메일 인증번호 없이 로그인할 수
-          있어요.
+          비밀번호를 등록하면 이메일 인증번호 없이 ZOJ에 로그인할 수 있어요.
         </p>
       </div>
       <button
