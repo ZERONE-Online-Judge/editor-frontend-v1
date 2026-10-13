@@ -382,7 +382,7 @@ export default function Executions({
               {exportFormat === 'zoj' && (
                 <>
                   <label>
-                    ZOJ에 표시할 지문
+                    ZOJ 기본 지문 언어
                     <select
                       value={statementLanguage}
                       onChange={(e) => setStatementLanguage(e.target.value)}
@@ -412,7 +412,7 @@ export default function Executions({
             </div>
             <p className="muted">
               {exportFormat === 'zoj'
-                ? '지문·예제·전체 입력과 정답·검증 코드·checker·validator를 ZOJ 가져오기 형식으로 내보냅니다. 다른 지문 언어와 원본 Editor 자료도 함께 보관합니다. 그룹·부분 점수 등 ZOJ가 지원하지 않는 채점 방식은 생성 전에 안내합니다.'
+                ? '선택한 언어를 ZOJ의 기본 지문으로 지정하고, 작성한 다른 번역 지문도 함께 내보냅니다. 참가자는 지문 화면에서 언어를 선택할 수 있습니다. 예제·전체 입력과 정답·검증 코드·checker·validator와 원본 Editor 자료를 함께 보관합니다. 그룹·부분 점수 등 지원하지 않는 채점 방식은 생성 전에 안내합니다.'
                 : 'Editor에서 다시 열 수 있는 작업 자료와 problem.xml, 생성된 테스트, 모든 지문 언어를 포함합니다.'}
             </p>
           </section>
