@@ -668,6 +668,36 @@ svg {
   padding-top: 20px;
   border-top: 1px solid var(--zoj-border);
 }
+.execution-limits-info {
+  background: #f1f4ff;
+  border: 1px solid var(--zoj-border);
+  border-radius: 14px;
+  padding: 16px 20px;
+  line-height: 1.65;
+}
+.execution-limits-info > strong {
+  font-size: 12px;
+}
+.execution-limits-info summary {
+  font-size: 11px;
+  color: #566383;
+  cursor: pointer;
+}
+.execution-limit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.execution-limit-grid dt {
+  color: #7c88a2;
+  font-size: 11px;
+}
+.execution-limit-grid dd {
+  font-size: 13px;
+  font-weight: 650;
+  margin: 4px 0 0;
+}
 .stress-results details > section {
   margin-top: 16px;
 }

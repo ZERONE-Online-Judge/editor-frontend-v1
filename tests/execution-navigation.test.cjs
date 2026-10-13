@@ -85,7 +85,10 @@ function job(id, kind, summary) {
 async function get(url) {
   if (url === '/execution-environment')
     return { default_backend: 'zoj', zoj_configured: true,
-      limits: { tests_per_set: 10, stress_iterations: 73, stress_seconds: 300, counterexample_targets: [1, 5, 10] } };
+      limits: { tests_per_set: 10, stress_iterations: 73, stress_seconds: 300, counterexample_targets: [1, 5, 10],
+        generator_arguments: 64, generator_cpu_ms: 10000, generator_memory_mb: 512, generator_output_bytes: 16777216,
+        job_timeout_seconds: 600, worker_concurrency: 4, judge_concurrency: 2, active_jobs_per_user: 5 },
+      capacity: { running_jobs: 1, queued_jobs: 3 } };
   if (url === '/problems/p') return JSON.parse(JSON.stringify(state));
   if (url.startsWith('/problems/p/revisions/')) return JSON.parse(JSON.stringify(state.document));
   if (url.endsWith('/preparation-status'))
@@ -385,6 +388,15 @@ test('test range parsing rejects invalid bounds and deduplicates overlap', () =>
   const { parseTestIndices } = source('lib/invocationOptions.ts');
   assert.deepEqual(parseTestIndices('1-3,2,5~6', 10), [1, 2, 3, 5, 6]);
   for (const value of ['', '0', '10-2', '11', '1; rm', '2.5']) assert.throws(() => parseTestIndices(value, 10));
+});
+test('execution limits reflect the server response rather than fixed UI defaults', async () => {
+  await mount('stress');
+  const panel = host.querySelector('[aria-label="서버 실행 한도와 처리 현황"]');
+  assert.match(panel.textContent, /73회/);
+  assert.match(panel.textContent, /작업 전체 최대 10분/);
+  assert.match(panel.textContent, /Editor 작업 동시 처리 4개/);
+  assert.match(panel.textContent, /진행 중 1개 · 대기 3개/);
+  assert.match(panel.textContent, /작업당 동시 2개/);
 });
 test('read-only users can view records while new execution buttons stay disabled', async () => {
   state.problem.role = 'READ';

@@ -33,6 +33,7 @@ loaded.require = (id) => {
     id === './StressControls' ||
     id === './StressCounterexamples' ||
     id === './InvocationControls' ||
+    id === './ExecutionLimitsInfo' ||
     id === './ZojPublishing' ||
     id === 'react-router-dom'
   )

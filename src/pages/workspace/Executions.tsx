@@ -17,6 +17,7 @@ import InvocationComments from './InvocationComments';
 import StressControls from './StressControls';
 import StressCounterexamples from './StressCounterexamples';
 import InvocationControls from './InvocationControls';
+import ExecutionLimitsInfo from './ExecutionLimitsInfo';
 import { useAuth } from '../../lib/authContext';
 import type { ExecutionEnvironment, InvocationScope } from '../../lib/types';
 import {
@@ -110,21 +111,28 @@ export default function Executions({
   const [environment, setEnvironment] = useState<ExecutionEnvironment | null>(null);
   useEffect(() => {
     let active = true;
-    void api<ExecutionEnvironment>(
-      '/execution-environment',
-    )
-      .then((value) => {
+    let pending = false;
+    async function refreshEnvironment() {
+      if (pending) return;
+      pending = true;
+      try {
+        const value = await api<ExecutionEnvironment>('/execution-environment');
         if (active) {
-          setExecutionBackend(value.default_backend);
+          setExecutionBackend((previous) => previous ?? value.default_backend);
           setZojConfigured(value.zoj_configured);
           setEnvironment(value);
         }
-      })
-      .catch((e) => {
+      } catch (e) {
         if (active) notify((e as Error).message, true);
-      });
+      } finally { pending = false; }
+    }
+    void refreshEnvironment();
+    const timer = window.setInterval(() => {
+      if (window.document.visibilityState !== 'hidden') void refreshEnvironment();
+    }, 15000);
     return () => {
       active = false;
+      window.clearInterval(timer);
     };
   }, [notify]);
   const fetchRows = useCallback(async () => {
@@ -299,6 +307,7 @@ export default function Executions({
           )
         }
       />
+      <ExecutionLimitsInfo environment={environment} stress={stress} />
       {packages && environmentPanel}
       {stress ? (
         <StressControls document={doc} limits={environment?.limits} allowed={canInvoke}

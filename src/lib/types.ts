@@ -171,6 +171,7 @@ export type ExecutionEnvironment = {
   default_backend: 'editor' | 'zoj'; zoj_configured: boolean;
   limits?: ExecutionLimits; capacity?: { running_jobs: number; queued_jobs: number };
   execution_transport?: 'local' | 'agent'; error?: string;
+  updated_at?: number;
   zoj?: { execution?: { online_nodes: number }; online_nodes?: number } | null;
 };
 export type CounterexampleFinding = {
