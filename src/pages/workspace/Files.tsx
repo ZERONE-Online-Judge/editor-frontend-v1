@@ -14,7 +14,14 @@ import type {
   Solution,
   SolutionTag,
   SourceFile,
+  SourceRole,
 } from '../../lib/types';
+import {
+  roleLabels,
+  sourceRoles,
+  reuseAsSolution,
+  solutionReuseIssue,
+} from '../../lib/sourceRoles';
 import {
   Badge,
   CodeEditor,
@@ -27,13 +34,42 @@ import {
 export default function Files({ solutions = false }: { solutions?: boolean }) {
   const { data, document: doc, mutate, editable, notify, run } = useWorkspace();
   const [editing, setEditing] = useState<SourceFile | null | false>(false);
+  const [editingSolution, setEditingSolution] = useState(false);
   const [removing, setRemoving] = useState<SourceFile | null>(null);
+  const [removingSolution, setRemovingSolution] = useState(false);
+  const [reusing, setReusing] = useState(false);
   const [busy, setBusy] = useState(false);
-  const items = Object.values(solutions ? doc.solutions : doc.files);
+  const items = solutions
+    ? Object.values(doc.solutions).map((file) => ({ file, isSolution: true }))
+    : [
+        ...Object.values(doc.files).map((file) => ({
+          file,
+          isSolution: false,
+        })),
+        ...Object.values(doc.solutions).map((file) => ({
+          file,
+          isSolution: true,
+        })),
+      ];
+  function edit(file: SourceFile | null, isSolution = solutions) {
+    setEditingSolution(isSolution);
+    setEditing(file);
+  }
   async function addFiles(files: File[]) {
     setBusy(true);
     try {
+      const names = new Set([
+        ...Object.keys(doc.files),
+        ...Object.keys(doc.solutions),
+      ]);
       for (const file of files) {
+        if (names.has(file.name))
+          throw new Error(
+            `${file.name}: 같은 이름의 파일이 있습니다. 기존 파일을 열어 수정하거나 풀이로 지정하세요.`,
+          );
+        names.add(file.name);
+        if (solutions && inferLanguage(file.name) === 'text')
+          throw new Error(`${file.name}: 실행 가능한 풀이 소스를 올리세요.`);
         const blob = await upload(data.problem.id, file);
         mutate((d) => {
           const entry = {
@@ -61,7 +97,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
   function remove() {
     if (!removing) return;
     mutate((d) => {
-      if (solutions) {
+      if (removingSolution) {
         delete d.solutions[removing.name];
         for (const material of Object.values(d.materials))
           material.solutions = material.solutions.filter(
@@ -88,10 +124,20 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
         description={
           solutions
             ? 'Main 풀이로 기대 출력을 생성하고, 정답과 의도한 오답 풀이로 테스트를 검증합니다.'
-            : '생성기·checker·validator 소스와 지문 이미지, 보조 리소스를 관리합니다.'
+            : '풀이·생성기·checker·validator 소스와 지문 이미지, 보조 리소스를 함께 관리합니다.'
         }
         actions={
           <>
+            {solutions && (
+              <button
+                className="button"
+                disabled={!editable}
+                onClick={() => setReusing(true)}
+              >
+                <Icon name="folder" />
+                기존 파일에서 선택
+              </button>
+            )}
             {solutions && (
               <button
                 className="button"
@@ -122,7 +168,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
             <button
               className="button primary"
               disabled={!editable}
-              onClick={() => setEditing(null)}
+              onClick={() => edit(null)}
             >
               <Icon name="plus" />새 파일
             </button>
@@ -149,29 +195,29 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
               <thead>
                 <tr>
                   <th>파일</th>
-                  <th>{solutions ? '기대 판정' : '분류'}</th>
+                  <th>{solutions ? '기대 판정' : '역할 · 분류'}</th>
                   <th>언어</th>
                   <th>크기</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {items.map((file) => (
-                  <tr key={file.name}>
+                {items.map(({ file, isSolution }) => (
+                  <tr key={`${isSolution ? 'solution' : 'file'}:${file.name}`}>
                     <td>
                       <button
                         className="file-title text-button"
-                        onClick={() => setEditing(file)}
+                        onClick={() => edit(file, isSolution)}
                       >
                         <Icon name="code" size={16} />
                         {file.name}
                       </button>
-                      {solutions && (file as Solution).tag === 'MA' && (
+                      {isSolution && (file as Solution).tag === 'MA' && (
                         <div className="subtext">기대 출력 생성에 사용</div>
                       )}
                     </td>
                     <td>
-                      {solutions ? (
+                      {isSolution ? (
                         <select
                           aria-label={`${file.name} 기대 판정`}
                           value={(file as Solution).tag}
@@ -193,21 +239,56 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
                           ))}
                         </select>
                       ) : (
-                        <Badge>
-                          {file.kind === 'source'
-                            ? '실행 소스'
-                            : file.kind === 'resource'
-                              ? '컴파일 리소스'
-                              : file.kind === 'statement'
-                                ? '지문 리소스'
-                                : '보조 파일'}
-                        </Badge>
+                        <div className="source-role-badges">
+                          {sourceRoles(doc, file.name).length ? (
+                            sourceRoles(doc, file.name).map((role) => (
+                              <Badge key={role} tone="accent">
+                                {roleLabels[role]}
+                              </Badge>
+                            ))
+                          ) : (
+                            <Badge>
+                              {file.kind === 'source'
+                                ? '역할 미지정'
+                                : file.kind === 'resource'
+                                  ? '컴파일 리소스'
+                                  : file.kind === 'statement'
+                                    ? '지문 리소스'
+                                    : '보조 파일'}
+                            </Badge>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="subtext">{languages[file.language]}</td>
                     <td className="subtext">{bytes(file.size)}</td>
                     <td>
                       <div className="actions">
+                        {!isSolution &&
+                          file.kind === 'source' &&
+                          file.language !== 'text' && (
+                            <button
+                              className="button small"
+                              disabled={
+                                !editable ||
+                                Boolean(solutionReuseIssue(doc, file.name))
+                              }
+                              title={
+                                solutionReuseIssue(doc, file.name) ||
+                                '내용을 다시 올리지 않고 이 파일을 풀이로 지정합니다.'
+                              }
+                              onClick={() => {
+                                mutate((d) =>
+                                  reuseAsSolution(d, file.name, 'OK'),
+                                );
+                                notify(
+                                  `${file.name}를 풀이로 지정했습니다. 기대 판정을 선택하세요.`,
+                                );
+                              }}
+                            >
+                              풀이로 지정
+                            </button>
+                          )}
                         <a
                           className="icon-button"
                           href={`/api/problems/${data.problem.id}/blobs/${file.sha256}`}
@@ -219,7 +300,10 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
                         <button
                           className="icon-button"
                           disabled={!editable}
-                          onClick={() => setRemoving(file)}
+                          onClick={() => {
+                            setRemoving(file);
+                            setRemovingSolution(isSolution);
+                          }}
                           aria-label={`${file.name} 제거`}
                         >
                           <Icon name="trash" size={16} />
@@ -248,7 +332,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
               <button
                 className="button"
                 disabled={!editable}
-                onClick={() => setEditing(null)}
+                onClick={() => edit(null)}
               >
                 새 파일 만들기
               </button>
@@ -271,7 +355,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
       {editing !== false && (
         <FileEditor
           asset={editing}
-          solutions={solutions}
+          solutions={editingSolution}
           onClose={() => setEditing(false)}
         />
       )}{' '}
@@ -297,9 +381,95 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
           </p>
         </Modal>
       )}
+      {reusing && <ReuseSolution onClose={() => setReusing(false)} />}
     </div>
   );
 }
+function ReuseSolution({ onClose }: { onClose: () => void }) {
+  const { document: doc, mutate, notify } = useWorkspace();
+  const candidates = Object.values(doc.files).filter(
+    (f) => f.kind === 'source' && f.language !== 'text',
+  );
+  const [name, setName] = useState('');
+  const [tag, setTag] = useState<SolutionTag>(
+    Object.values(doc.solutions).some((s) => s.tag === 'MA') ? 'OK' : 'MA',
+  );
+  const issue = name
+    ? solutionReuseIssue(doc, name)
+    : '풀이로 사용할 파일을 선택하세요.';
+  return (
+    <Modal
+      title="기존 파일을 풀이로 지정"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="button" onClick={onClose}>
+            취소
+          </button>
+          <button
+            className="button primary"
+            disabled={Boolean(issue)}
+            onClick={() => {
+              mutate((d) => reuseAsSolution(d, name, tag));
+              notify(
+                `${name}를 풀이로 지정했습니다. 파일 내용과 공개 자료 연결은 유지됩니다.`,
+              );
+              onClose();
+            }}
+          >
+            풀이로 지정
+          </button>
+        </>
+      }
+    >
+      <p className="muted">
+        파일 내용과 이름을 그대로 사용합니다. 지정한 파일은 풀이 목록과 파일 ·
+        리소스 양쪽에서 관리할 수 있습니다.
+      </p>
+      <label>
+        기존 소스 파일
+        <select value={name} onChange={(e) => setName(e.target.value)}>
+          <option value="">파일 선택</option>
+          {candidates.map((f) => (
+            <option
+              key={f.name}
+              value={f.name}
+              disabled={Boolean(solutionReuseIssue(doc, f.name))}
+            >
+              {f.name}
+              {solutionReuseIssue(doc, f.name)
+                ? ` · ${solutionReuseIssue(doc, f.name)}`
+                : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        기대 판정
+        <select
+          value={tag}
+          onChange={(e) => setTag(e.target.value as SolutionTag)}
+        >
+          {Object.entries(tags).map(([id, label]) => (
+            <option key={id} value={id}>
+              {id} · {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {tag === 'MA' &&
+        Object.values(doc.solutions).some((s) => s.tag === 'MA') && (
+          <Notice>기존 Main 풀이는 정답 풀이로 변경됩니다.</Notice>
+        )}
+      {!candidates.length && (
+        <Notice>
+          파일 · 리소스에 실행 소스를 추가하거나 새 풀이 파일을 작성하세요.
+        </Notice>
+      )}
+    </Modal>
+  );
+}
+
 function FileEditor({
   asset,
   solutions,
@@ -315,6 +485,9 @@ function FileEditor({
     asset?.language || 'cpp17',
   );
   const [kind, setKind] = useState<SourceFile['kind']>(asset?.kind || 'source');
+  const [roles, setRoles] = useState<SourceRole[]>(
+    asset && !solutions ? sourceRoles(doc, asset.name) : [],
+  );
   const [compileWithSolution, setCompileWithSolution] = useState(
     asset?.compile_with_solution || false,
   );
@@ -358,8 +531,12 @@ function FileEditor({
       );
       return;
     }
-    if (!asset && (solutions ? doc.solutions[name] : doc.files[name])) {
+    if (!asset && (doc.solutions[name] || doc.files[name])) {
       setError('같은 이름의 파일이 이미 있습니다.');
+      return;
+    }
+    if (solutions && (kind !== 'source' || language === 'text')) {
+      setError('풀이에는 실행 가능한 소스 언어를 지정하세요.');
       return;
     }
     setBusy(true);
@@ -386,7 +563,18 @@ function FileEditor({
             tag,
             extra_tags: asset ? d.solutions[asset.name].extra_tags : {},
           };
-        } else d.files[name] = entry;
+        } else {
+          d.files[name] = {
+            ...entry,
+            ...(roles.length && kind === 'source' && language !== 'text'
+              ? { roles }
+              : {}),
+          };
+          for (const role of ['checker', 'validator', 'interactor'] as const)
+            if (!roles.includes(role) && d[role] === name) d[role] = '';
+          if (!roles.includes('validator'))
+            d.extra_validators = d.extra_validators.filter((n) => n !== name);
+        }
       });
       onClose();
     } catch (e) {
@@ -470,6 +658,33 @@ function FileEditor({
               <option value="statement">지문 리소스</option>
             </select>
           </label>
+        )}
+        {!solutions && kind === 'source' && language !== 'text' && (
+          <fieldset className="span-2 source-role-picker">
+            <legend>파일 역할</legend>
+            <div className="checkbox-list">
+              {Object.entries(roleLabels).map(([role, label]) => (
+                <label className="checkbox" key={role}>
+                  <input
+                    type="checkbox"
+                    checked={roles.includes(role as SourceRole)}
+                    onChange={(e) =>
+                      setRoles((before) =>
+                        e.target.checked
+                          ? [...before, role as SourceRole]
+                          : before.filter((r) => r !== role),
+                      )
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <small>
+              선택한 역할의 프로그램 목록에 표시됩니다. 여러 역할을 지정할 수
+              있습니다.
+            </small>
+          </fieldset>
         )}
         {!solutions &&
           ['cpp17', 'cpp20', 'c17', 'c99', 'java17', 'java8'].includes(

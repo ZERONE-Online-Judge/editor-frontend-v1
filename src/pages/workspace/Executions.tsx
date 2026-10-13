@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   api,
   blobText,
@@ -51,7 +52,10 @@ export default function Executions({
     dirty,
   } = useWorkspace();
   const [rows, setRows] = useState<Job[]>([]);
-  const [selected, setSelected] = useState('');
+  const [searchParams] = useSearchParams();
+  const requestedJob = searchParams.get('job') || '';
+  const [selected, setSelected] = useState(requestedJob);
+  const [autoApply, setAutoApply] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
   const [generator, setGenerator] = useState('');
   const [reference, setReference] = useState(
@@ -148,7 +152,13 @@ export default function Executions({
         );
         if (active) {
           setJob(value);
-          if (value.status === 'queued' || value.status === 'running')
+          if (
+            value.status === 'queued' ||
+            value.status === 'running' ||
+            (value.kind === 'prepare' &&
+              value.status === 'completed' &&
+              !value.application)
+          )
             timer = window.setTimeout(() => void refresh(), 1800);
         }
       } catch (e) {
@@ -191,7 +201,9 @@ export default function Executions({
       await post(`/problems/${data.problem.id}/jobs/${job.id}/apply`, {
         version,
       });
-      await reload();
+      await reload(true);
+      setJob(await api<Job>(`/problems/${data.problem.id}/jobs/${job.id}`));
+      await fetchRows();
       notify('생성된 입력과 정답을 작업 사본에 반영했습니다.');
     } catch (e) {
       notify((e as Error).message, true);
@@ -413,12 +425,30 @@ export default function Executions({
             <button
               className="button"
               disabled={!editable || busy}
-              onClick={() => void start('prepare', { testset: setName })}
+              onClick={() =>
+                void start('prepare', {
+                  testset: setName,
+                  auto_apply: autoApply,
+                })
+              }
             >
               <Icon name="tests" />
               입력·정답 생성
             </button>
           </div>
+          <label className="checkbox generation-auto-apply">
+            <input
+              type="checkbox"
+              checked={autoApply}
+              disabled={!editable || busy}
+              onChange={(e) => setAutoApply(e.target.checked)}
+            />
+            성공하면 내 작업 사본에 자동 반영
+          </label>
+          <p className="muted small">
+            실행 이후 저장된 작업 사본이 바뀌면 자동 반영하지 않습니다. 반영된
+            자료는 커밋하기 전까지 나에게만 보입니다.
+          </p>
         </section>
       )}
       <div className="execution-layout">
@@ -437,6 +467,23 @@ export default function Executions({
               >
                 <div>
                   <strong>{jobLabels[row.kind]}</strong>
+                  {row.kind === 'prepare' && row.status === 'completed' && (
+                    <Badge
+                      tone={
+                        row.application
+                          ? 'success'
+                          : row.document_hash === data.document_hash
+                            ? 'warning'
+                            : 'neutral'
+                      }
+                    >
+                      {row.application
+                        ? '내 사본에 반영됨'
+                        : row.document_hash === data.document_hash
+                          ? '미반영'
+                          : '이전 자료'}
+                    </Badge>
+                  )}
                   <Badge
                     tone={
                       row.status === 'failed'
@@ -562,15 +609,30 @@ export default function Executions({
                       0,
                     )}
                     개 입력·정답 생성 완료
+                    {job.application && (
+                      <small className="block">
+                        내 작업 사본에 반영됨 ·{' '}
+                        {time(job.application.applied_at)} · 작업 사본 v
+                        {job.application.workspace_version}
+                      </small>
+                    )}
                   </span>
-                  <button
-                    className="button primary"
-                    disabled={!editable || stale || dirty}
-                    onClick={() => void apply()}
-                  >
-                    작업 사본에 반영
-                  </button>
+                  {!job.application && (
+                    <button
+                      className="button primary"
+                      disabled={!editable || stale || dirty}
+                      onClick={() => void apply()}
+                    >
+                      작업 사본에 반영
+                    </button>
+                  )}
                 </div>
+              )}
+              {job.result.auto_apply?.status === 'blocked' && (
+                <Notice>
+                  {job.result.auto_apply.message ||
+                    '자동 반영되지 않았습니다. 실행 당시 자료와 작업 사본을 확인하세요.'}
+                </Notice>
               )}
               {job.result.solutions?.map((solution) => (
                 <div className="solution-result" key={solution.name}>

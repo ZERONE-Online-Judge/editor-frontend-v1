@@ -8,7 +8,7 @@ export type Workspace = {
   editable: boolean;
   mutate: (fn: (doc: ProblemDocument) => void) => void;
   save: () => Promise<number>;
-  reload: () => Promise<void>;
+  reload: (preserveEdits?: boolean) => Promise<void>;
   run: (kind: JobKind, options?: Record<string, unknown>) => Promise<Job>;
   notify: (message: string, error?: boolean) => void;
 };

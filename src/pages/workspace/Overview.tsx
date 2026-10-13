@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { patch, put } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
 import { Badge, Icon, Modal, SectionHeading } from '../../components/ui';
+import { preparationCautions } from '../../lib/readiness';
 export default function Overview() {
   const {
     data,
@@ -10,11 +11,18 @@ export default function Overview() {
     mutate,
     editable,
     busy,
+    dirty,
     notify,
   } = useWorkspace();
   const [note, setNote] = useState(data.problem.note);
   const [deleting, setDeleting] = useState(false);
-  const fileCount = Object.keys(doc.files).length;
+  const cautions = preparationCautions(doc);
+  const required = cautions.filter((c) => c.blocking);
+  const recommended = cautions.filter((c) => !c.blocking);
+  const pending =
+    data.pending_preparations?.filter((r) => !r.stale).length || 0;
+  const fileCount =
+    Object.keys(doc.files).length + Object.keys(doc.solutions).length;
   const tests = Object.values(doc.testsets).reduce(
     (n, s) => n + Object.keys(s.tests).length,
     0,
@@ -209,11 +217,37 @@ export default function Overview() {
       <section className="card">
         <SectionHeading
           title="패키지 준비 상태"
-          description="저장한 작업 사본을 기준으로 필수 자료와 검증 항목을 점검합니다."
+          description="현재 편집 내용에서 필수 자료와 권장 검증을 구분합니다. 필수 완료 후에도 커밋과 실제 검증이 필요합니다."
         />
+        <div className="readiness-summary">
+          <strong>
+            <Icon name={required.length ? 'issue' : 'check'} />
+            {required.length
+              ? `필수 ${required.length}개 남음`
+              : '필수 준비 완료'}
+          </strong>
+          <Badge tone={recommended.length ? 'warning' : 'success'}>
+            {recommended.length
+              ? `권장 검증 ${recommended.length}개 남음`
+              : '권장 항목 완료'}
+          </Badge>
+          <p>
+            {required.length
+              ? '아래 필수 항목을 먼저 준비하세요.'
+              : busy
+                ? '자료를 저장하고 있습니다.'
+                : pending
+                  ? '생성 결과를 작업 사본에 반영한 뒤 커밋하세요.'
+                  : dirty
+                    ? '편집 내용을 작업 사본에 저장하고 커밋한 뒤 패키지를 생성하세요.'
+                    : data.problem.modified
+                      ? '변경사항을 커밋한 뒤 실제 풀이 검증을 포함해 패키지를 생성하세요.'
+                      : '패키지 화면에서 실제 풀이 검증을 포함해 생성하세요. 내보내기 형식의 호환 조건도 확인합니다.'}
+          </p>
+        </div>
         <div className="readiness-list">
-          {data.cautions.length ? (
-            data.cautions.map((c) => (
+          {cautions.length ? (
+            [...required, ...recommended].map((c) => (
               <Link
                 key={c.code}
                 to={`/problems/${data.problem.id}/${c.section}`}

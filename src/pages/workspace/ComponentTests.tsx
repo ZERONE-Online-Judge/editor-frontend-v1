@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { upload } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
 import type { UnitTest } from '../../lib/types';
+import { sourceRoles } from '../../lib/sourceRoles';
 import {
   Badge,
   CodeEditor,
@@ -20,7 +21,10 @@ export default function ComponentTests({
   const { data, document: doc, mutate, editable, run, notify } = useWorkspace();
   const [adding, setAdding] = useState(false);
   const sources = Object.values(doc.files).filter(
-    (f) => f.kind === 'source' && f.language !== 'text',
+    (f) =>
+      f.kind === 'source' &&
+      f.language !== 'text' &&
+      sourceRoles(doc, f.name).includes(kind),
   );
   const unitKey = kind === 'checker' ? 'checker_tests' : 'validator_tests';
   const tests = Object.entries(doc[unitKey]);
@@ -103,6 +107,10 @@ export default function ComponentTests({
           <Icon name="code" size={15} />
           소스 파일 관리
         </Link>
+        <p className="muted small">
+          파일 · 리소스에서 {title} 역할을 지정한 소스만 표시합니다. 기존에
+          연결한 프로그램은 그대로 표시됩니다.
+        </p>
       </section>
       {kind !== 'interactor' && (
         <section className="card no-padding">

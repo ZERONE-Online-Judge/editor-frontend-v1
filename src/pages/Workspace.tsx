@@ -3,10 +3,18 @@ import {
   useEffect,
   useMemo,
   useState,
+  useRef,
+  useLayoutEffect,
   lazy,
   Suspense,
 } from 'react';
-import { Link, NavLink, useBlocker, useParams } from 'react-router-dom';
+import {
+  Link,
+  NavLink,
+  useBlocker,
+  useParams,
+  useLocation,
+} from 'react-router-dom';
 import { api, post, put, ApiError } from '../lib/api';
 import type {
   Job,
@@ -16,6 +24,9 @@ import type {
 } from '../lib/types';
 import { WorkspaceContext } from '../lib/workspace';
 import { Badge, Icon, Modal, Notice } from '../components/ui';
+import PreparationNotice from '../components/PreparationNotice';
+import { preparationCautions } from '../lib/readiness';
+const CommitChanges = lazy(() => import('../components/CommitChanges'));
 import Overview from './workspace/Overview';
 import Statements from './workspace/Statements';
 import Files from './workspace/Files';
@@ -61,13 +72,22 @@ const sections = [
 ];
 export default function ProblemWorkspace() {
   const { problemId = '', tab = 'overview' } = useParams();
+  const location = useLocation();
   const [data, setData] = useState<WorkspaceData | null>(null);
   const [doc, setDoc] = useState<ProblemDocument | null>(null);
+  const dirtyRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
   const [commitModal, setCommitModal] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
+  const [commitPreview, setCommitPreview] = useState<{
+    revision: number;
+    before: ProblemDocument;
+    after: ProblemDocument;
+    conflicts: string[];
+  } | null>(null);
+  const [previewError, setPreviewError] = useState('');
   const [minor, setMinor] = useState(false);
   const [discardModal, setDiscardModal] = useState(false);
   const [conflicts, setConflicts] = useState<string[]>([]);
@@ -92,11 +112,15 @@ export default function ProblemWorkspace() {
         ? value
         : JSON.stringify(value, null, 2);
   }
-  const reload = useCallback(async () => {
-    const value = await api<WorkspaceData>(`/problems/${problemId}`);
-    setData(value);
-    setDoc(structuredClone(value.document));
-  }, [problemId]);
+  const reload = useCallback(
+    async (preserveEdits = false) => {
+      const value = await api<WorkspaceData>(`/problems/${problemId}`);
+      if (preserveEdits && dirtyRef.current) return;
+      setData(value);
+      setDoc(structuredClone(value.document));
+    },
+    [problemId],
+  );
   useEffect(() => {
     let active = true;
     api<WorkspaceData>(`/problems/${problemId}`)
@@ -119,6 +143,34 @@ export default function ProblemWorkspace() {
   const dirty = Boolean(
     data && doc && JSON.stringify(doc) !== JSON.stringify(data.document),
   );
+  useLayoutEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
+  const cautions = useMemo(() => (doc ? preparationCautions(doc) : []), [doc]);
+  const required = cautions.filter((c) => c.blocking).length;
+  const recommended = cautions.length - required;
+  useEffect(() => {
+    if (!commitModal || !data || !doc) return;
+    let active = true;
+    void post<{
+      revision: number;
+      before: ProblemDocument;
+      after: ProblemDocument;
+      conflicts: string[];
+    }>(`/problems/${problemId}/commit-preview`, {
+      version: data.version,
+      document: doc,
+    })
+      .then((value) => {
+        if (active) setCommitPreview(value);
+      })
+      .catch((e) => {
+        if (active) setPreviewError((e as Error).message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [commitModal, data, doc, problemId]);
   useEffect(() => {
     if (!dirty) return;
     const handler = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -133,6 +185,18 @@ export default function ProblemWorkspace() {
     setMessage(value);
     setIsError(error);
   }, []);
+  const updatePreparations = useCallback(
+    (rows: NonNullable<WorkspaceData['pending_preparations']>) => {
+      setData((previous) =>
+        previous &&
+        JSON.stringify(previous.pending_preparations || []) !==
+          JSON.stringify(rows)
+          ? { ...previous, pending_preparations: rows }
+          : previous,
+      );
+    },
+    [],
+  );
   const save = useCallback(async () => {
     const current = { data, doc };
     if (!current.data || !current.doc)
@@ -145,6 +209,7 @@ export default function ProblemWorkspace() {
         version: number;
         document_hash: string;
         cautions: WorkspaceData['cautions'];
+        modified: boolean;
       }>(`/problems/${problemId}/working-copy`, {
         version: current.data.version,
         document: current.doc,
@@ -153,6 +218,7 @@ export default function ProblemWorkspace() {
         ...current.data,
         ...result,
         document: structuredClone(current.doc),
+        problem: { ...current.data.problem, modified: result.modified },
       };
       setData(next);
       notify('내 작업 사본에 저장했습니다. 공유하려면 커밋하세요.');
@@ -266,7 +332,7 @@ export default function ProblemWorkspace() {
       setBusy(false);
     }
   }
-  if (!data || !doc || !context)
+  if (!data || !doc)
     return (
       <div className="page-container">
         {isError ? (
@@ -285,7 +351,7 @@ export default function ProblemWorkspace() {
     validator: <ComponentTests kind="validator" />,
     interactor: <ComponentTests kind="interactor" />,
     tests: <Tests />,
-    invocations: <Executions />,
+    invocations: <Executions key={location.search} />,
     stress: <Executions stress />,
     packages: <Executions packages />,
     issues: <Collaboration />,
@@ -342,7 +408,7 @@ export default function ProblemWorkspace() {
               <Icon name="download" />
               업데이트
             </button>
-            {(context.editable || data.problem.translator) && (
+            {(data.problem.role !== 'READ' || data.problem.translator) && (
               <>
                 <button
                   className="button"
@@ -355,7 +421,11 @@ export default function ProblemWorkspace() {
                 <button
                   className="button primary"
                   disabled={busy}
-                  onClick={() => setCommitModal(true)}
+                  onClick={() => {
+                    setCommitPreview(null);
+                    setPreviewError('');
+                    setCommitModal(true);
+                  }}
                 >
                   <Icon name="branch" />
                   커밋
@@ -377,9 +447,27 @@ export default function ProblemWorkspace() {
                   >
                     <Icon name={icon} size={17} />
                     <span>{label}</span>
-                    {id === 'overview' && data.cautions.length > 0 && (
-                      <span className="nav-count">{data.cautions.length}</span>
+                    {id === 'overview' && (
+                      <span
+                        className={`nav-readiness ${required ? 'blocking' : ''}`}
+                      >
+                        {required ? `필수 ${required}` : '필수 완료'}
+                        {recommended ? ` · 권장 ${recommended}` : ''}
+                      </span>
                     )}
+                    {id === 'invocations' &&
+                      Boolean(
+                        data.pending_preparations?.filter((r) => !r.stale)
+                          .length,
+                      ) && (
+                        <span className="nav-count">
+                          미반영{' '}
+                          {
+                            data.pending_preparations?.filter((r) => !r.stale)
+                              .length
+                          }
+                        </span>
+                      )}
                   </NavLink>
                 ))}
               </div>
@@ -396,6 +484,7 @@ export default function ProblemWorkspace() {
             </div>
           </aside>
           <div className="workspace-main">
+            <PreparationNotice onPendingChange={updatePreparations} />
             {message && (
               <Notice tone={isError ? 'error' : 'success'}>
                 {message}
@@ -502,6 +591,7 @@ export default function ProblemWorkspace() {
       )}
       {commitModal && (
         <Modal
+          wide
           title="변경사항 커밋"
           onClose={() => setCommitModal(false)}
           footer={
@@ -511,11 +601,17 @@ export default function ProblemWorkspace() {
               </button>
               <button
                 className="button primary"
-                disabled={busy || !commitMessage.trim()}
+                disabled={
+                  busy ||
+                  !commitMessage.trim() ||
+                  !commitPreview ||
+                  Boolean(commitPreview.conflicts.length)
+                }
                 onClick={() =>
                   void workingAction('commit', {
                     message: commitMessage,
                     minor,
+                    expected_revision: commitPreview?.revision,
                   })
                 }
               >
@@ -528,6 +624,35 @@ export default function ProblemWorkspace() {
             저장한 변경을 공유 리비전에 반영합니다. 동료의 변경과 충돌하면
             커밋이 중단됩니다.
           </p>
+          {previewError ? (
+            <Notice tone="error">{previewError}</Notice>
+          ) : commitPreview ? (
+            <>
+              <p className="muted small">
+                공유 r{commitPreview.revision}에 반영할 변경사항입니다. 아직
+                저장하지 않은 편집도 포함됩니다.
+              </p>
+              {commitPreview.conflicts.length > 0 && (
+                <Notice tone="error">
+                  동료의 변경과 충돌합니다: {commitPreview.conflicts.join(', ')}
+                  . 업데이트하고 충돌을 해결한 뒤 다시 확인하세요.
+                </Notice>
+              )}
+              <Suspense
+                fallback={
+                  <p className="muted">변경사항을 불러오고 있습니다…</p>
+                }
+              >
+                <CommitChanges
+                  problemId={problemId}
+                  before={commitPreview.before}
+                  after={commitPreview.after}
+                />
+              </Suspense>
+            </>
+          ) : (
+            <p className="muted">변경사항을 비교하고 있습니다…</p>
+          )}
           <label>
             변경 내용
             <textarea

@@ -2679,7 +2679,9 @@ svg {
   background: var(--zoj-surface);
   font-size: 13px;
 }
-.login-selected-account span { overflow-wrap: anywhere; }
+.login-selected-account span {
+  overflow-wrap: anywhere;
+}
 .account-security-card {
   display: flex;
   align-items: center;
@@ -2692,9 +2694,244 @@ svg {
   background: var(--zoj-surface);
   text-align: left;
 }
-.account-security-card:hover { border-color: var(--zoj-border-selected); background: var(--zoj-surface-hover); }
-.account-security-icon { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 12px; background: var(--zoj-surface-hover); color: var(--zoj-accent); }
-.account-security-card strong { display: block; }
-.account-security-card small { display: block; margin-top: 5px; font-weight: 400; color: var(--zoj-muted); }
-.account-security-card > svg { margin-left: auto; flex: none; color: var(--zoj-accent); }
-.editor-modal.password-modal { width: 720px; }
+.account-security-card:hover {
+  border-color: var(--zoj-border-selected);
+  background: var(--zoj-surface-hover);
+}
+.account-security-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 12px;
+  background: var(--zoj-surface-hover);
+  color: var(--zoj-accent);
+}
+.account-security-card strong {
+  display: block;
+}
+.account-security-card small {
+  display: block;
+  margin-top: 5px;
+  font-weight: 400;
+  color: var(--zoj-muted);
+}
+.account-security-card > svg {
+  margin-left: auto;
+  flex: none;
+  color: var(--zoj-accent);
+}
+.editor-modal.password-modal {
+  width: 720px;
+}
+
+/* Authoring status stays close to the current work and uses real states. */
+.nav-readiness {
+  display: block;
+  font-size: 10px;
+  color: #15803d;
+  line-height: 1.4;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.nav-readiness.blocking {
+  color: #b91c1c;
+}
+.problem-sidebar a:has(.nav-readiness) {
+  flex-wrap: wrap;
+}
+.problem-sidebar a .nav-readiness {
+  flex-basis: 100%;
+  padding-left: 25px;
+}
+.readiness-summary {
+  border: 1px solid #dbe4ef;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+  background: #f8fafc;
+}
+.readiness-summary > strong {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  margin-right: 12px;
+}
+.readiness-summary p {
+  margin: 10px 0 0;
+  color: #475569;
+  font-size: 13px;
+}
+.source-role-badges,
+.commit-change-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.source-role-picker {
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  padding: 14px;
+}
+.source-role-picker legend {
+  font-weight: 650;
+  padding: 0 6px;
+}
+.source-role-picker .checkbox-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+.generation-auto-apply {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.generation-auto-apply small {
+  color: #64748b;
+  font-weight: 400;
+}
+.preparation-banner {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px;
+  border: 1px solid #f4d598;
+  border-radius: 14px;
+  background: #fffbeb;
+  margin-bottom: 18px;
+}
+.preparation-banner > svg {
+  flex-shrink: 0;
+  color: #a16207;
+  margin-top: 2px;
+}
+.preparation-banner > div:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+.preparation-banner strong {
+  font-size: 14px;
+  color: #713f12;
+}
+.preparation-banner p {
+  font-size: 12px;
+  color: #854d0e;
+  line-height: 1.6;
+  margin: 6px 0 0;
+}
+.preparation-banner .actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.commit-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 18px 0 24px;
+}
+.commit-changes h3 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+.commit-change {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.commit-change summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.commit-change summary > span:not(.badge) {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.commit-change summary::after {
+  content: '+';
+  color: #64748b;
+}
+.commit-change[open] summary::after {
+  content: '−';
+}
+.commit-change summary:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: -3px;
+}
+.commit-change > p {
+  padding: 0 12px;
+}
+.diff-downloads {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  padding: 0 12px 12px;
+}
+.line-diff {
+  overflow-x: auto;
+  max-height: 340px;
+  overflow-y: auto;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.diff-line {
+  display: flex;
+  gap: 8px;
+  min-width: max-content;
+  font:
+    12px/1.75 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  padding: 1px 10px;
+  color: #334155;
+}
+.diff-line.add {
+  background: #ecfdf5;
+  color: #065f46;
+}
+.diff-line.remove {
+  background: #fef2f2;
+  color: #991b1b;
+}
+.diff-line code {
+  white-space: pre;
+  color: inherit;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+}
+.diff-line .line-number {
+  min-width: 26px;
+  text-align: right;
+  color: #64748b;
+  user-select: none;
+}
+.result-action .block {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+}
+@media (max-width: 720px) {
+  .preparation-banner {
+    flex-wrap: wrap;
+  }
+  .preparation-banner .actions {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    padding-left: 30px;
+  }
+  .preparation-banner .button {
+    white-space: normal;
+  }
+  .readiness-summary > .badge {
+    margin-top: 8px;
+  }
+}

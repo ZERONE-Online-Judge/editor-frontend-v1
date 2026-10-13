@@ -26,7 +26,12 @@ loaded.require = (id) => {
         return sha === 'input' ? '1 2\n3 4\n' : '3\n7\n';
       },
     };
-  if (id === '../../lib/workspace' || id === './ZojPublishing') return {};
+  if (
+    id === '../../lib/workspace' ||
+    id === './ZojPublishing' ||
+    id === 'react-router-dom'
+  )
+    return {};
   if (id === '../../components/ui')
     return {
       CodeEditor: ({ value, label }) =>

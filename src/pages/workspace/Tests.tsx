@@ -21,6 +21,7 @@ export default function Tests() {
   const [editing, setEditing] = useState<Test | null | false>(false);
   const [groups, setGroups] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [autoApply, setAutoApply] = useState(false);
   const set = doc.testsets[selected];
   const rows = Object.values(set?.tests || {}).sort(
     (a, b) => a.index - b.index,
@@ -79,9 +80,10 @@ export default function Tests() {
               className="button primary"
               disabled={!editable || busy}
               onClick={() =>
-                void run('prepare', { testset: selected }).catch((e) =>
-                  notify(e.message, true),
-                )
+                void run('prepare', {
+                  testset: selected,
+                  auto_apply: autoApply,
+                }).catch((e) => notify(e.message, true))
               }
             >
               <Icon name="play" />
@@ -96,6 +98,16 @@ export default function Tests() {
           </>
         }
       />
+      <label className="checkbox generation-auto-apply">
+        <input
+          type="checkbox"
+          checked={autoApply}
+          disabled={!editable || busy}
+          onChange={(e) => setAutoApply(e.target.checked)}
+        />
+        성공하면 내 작업 사본에 자동 반영
+        <small>실행 이후 저장된 자료가 바뀌면 반영하지 않습니다.</small>
+      </label>
       <div className="card language-toolbar">
         <div className="tabs">
           {Object.keys(doc.testsets).map((name) => (

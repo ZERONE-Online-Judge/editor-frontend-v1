@@ -33,6 +33,7 @@ export type Statement = {
 export type Language =
   'cpp17' | 'cpp20' | 'c17' | 'c99' | 'python3' | 'java17' | 'java8' | 'text';
 export type SourceFile = {
+  roles?: SourceRole[];
   name: string;
   kind: 'source' | 'resource' | 'aux' | 'statement';
   language: Language;
@@ -41,6 +42,7 @@ export type SourceFile = {
   compile_with_solution?: boolean;
   entry_class?: string;
 };
+export type SourceRole = 'validator' | 'checker' | 'generator' | 'interactor';
 export type SolutionTag =
   'MA' | 'OK' | 'RJ' | 'TL' | 'TO' | 'TM' | 'WA' | 'PE' | 'ML' | 'NR' | 'RE';
 export type Solution = SourceFile & {
@@ -131,6 +133,7 @@ export type WorkspaceData = {
   base_revision: number;
   document_hash: string;
   cautions: Caution[];
+  pending_preparations?: { id: string; created_at: number; stale: boolean }[];
 };
 export type JobKind =
   | 'prepare'
@@ -159,6 +162,11 @@ export type PreparedTest = Test & {
   main_memory_kb: number | null;
 };
 export type Job = {
+  application?: {
+    applied_at: number;
+    workspace_version: number;
+    document_hash: string;
+  } | null;
   id: string;
   problem_id: string;
   kind: JobKind;
@@ -171,6 +179,7 @@ export type Job = {
   started_at: number | null;
   finished_at: number | null;
   result: {
+    auto_apply?: { status: 'applied' | 'blocked'; message?: string };
     runtime?: { backend?: 'editor' | 'zoj'; runtime_revision?: string };
     summary?: string;
     progress?: number;
