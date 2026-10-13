@@ -551,8 +551,8 @@ export default function Executions({
                     컴파일·생성·검증·PDF 실행을 담당한 실제 노드와 실행 자원을
                     확인합니다.
                   </p>
-                  <div className="table-wrap">
-                    <table>
+                  <div className="table-scroll">
+                    <table className="data-table">
                       <thead>
                         <tr>
                           <th>채점 노드</th>
