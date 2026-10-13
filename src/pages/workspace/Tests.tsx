@@ -542,14 +542,15 @@ function TestEditor({
         <CodeEditor
           value={answer}
           onChange={setAnswer}
-          label="기대 출력 · 선택"
+          label={doc.info.interactive ? 'Interactor 참고 자료 · 선택' : '기대 출력 · 작성 중 참고용 (선택)'}
           rows={10}
           readOnly={!editable || busy}
         />
       </div>
       <p className="muted small">
-        실제 검증에서는 validator를 통과한 뒤 Main 풀이로 기대 출력을 다시
-        생성합니다.
+        {doc.info.interactive
+          ? '이 값은 Interactor가 읽는 참고 자료로 전달됩니다. 입력·정답 생성에서도 이 자료를 유지하며, Main과 Interactor의 대화 내용을 기대 출력으로 덮어쓰지 않습니다. Interactor가 참고 자료를 사용하지 않으면 비워 두세요.'
+          : '입력한 기대 출력은 작성 중 참고용입니다. ‘입력·정답 생성’을 실행하면 validator 검사 후 Main 풀이 출력으로 교체됩니다. 생성 결과를 작업 사본에 반영하면 교체한 기대 출력이 저장됩니다.'}
       </p>
       {error && <Notice tone="error">{error}</Notice>}
     </Modal>
