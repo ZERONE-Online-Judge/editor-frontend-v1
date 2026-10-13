@@ -252,15 +252,17 @@ export default function Executions({
           <option value="zoj" disabled={!zojConfigured}>
             ZOJ 실제 채점기 · 대회와 같은 환경
           </option>
-          <option value="editor">Editor 격리 실행 · 제작 기능 전체 지원</option>
+          <option value="editor">
+            에이전트 격리 실행 · 제작 기능 전체 지원
+          </option>
         </select>
       </label>
       <p className="muted">
         {executionBackend === null
           ? '서버에서 기본 검증 환경을 확인하고 있습니다.'
           : executionBackend === 'zoj'
-            ? '풀이를 기존 ZOJ 채점 큐에 보내 판정과 시간·메모리를 기록합니다. C++17·C99·Python 3.13·Java 8을 지원하고, 대회와 같은 언어별 보정을 적용합니다. 테스트 준비·생성기·PDF 작업은 Editor에서 처리합니다.'
-            : 'Editor 서버의 별도 격리 컨테이너에서 실행합니다. 대화형·그룹 점수 등 제작 기능을 검증할 수 있으며, 시간·메모리는 ZOJ 대회 채점 환경의 측정값과 다를 수 있습니다.'}
+            ? '풀이를 기존 ZOJ 채점 큐에 보내 판정과 시간·메모리를 기록합니다. C++17·C99·Python 3.13·Java 8을 지원하고, 대회와 같은 언어별 보정을 적용합니다. 입력 생성·Validator·Checker·PDF 실행도 Editor 작업이 허용된 채점 에이전트에서 처리합니다.'
+            : 'Editor 실행이 허용된 채점 VM의 제작용 격리 환경에서 실행합니다. 대화형·그룹 점수 등 제작 기능을 검증합니다. ZOJ 대회의 언어별 시간·메모리 보정은 ‘ZOJ 실제 채점기’ 선택에서 적용됩니다.'}
       </p>
     </section>
   );
@@ -528,7 +530,10 @@ export default function Executions({
                 {(job.result.runtime?.backend ??
                   job.options.execution_backend) === 'zoj'
                   ? 'ZOJ 실제 채점기'
-                  : 'Editor 격리 실행'}
+                  : job.result.runtime?.backend === 'agent' ||
+                      job.options.execution_transport === 'agent'
+                    ? '채점 에이전트 제작용 격리 실행'
+                    : 'Editor 격리 실행 (이전 기록)'}
               </p>
               {job.status !== 'queued' &&
                 job.status !== 'running' &&
@@ -537,6 +542,61 @@ export default function Executions({
                     {job.result.summary}
                   </p>
                 )}
+              {job.result.execution_runs?.length ? (
+                <details className="notice neutral">
+                  <summary>
+                    에이전트 실행 기록 · {job.result.execution_runs.length}회
+                  </summary>
+                  <p className="muted small">
+                    컴파일·생성·검증·PDF 실행을 담당한 실제 노드와 실행 자원을
+                    확인합니다.
+                  </p>
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>채점 노드</th>
+                          <th>환경</th>
+                          <th>실행 결과</th>
+                          <th>CPU 시간</th>
+                          <th>메모리</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {job.result.execution_runs.map((run) => (
+                          <tr key={run.task_id}>
+                            <td>{run.node_name || '채점 노드'}</td>
+                            <td>
+                              {run.runtime === 'renderer'
+                                ? 'PDF 렌더링'
+                                : '제작용 실행'}
+                            </td>
+                            <td>
+                              {{
+                                ok: '실행 완료',
+                                'time-limit': '시간 초과',
+                                'memory-limit': '메모리 초과',
+                                'output-limit': '출력 초과',
+                                'wall-limit': '실행 응답 시간 초과',
+                              }[run.status] || run.status}
+                            </td>
+                            <td>
+                              {run.cpu_ms == null
+                                ? '미제공'
+                                : `${run.cpu_ms}ms`}
+                            </td>
+                            <td>
+                              {run.memory_kb == null
+                                ? '미제공'
+                                : `${(run.memory_kb / 1024).toFixed(1)}MiB`}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              ) : null}
               {stale && (
                 <Notice>
                   현재 작업 사본과 다른 자료의 실행 기록입니다. 이 결과는 당시

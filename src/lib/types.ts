@@ -180,7 +180,20 @@ export type Job = {
   finished_at: number | null;
   result: {
     auto_apply?: { status: 'applied' | 'blocked'; message?: string };
-    runtime?: { backend?: 'editor' | 'zoj'; runtime_revision?: string };
+    runtime?: {
+      backend?: 'editor' | 'zoj' | 'agent';
+      runtime_revision?: string;
+    };
+    execution_runs?: {
+      task_id: string;
+      runtime: string;
+      node_name?: string | null;
+      agent_version?: string;
+      status: string;
+      cpu_ms?: number | null;
+      wall_ms?: number | null;
+      memory_kb?: number | null;
+    }[];
     summary?: string;
     progress?: number;
     error?: string;
