@@ -2792,6 +2792,10 @@ svg {
   color: #64748b;
   font-weight: 400;
 }
+.test-content-button {
+  margin-top: 8px;
+  white-space: nowrap;
+}
 .preparation-banner {
   display: flex;
   gap: 12px;

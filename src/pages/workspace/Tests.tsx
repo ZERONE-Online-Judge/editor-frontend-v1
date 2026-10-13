@@ -186,7 +186,8 @@ export default function Tests() {
                   등록 테스트 <span className="count">{rows.length}</span>
                 </h3>
                 <p>
-                  생성 결과는 실행 기록에서 확인한 뒤 작업 사본에 반영합니다.
+                  각 테스트의 ‘입력·출력 보기’ 버튼에서 내용을 확인할 수
+                  있습니다.
                 </p>
               </div>
               <div className="actions">
@@ -238,12 +239,7 @@ export default function Tests() {
                     {rows.map((test) => (
                       <tr key={test.index}>
                         <td>
-                          <button
-                            className="text-button"
-                            onClick={() => setEditing(test)}
-                          >
-                            #{test.index}
-                          </button>
+                          <Badge>#{test.index}</Badge>
                         </td>
                         <td>
                           <strong className="small">
@@ -253,6 +249,15 @@ export default function Tests() {
                             {test.command || '직접 입력'}
                             {test.answer_sha && ' · 기대 출력 있음'}
                           </div>
+                          <button
+                            className="button small test-content-button"
+                            aria-label={`테스트 ${test.index} 입력·출력 보기`}
+                            aria-haspopup="dialog"
+                            onClick={() => setEditing(test)}
+                          >
+                            <Icon name="file" size={15} />
+                            입력·출력 보기
+                          </button>
                         </td>
                         <td>
                           <select
@@ -456,7 +461,7 @@ function TestEditor({
   return (
     <Modal
       wide
-      title={test ? `테스트 #${test.index}` : '직접 입력 테스트'}
+      title={test ? `테스트 #${test.index} · 입력·출력` : '직접 입력 테스트'}
       onClose={onClose}
       footer={
         <>
