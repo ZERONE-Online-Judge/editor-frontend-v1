@@ -162,27 +162,52 @@ export type PreparedTest = Test & {
   main_memory_kb: number | null;
 };
 export type ExecutionLimits = {
-  tests_per_set: number; stress_iterations: number; stress_seconds: number;
-  counterexample_targets: number[]; generator_arguments: number;
-  generator_cpu_ms: number; generator_memory_mb: number; generator_output_bytes: number;
-  job_timeout_seconds: number; worker_concurrency: number; judge_concurrency: number; active_jobs_per_user: number;
+  tests_per_set: number;
+  stress_iterations: number;
+  stress_seconds: number;
+  counterexample_targets: number[];
+  generator_arguments: number;
+  generator_cpu_ms: number;
+  generator_memory_mb: number;
+  generator_output_bytes: number;
+  job_timeout_seconds: number;
+  worker_concurrency: number;
+  judge_concurrency: number;
+  active_jobs_per_user: number;
 };
 export type ExecutionEnvironment = {
-  default_backend: 'editor' | 'zoj'; zoj_configured: boolean;
-  limits?: ExecutionLimits; capacity?: { running_jobs: number; queued_jobs: number };
-  execution_transport?: 'local' | 'agent'; error?: string;
+  default_backend: 'editor' | 'zoj';
+  zoj_configured: boolean;
+  limits?: ExecutionLimits;
+  capacity?: { running_jobs: number; queued_jobs: number };
+  execution_transport?: 'local' | 'agent';
+  error?: string;
   updated_at?: number;
   zoj?: { execution?: { online_nodes: number }; online_nodes?: number } | null;
 };
 export type CounterexampleFinding = {
-  solution: string; tag?: string; verdict: string; actual_sha: string; comment: string;
-  cpu_ms?: number | null; memory_kb?: number | null;
+  solution: string;
+  tag?: string;
+  verdict: string;
+  actual_sha: string;
+  comment: string;
+  cpu_ms?: number | null;
+  memory_kb?: number | null;
 };
 export type Counterexample = {
-  id: string; iteration: number; command: string; input_sha: string; answer_sha: string;
+  id: string;
+  iteration: number;
+  command: string;
+  input_sha: string;
+  answer_sha: string;
   findings: CounterexampleFinding[];
 };
-export type InvocationScope = { testset: string; solutions: string[]; test_indices: number[]; test_count: number };
+export type InvocationScope = {
+  testset: string;
+  solutions: string[];
+  test_indices: number[];
+  test_count: number;
+};
 export type Job = {
   application?: {
     applied_at: number;
@@ -275,9 +300,21 @@ export type Job = {
       comment: string;
     } | null;
     counterexamples?: Counterexample[];
-    stress?: { iterations_started: number; iterations_completed: number; elapsed_seconds: number;
-      duplicates_skipped: number; counterexample_count: number; stop_reason: string | null };
-    candidate_summaries?: { name: string; tag: string; tested: number; verdicts: Record<string, number>; first_counterexample_id: string | null }[];
+    stress?: {
+      iterations_started: number;
+      iterations_completed: number;
+      elapsed_seconds: number;
+      duplicates_skipped: number;
+      counterexample_count: number;
+      stop_reason: string | null;
+    };
+    candidate_summaries?: {
+      name: string;
+      tag: string;
+      tested: number;
+      verdicts: Record<string, number>;
+      first_counterexample_id: string | null;
+    }[];
     iterations?: number;
     package?: {
       format?: 'editor' | 'zoj';

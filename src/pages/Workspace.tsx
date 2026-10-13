@@ -235,14 +235,18 @@ export default function ProblemWorkspace() {
   }, [problemId, notify, data, doc]);
   const run = useCallback(
     async (kind: JobKind, options: Record<string, unknown> = {}) => {
-      const committed = options.snapshot === 'committed' ||
+      const committed =
+        options.snapshot === 'committed' ||
         (data?.problem.role === 'READ' && data.problem.reviewer);
       const version = committed ? data!.version : await save();
       const result = await post<Job>(`/problems/${problemId}/jobs`, {
         kind,
         version,
         ...(committed ? { revision: data!.problem.revision } : {}),
-        options: { ...options, ...(committed ? { snapshot: 'committed' } : {}) },
+        options: {
+          ...options,
+          ...(committed ? { snapshot: 'committed' } : {}),
+        },
         reuse: false,
       });
       if (activeProblem.current === problemId)

@@ -108,7 +108,9 @@ export default function Executions({
     'editor' | 'zoj' | null
   >(null);
   const [zojConfigured, setZojConfigured] = useState(false);
-  const [environment, setEnvironment] = useState<ExecutionEnvironment | null>(null);
+  const [environment, setEnvironment] = useState<ExecutionEnvironment | null>(
+    null,
+  );
   useEffect(() => {
     let active = true;
     let pending = false;
@@ -124,11 +126,14 @@ export default function Executions({
         }
       } catch (e) {
         if (active) notify((e as Error).message, true);
-      } finally { pending = false; }
+      } finally {
+        pending = false;
+      }
     }
     void refreshEnvironment();
     const timer = window.setInterval(() => {
-      if (window.document.visibilityState !== 'hidden') void refreshEnvironment();
+      if (window.document.visibilityState !== 'hidden')
+        void refreshEnvironment();
     }, 15000);
     return () => {
       active = false;
@@ -218,7 +223,9 @@ export default function Executions({
     try {
       const result = await run(kind, {
         ...options,
-        ...(executionBackend && (kind === 'verify' || kind === 'package') ? { execution_backend: executionBackend } : {}),
+        ...(executionBackend && (kind === 'verify' || kind === 'package')
+          ? { execution_backend: executionBackend }
+          : {}),
       });
       selectJob(result.id);
       setJob(result);
@@ -229,8 +236,13 @@ export default function Executions({
       setBusy(false);
     }
   }
-  const stale = Boolean(job && (job.options.source_document_hash || job.document_hash) !== data.document_hash);
-  const scope = (job?.result.scope || job?.options.scope) as InvocationScope | undefined;
+  const stale = Boolean(
+    job &&
+    (job.options.source_document_hash || job.document_hash) !==
+      data.document_hash,
+  );
+  const scope = (job?.result.scope || job?.options.scope) as
+    InvocationScope | undefined;
   async function apply() {
     if (!job) return;
     try {
@@ -310,8 +322,13 @@ export default function Executions({
       <ExecutionLimitsInfo environment={environment} stress={stress} />
       {packages && environmentPanel}
       {stress ? (
-        <StressControls document={doc} limits={environment?.limits} allowed={canInvoke}
-          busy={busy} start={(options) => void start('stress', options)} />
+        <StressControls
+          document={doc}
+          limits={environment?.limits}
+          allowed={canInvoke}
+          busy={busy}
+          start={(options) => void start('stress', options)}
+        />
       ) : packages ? (
         <>
           <section className="card compact">
@@ -406,7 +423,11 @@ export default function Executions({
                 onClick={() => selectJob(row.id)}
               >
                 <div>
-                  <strong>{typeof row.options.name === 'string' && row.options.name ? row.options.name : jobLabels[row.kind]}</strong>
+                  <strong>
+                    {typeof row.options.name === 'string' && row.options.name
+                      ? row.options.name
+                      : jobLabels[row.kind]}
+                  </strong>
                   {row.kind === 'prepare' && row.status === 'completed' && (
                     <Badge
                       tone={
@@ -455,7 +476,11 @@ export default function Executions({
             <>
               <div className="section-heading">
                 <div>
-                  <h3>{typeof job.options.name === 'string' && job.options.name ? job.options.name : jobLabels[job.kind]}</h3>
+                  <h3>
+                    {typeof job.options.name === 'string' && job.options.name
+                      ? job.options.name
+                      : jobLabels[job.kind]}
+                  </h3>
                   <p>
                     {time(job.created_at)} · r{job.revision}
                   </p>
@@ -482,9 +507,29 @@ export default function Executions({
                     ? '채점 에이전트 제작용 격리 실행'
                     : 'Editor 격리 실행 (이전 기록)'}
               </p>
-              <p className="muted small">자료 기준: {job.options.snapshot === 'committed' ? `커밋된 리비전 r${job.revision}` : '요청 당시 작업 사본'}</p>
-              {scope && <p className="muted small">요청 범위: {scope.testset} · 풀이 {scope.solutions.length}개 · 테스트 {scope.test_count}개{scope.test_indices.length ? ` (#${scope.test_indices.join(', #')})` : ' (세트 전체)'}</p>}
-              {typeof job.options.note === 'string' && job.options.note && <p className="notice neutral" style={{ whiteSpace: 'pre-wrap' }}>{job.options.note}</p>}
+              <p className="muted small">
+                자료 기준:{' '}
+                {job.options.snapshot === 'committed'
+                  ? `커밋된 리비전 r${job.revision}`
+                  : '요청 당시 작업 사본'}
+              </p>
+              {scope && (
+                <p className="muted small">
+                  요청 범위: {scope.testset} · 풀이 {scope.solutions.length}개 ·
+                  테스트 {scope.test_count}개
+                  {scope.test_indices.length
+                    ? ` (#${scope.test_indices.join(', #')})`
+                    : ' (세트 전체)'}
+                </p>
+              )}
+              {typeof job.options.note === 'string' && job.options.note && (
+                <p
+                  className="notice neutral"
+                  style={{ whiteSpace: 'pre-wrap' }}
+                >
+                  {job.options.note}
+                </p>
+              )}
               {job.status !== 'queued' &&
                 job.status !== 'running' &&
                 job.result.summary && (
@@ -494,7 +539,8 @@ export default function Executions({
                 )}
               {job.result.processed_testsets?.length ? (
                 <p className="muted small">
-                  실제 처리한 테스트 세트: {job.result.processed_testsets.join(', ')}
+                  실제 처리한 테스트 세트:{' '}
+                  {job.result.processed_testsets.join(', ')}
                 </p>
               ) : null}
               {job.result.execution_runs?.length ? (
@@ -569,7 +615,9 @@ export default function Executions({
                   <strong>
                     {job.result.summary || '실행 자리를 기다리고 있습니다.'}
                   </strong>
-                  {(editable || (data.problem.reviewer && job.requested_by === user?.id)) && (
+                  {(editable ||
+                    (data.problem.reviewer &&
+                      job.requested_by === user?.id)) && (
                     <button
                       className="text-button"
                       onClick={() =>
@@ -661,7 +709,12 @@ export default function Executions({
                   {solution.total_score != null && (
                     <p>점수 {solution.total_score.toLocaleString()}</p>
                   )}
-                  {solution.score_scope_complete === false && <p className="muted small">일부 테스트만 실행했으므로 세트 전체 점수는 계산하지 않았습니다.</p>}
+                  {solution.score_scope_complete === false && (
+                    <p className="muted small">
+                      일부 테스트만 실행했으므로 세트 전체 점수는 계산하지
+                      않았습니다.
+                    </p>
+                  )}
                   {solution.judge_runs?.length ? (
                     <div className="section-stack">
                       <p className="muted">
@@ -790,16 +843,35 @@ export default function Executions({
                 </table>
               ) : null}
               {job.kind === 'stress' && (
-                <StressCounterexamples job={job} problemId={data.problem.id}
+                <StressCounterexamples
+                  job={job}
+                  problemId={data.problem.id}
                   testsets={Object.keys(doc.testsets)}
-                  allowed={editable && !dirty && (!stale || job.application?.document_hash === data.document_hash)}
-                  save={save} applied={async () => {
+                  allowed={
+                    editable &&
+                    !dirty &&
+                    (!stale ||
+                      job.application?.document_hash === data.document_hash)
+                  }
+                  save={save}
+                  applied={async () => {
                     await reload(true);
-                    setJob(await api<Job>(`/problems/${data.problem.id}/jobs/${job.id}`));
+                    setJob(
+                      await api<Job>(
+                        `/problems/${data.problem.id}/jobs/${job.id}`,
+                      ),
+                    );
                     await fetchRows();
                   }}
-                  evidence={(example, finding) => <CodeEvidence problemId={data.problem.id}
-                    input={example.input_sha} answer={example.answer_sha} actual={finding.actual_sha} />} />
+                  evidence={(example, finding) => (
+                    <CodeEvidence
+                      problemId={data.problem.id}
+                      input={example.input_sha}
+                      answer={example.answer_sha}
+                      actual={finding.actual_sha}
+                    />
+                  )}
+                />
               )}
               {job.result.package && job.status === 'completed' && (
                 <div className="package-download">
@@ -872,7 +944,11 @@ export default function Executions({
                 결과는 실행 당시 자료 해시·검증 환경과 함께 보관됩니다.
                 시간·메모리는 해당 실행 환경에서 반환한 값입니다.
               </div>
-              <InvocationComments problemId={data.problem.id} jobId={job.id} allowed={canInvoke} />
+              <InvocationComments
+                problemId={data.problem.id}
+                jobId={job.id}
+                allowed={canInvoke}
+              />
             </>
           ) : jobError?.id === selected ? (
             <Notice tone="error">{jobError.message}</Notice>
@@ -896,7 +972,7 @@ export default function Executions({
             <div>
               <strong>새 작업 시작</strong>
               <span>
-                전체 풀이 검증 또는 입력·정답 생성을 추가로 요청합니다.
+                실행 범위를 지정한 풀이 검증 또는 입력·정답 생성을 요청합니다.
               </span>
             </div>
             <Icon name="down" size={16} />
@@ -908,16 +984,27 @@ export default function Executions({
             </p>
             {environmentPanel}
             {!editable && data.problem.reviewer && (
-              <Notice>검수 실행은 커밋된 리비전 r{data.problem.revision}의 입력·기대 출력과 판정 태그를 사용합니다. 결과와 임시 코드는 실행 기록에만 보관됩니다.</Notice>
+              <Notice>
+                검수 실행은 커밋된 리비전 r{data.problem.revision}의 입력·기대
+                출력과 판정 태그를 사용합니다. 결과와 임시 코드는 실행 기록에만
+                보관됩니다.
+              </Notice>
             )}
             <div className="execution-launcher-grid">
               <section
                 className="execution-launcher-option"
-                aria-label="새 전체 풀이 검증"
+                aria-label="새 풀이 검증"
               >
-                <InvocationControls problemId={data.problem.id} document={doc} revision={data.problem.revision}
-                  limits={environment?.limits} allowed={canInvoke} writer={editable} busy={busy}
-                  start={(options) => void start('verify', options)} />
+                <InvocationControls
+                  problemId={data.problem.id}
+                  document={doc}
+                  revision={data.problem.revision}
+                  limits={environment?.limits}
+                  allowed={canInvoke}
+                  writer={editable}
+                  busy={busy}
+                  start={(options) => void start('verify', options)}
+                />
               </section>
               <section
                 className="execution-launcher-option"
@@ -928,9 +1015,17 @@ export default function Executions({
                   선택한 테스트 세트의 생성기를 실행하고 Validator와 Main 풀이로
                   입력·정답을 준비합니다.
                 </p>
-                <label>생성할 테스트 세트<select value={setName} onChange={(e) => setSetName(e.target.value)}>
-                  {Object.keys(doc.testsets).map((name) => <option key={name}>{name}</option>)}
-                </select></label>
+                <label>
+                  생성할 테스트 세트
+                  <select
+                    value={setName}
+                    onChange={(e) => setSetName(e.target.value)}
+                  >
+                    {Object.keys(doc.testsets).map((name) => (
+                      <option key={name}>{name}</option>
+                    ))}
+                  </select>
+                </label>
                 <label className="checkbox generation-auto-apply">
                   <input
                     type="checkbox"

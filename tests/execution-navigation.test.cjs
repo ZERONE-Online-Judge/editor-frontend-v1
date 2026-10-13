@@ -84,13 +84,28 @@ function job(id, kind, summary) {
 }
 async function get(url) {
   if (url === '/execution-environment')
-    return { default_backend: 'zoj', zoj_configured: true,
-      limits: { tests_per_set: 10, stress_iterations: 73, stress_seconds: 300, counterexample_targets: [1, 5, 10],
-        generator_arguments: 64, generator_cpu_ms: 10000, generator_memory_mb: 512, generator_output_bytes: 16777216,
-        job_timeout_seconds: 600, worker_concurrency: 4, judge_concurrency: 2, active_jobs_per_user: 5 },
-      capacity: { running_jobs: 1, queued_jobs: 3 } };
+    return {
+      default_backend: 'zoj',
+      zoj_configured: true,
+      limits: {
+        tests_per_set: 10,
+        stress_iterations: 73,
+        stress_seconds: 300,
+        counterexample_targets: [1, 5, 10],
+        generator_arguments: 64,
+        generator_cpu_ms: 10000,
+        generator_memory_mb: 512,
+        generator_output_bytes: 16777216,
+        job_timeout_seconds: 600,
+        worker_concurrency: 4,
+        judge_concurrency: 2,
+        active_jobs_per_user: 5,
+      },
+      capacity: { running_jobs: 1, queued_jobs: 3 },
+    };
   if (url === '/problems/p') return JSON.parse(JSON.stringify(state));
-  if (url.startsWith('/problems/p/revisions/')) return JSON.parse(JSON.stringify(state.document));
+  if (url.startsWith('/problems/p/revisions/'))
+    return JSON.parse(JSON.stringify(state.document));
   if (url.endsWith('/preparation-status'))
     return { version: 1, pending_preparations: [] };
   if (url === '/problems/p/jobs') return [...jobs];
@@ -341,7 +356,9 @@ test('explicit verification starts once with the chosen testset and environment'
   await act(() => {
     launcher.open = true;
   });
-  const select = [...host.querySelectorAll('.invocation-controls label')].find((el) => el.textContent.startsWith('검증 테스트 세트')).querySelector('select');
+  const select = [...host.querySelectorAll('.invocation-controls label')]
+    .find((el) => el.textContent.startsWith('검증 테스트 세트'))
+    .querySelector('select');
   await act(() => {
     select.value = 'extra';
     select.dispatchEvent(new window.Event('change', { bubbles: true }));
@@ -349,7 +366,11 @@ test('explicit verification starts once with the chosen testset and environment'
   await click('전체 풀이 검증 시작');
   assert.equal(requests.length, 1);
   assert.deepEqual(requests[0].body.options, {
-    name: '', note: '', snapshot: 'working_copy', test_indices: [], solutions: [],
+    name: '',
+    note: '',
+    snapshot: 'working_copy',
+    test_indices: [],
+    solutions: [],
     testset: 'extra',
     verify: true,
     execution_backend: 'zoj',
@@ -361,20 +382,41 @@ test('explicit verification starts once with the chosen testset and environment'
   );
 });
 test('selected verification submits exact solution names and a normalized test range', async () => {
-  state.document.solutions['wrong.py'] = { ...state.document.solutions['main.py'], name: 'wrong.py', tag: 'WA' };
+  state.document.solutions['wrong.py'] = {
+    ...state.document.solutions['main.py'],
+    name: 'wrong.py',
+    tag: 'WA',
+  };
   await mount('invocations?job=old');
-  const field = (label) => [...host.querySelectorAll('.invocation-controls label')].find((el) => el.textContent.startsWith(label)).querySelector('input,select,textarea');
+  const field = (label) =>
+    [...host.querySelectorAll('.invocation-controls label')]
+      .find((el) => el.textContent.startsWith(label))
+      .querySelector('input,select,textarea');
   await act(() => {
-    for (const [label, value] of [['대상 풀이', 'selected'], ['테스트 범위', 'range']]) {
-      const select = field(label); select.value = value; select.dispatchEvent(new window.Event('change', { bubbles: true }));
+    for (const [label, value] of [
+      ['대상 풀이', 'selected'],
+      ['테스트 범위', 'range'],
+    ]) {
+      const select = field(label);
+      select.value = value;
+      select.dispatchEvent(new window.Event('change', { bubbles: true }));
     }
   });
   await flush();
   await act(() => {
-    const label = [...host.querySelectorAll('.invocation-select-list label')].find((el) => el.textContent.includes('wrong.py'));
+    const label = [
+      ...host.querySelectorAll('.invocation-select-list label'),
+    ].find((el) => el.textContent.includes('wrong.py'));
     label.querySelector('input').click();
-    for (const [title, value] of [['테스트 번호·범위', '1-3, 2, 5'], ['실행 이름', '경계 확인']]) {
-      const input = field(title); Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, value);
+    for (const [title, value] of [
+      ['테스트 번호·범위', '1-3, 2, 5'],
+      ['실행 이름', '경계 확인'],
+    ]) {
+      const input = field(title);
+      Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      ).set.call(input, value);
       input.dispatchEvent(new window.Event('input', { bubbles: true }));
     }
   });
@@ -387,7 +429,8 @@ test('selected verification submits exact solution names and a normalized test r
 test('test range parsing rejects invalid bounds and deduplicates overlap', () => {
   const { parseTestIndices } = source('lib/invocationOptions.ts');
   assert.deepEqual(parseTestIndices('1-3,2,5~6', 10), [1, 2, 3, 5, 6]);
-  for (const value of ['', '0', '10-2', '11', '1; rm', '2.5']) assert.throws(() => parseTestIndices(value, 10));
+  for (const value of ['', '0', '10-2', '11', '1; rm', '2.5'])
+    assert.throws(() => parseTestIndices(value, 10));
 });
 test('execution limits reflect the server response rather than fixed UI defaults', async () => {
   await mount('stress');
@@ -418,21 +461,37 @@ test('a read-only reviewer can verify the committed revision without a working-c
   assert.equal(requests.length, 1);
   assert.equal(requests[0].body.options.snapshot, 'committed');
   assert.equal(requests[0].body.revision, state.problem.revision);
-  const generation = [...host.querySelectorAll('.execution-launcher button')].find((el) => el.textContent.includes('입력·정답 생성 시작'));
+  const generation = [
+    ...host.querySelectorAll('.execution-launcher button'),
+  ].find((el) => el.textContent.includes('입력·정답 생성 시작'));
   assert.equal(generation.disabled, true);
 });
 test('stress runs selected solutions against shared inputs with time and collection options', async () => {
   const main = state.document.solutions['main.py'];
-  state.document.solutions['wrong.py'] = { ...main, name: 'wrong.py', tag: 'WA' };
+  state.document.solutions['wrong.py'] = {
+    ...main,
+    name: 'wrong.py',
+    tag: 'WA',
+  };
   state.document.solutions['slow.py'] = { ...main, name: 'slow.py', tag: 'TL' };
   await mount('stress');
-  const field = (label) => [...host.querySelectorAll('.stress-controls label')].find((el) => el.textContent.startsWith(label)).querySelector('input,select');
+  const field = (label) =>
+    [...host.querySelectorAll('.stress-controls label')]
+      .find((el) => el.textContent.startsWith(label))
+      .querySelector('input,select');
   await act(() => {
     const input = field('생성기 명령');
-    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, 'gen {seed}');
+    Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    ).set.call(input, 'gen {seed}');
     input.dispatchEvent(new window.Event('input', { bubbles: true }));
-    for (const [label, value] of [['실행 기준', 'duration'], ['반례 발견 후', 'collect']]) {
-      const select = field(label); select.value = value;
+    for (const [label, value] of [
+      ['실행 기준', 'duration'],
+      ['반례 발견 후', 'collect'],
+    ]) {
+      const select = field(label);
+      select.value = value;
       select.dispatchEvent(new window.Event('change', { bubbles: true }));
     }
   });
@@ -440,11 +499,19 @@ test('stress runs selected solutions against shared inputs with time and collect
   assert.equal(field('최대 반복 횟수').max, '73');
   await click('스트레스 테스트 시작');
   assert.equal(requests.length, 1);
-  assert.deepEqual(requests[0].body.options.candidates, ['wrong.py', 'slow.py']);
+  assert.deepEqual(requests[0].body.options.candidates, [
+    'wrong.py',
+    'slow.py',
+  ]);
   assert.equal(requests[0].body.options.duration_seconds, 30);
   assert.equal(requests[0].body.options.counterexample_limit, 5);
   assert.equal(requests[0].body.options.stop_on_first, false);
-  assert.deepEqual(requests[0].body.options.counterexample_verdicts, ['WA', 'TLE', 'MLE', 'RE']);
+  assert.deepEqual(requests[0].body.options.counterexample_verdicts, [
+    'WA',
+    'TLE',
+    'MLE',
+    'RE',
+  ]);
 });
 test('a rejected request shows no misleading result link', async () => {
   requestError = '실행 요청이 거부되었습니다.';

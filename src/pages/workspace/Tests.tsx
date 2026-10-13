@@ -114,7 +114,8 @@ export default function Tests() {
         }
       />
       <p className="muted small">
-        ‘입력·정답 생성’은 현재 선택한 <strong>{selected}</strong> 세트만 처리합니다.
+        ‘입력·정답 생성’은 현재 선택한 <strong>{selected}</strong> 세트만
+        처리합니다.
       </p>
       <label className="checkbox generation-auto-apply">
         <input
@@ -542,7 +543,11 @@ function TestEditor({
         <CodeEditor
           value={answer}
           onChange={setAnswer}
-          label={doc.info.interactive ? 'Interactor 참고 자료 · 선택' : '기대 출력 · 작성 중 참고용 (선택)'}
+          label={
+            doc.info.interactive
+              ? 'Interactor 참고 자료 · 선택'
+              : '기대 출력 · 작성 중 참고용 (선택)'
+          }
           rows={10}
           readOnly={!editable || busy}
         />
