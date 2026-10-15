@@ -83,7 +83,7 @@ function source(relative) {
 }
 const Review = source('pages/workspace/Review.tsx').default;
 
-async function mount() {
+async function mount(sampleOverrides = {}) {
   const statement = {
     name: '줄 세기',
     legend: '줄의 개수를 구하세요.',
@@ -116,6 +116,7 @@ async function mount() {
               sample: true,
               input_sha: 'sample-input',
               answer_sha: 'sample-answer',
+              ...sampleOverrides,
             },
           },
         },
@@ -140,6 +141,26 @@ function button(host, text) {
     (item) => item.textContent === text,
   );
 }
+
+test('review and print use separate display samples including an empty override', async () => {
+  const { host, close } = await mount({
+    statement_input: 'friendly display\n',
+    statement_output: '',
+    verify_statement_io: false,
+  });
+  const samples = [...host.querySelectorAll('.review-sample-print pre')];
+  assert.equal(samples[0].textContent, 'friendly display\n');
+  assert.equal(samples[1].textContent, '');
+  assert.equal(
+    context.document.testsets.tests.tests.one.input_sha,
+    'sample-input',
+  );
+  assert.equal(
+    context.document.testsets.tests.tests.one.answer_sha,
+    'sample-answer',
+  );
+  await close();
+});
 function checkbox(host, label) {
   return [...host.querySelectorAll('label')]
     .find((item) => item.textContent.startsWith(label))

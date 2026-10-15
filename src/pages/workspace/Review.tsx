@@ -60,8 +60,13 @@ export default function Review() {
   const sampleKey = JSON.stringify(
     Object.values(doc.testsets).flatMap((set) =>
       Object.values(set.tests)
-        .filter((t) => t.sample && t.input_sha)
-        .map((t) => [t.input_sha, t.answer_sha]),
+        .filter((t) => t.sample && (t.input_sha || t.statement_input != null))
+        .map((t) => [
+          t.input_sha,
+          t.answer_sha,
+          t.statement_input ?? null,
+          t.statement_output ?? null,
+        ]),
     ),
   );
   const sampleRequestKey = `${data.problem.id}:${sampleKey}`;
@@ -100,11 +105,14 @@ export default function Review() {
     let active = true;
     const items = JSON.parse(sampleKey) as (string | null)[][];
     Promise.all(
-      items.map(async ([inp, ans]) => ({
-        input: inp ? await blobText(data.problem.id, inp) : '',
-        answer: ans
-          ? await blobText(data.problem.id, ans)
-          : 'Main 풀이로 기대 출력을 생성하세요.',
+      items.map(async ([inp, ans, displayInput, displayOutput]) => ({
+        input:
+          displayInput ?? (inp ? await blobText(data.problem.id, inp) : ''),
+        answer:
+          displayOutput ??
+          (ans
+            ? await blobText(data.problem.id, ans)
+            : 'Main 풀이로 기대 출력을 생성하세요.'),
       })),
     )
       .then((values) => {

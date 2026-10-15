@@ -51,6 +51,9 @@ export type Solution = SourceFile & {
   group_tags?: Record<string, Record<string, string>>;
 };
 export type Test = {
+  statement_input?: string | null;
+  statement_output?: string | null;
+  verify_statement_io?: boolean;
   index: number;
   input_sha: string | null;
   answer_sha: string | null;
@@ -158,6 +161,7 @@ export type CaseResult = {
   actual_sha: string | null;
 };
 export type PreparedTest = Test & {
+  statement_io_validation?: 'VALID' | 'NOT_REQUESTED';
   validator: string;
   main_cpu_ms: number | null;
   main_wall_ms: number | null;

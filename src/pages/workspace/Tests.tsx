@@ -422,6 +422,17 @@ function TestEditor({
   const [answer, setAnswer] = useState('');
   const [description, setDescription] = useState(test?.description || '');
   const [sample, setSample] = useState(test?.sample || false);
+  const [displayOnly, setDisplayOnly] = useState(
+    test?.statement_input != null || test?.statement_output != null,
+  );
+  const [displayInput, setDisplayInput] = useState(test?.statement_input ?? '');
+  const [displayOutput, setDisplayOutput] = useState(
+    test?.statement_output ?? '',
+  );
+  const [verifyDisplay, setVerifyDisplay] = useState(
+    test?.verify_statement_io ?? true,
+  );
+  const [answerChanged, setAnswerChanged] = useState(false);
   const [busy, setBusy] = useState(Boolean(test));
   const [changed, setChanged] = useState(false);
   const [error, setError] = useState('');
@@ -468,8 +479,16 @@ function TestEditor({
     }
     setBusy(true);
     try {
-      const inp = await upload(data.problem.id, input);
-      const ans = answer ? await upload(data.problem.id, answer) : null;
+      const inp =
+        test?.input_sha && !changed
+          ? { sha256: test.input_sha }
+          : await upload(data.problem.id, input);
+      const ans =
+        test?.answer_sha && !answerChanged
+          ? { sha256: test.answer_sha }
+          : answer
+            ? await upload(data.problem.id, answer)
+            : null;
       const item: Test = {
         index,
         input_sha: inp.sha256,
@@ -479,6 +498,13 @@ function TestEditor({
         points: test?.points || 0,
         description,
         sample,
+        ...(displayOnly
+          ? {
+              statement_input: displayInput,
+              statement_output: displayOutput,
+              verify_statement_io: verifyDisplay,
+            }
+          : {}),
       };
       mutate((d) => {
         if (test)
@@ -543,6 +569,64 @@ function TestEditor({
           문제 지문에 예제로 표시
         </label>
       </fieldset>
+      {sample && (
+        <section className="scoped-expectations">
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={displayOnly}
+              disabled={!editable || busy}
+              onChange={(e) => {
+                setDisplayOnly(e.target.checked);
+                if (
+                  e.target.checked &&
+                  test?.statement_input == null &&
+                  test?.statement_output == null
+                ) {
+                  setDisplayInput(input);
+                  setDisplayOutput(answer);
+                }
+              }}
+            />
+            지문 표시용 입출력을 별도로 작성
+          </label>
+          {displayOnly && (
+            <>
+              <div className="form-grid">
+                <CodeEditor
+                  label="지문 표시용 입력"
+                  value={displayInput}
+                  onChange={setDisplayInput}
+                  rows={6}
+                  readOnly={!editable || busy}
+                />
+                <CodeEditor
+                  label="지문 표시용 출력"
+                  value={displayOutput}
+                  onChange={setDisplayOutput}
+                  rows={6}
+                  readOnly={!editable || busy}
+                />
+              </div>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={verifyDisplay}
+                  onChange={(e) => setVerifyDisplay(e.target.checked)}
+                  disabled={!editable || busy}
+                />
+                입력·정답 생성 시 표시용 입출력도 검증
+              </label>
+              <p className="muted small">
+                실제 채점 입력·정답은 위 표시값으로 바꾸지 않습니다. 검증을 켜면
+                Validator와 Main을 실행하고 표시용 출력이 Checker를 통과하는지
+                확인합니다. 인터랙티브 대화 예제는 자동 검증을 해제하고 직접
+                검수하세요.
+              </p>
+            </>
+          )}
+        </section>
+      )}
       {test?.command && (
         <p className="muted code-text">생성 명령: {test.command}</p>
       )}
@@ -559,7 +643,10 @@ function TestEditor({
         />
         <CodeEditor
           value={answer}
-          onChange={setAnswer}
+          onChange={(value) => {
+            setAnswer(value);
+            setAnswerChanged(true);
+          }}
           label={
             doc.info.interactive
               ? 'Interactor 참고 자료 · 선택'
