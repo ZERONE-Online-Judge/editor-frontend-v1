@@ -272,6 +272,29 @@ test('Linux packages explicitly use the Editor replay runtime', async () => {
   assert.equal(requests[0].body.options.export_format, 'linux');
   assert.equal(requests[0].body.options.execution_backend, 'editor');
 });
+
+test('selected test preparation requests only the chosen indices and operation', async () => {
+  state.document.testsets.tests.script = '';
+  state.document.testsets.tests.tests = {
+    one: {
+      index: 1,
+      input_sha: 'input',
+      answer_sha: 'answer',
+      command: '',
+      description: 'one',
+      group: '',
+      sample: false,
+      points: 0,
+    },
+  };
+  await mount('tests');
+  await act(() => host.querySelector('[aria-label="테스트 1 선택"]').click());
+  await click('선택 정답만 재생성');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.kind, 'prepare');
+  assert.deepEqual(requests[0].body.options.test_indices, [1]);
+  assert.equal(requests[0].body.options.prepare_mode, 'answers');
+});
 for (const [tab, button, kind] of [
   ['tests', '입력·정답 생성', 'prepare'],
   ['validator', '테스트 실행', 'validator-tests'],

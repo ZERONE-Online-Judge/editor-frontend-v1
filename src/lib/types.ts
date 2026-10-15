@@ -138,6 +138,7 @@ export type Folder = {
   name: string;
 };
 export type WorkspaceData = {
+  limits?: ExecutionLimits;
   problem: Problem;
   document: ProblemDocument;
   version: number;

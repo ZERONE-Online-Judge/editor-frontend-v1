@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { blobText, upload } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
 import GeneratorLoop from './GeneratorLoop';
+import BulkTests from './BulkTests';
 import type { Test } from '../../lib/types';
 import {
   Badge,
@@ -23,10 +24,19 @@ export default function Tests() {
   const [groups, setGroups] = useState(false);
   const [busy, setBusy] = useState(false);
   const [autoApply, setAutoApply] = useState(false);
+  const [selection, setSelection] = useState<{
+    name: string;
+    indices: number[];
+  }>({ name: '', indices: [] });
   const set = doc.testsets[selected];
   const rows = Object.values(set?.tests || {}).sort(
     (a, b) => a.index - b.index,
   );
+  const availableIndices = new Set(rows.map((test) => test.index));
+  const selectedIndices =
+    selection.name === selected
+      ? selection.indices.filter((index) => availableIndices.has(index))
+      : [];
   async function importFiles(files: File[]) {
     setBusy(true);
     try {
@@ -259,125 +269,170 @@ export default function Tests() {
               </div>
             </div>
             {rows.length ? (
-              <div className="table-scroll">
-                <table className="data-table tests-table">
-                  <thead>
-                    <tr>
-                      <th>번호</th>
-                      <th>테스트 내용</th>
-                      <th>그룹</th>
-                      {doc.info.points_enabled && <th>점수</th>}
-                      <th>지문 예제</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((test) => (
-                      <tr key={test.index}>
-                        <td>
-                          <Badge>#{test.index}</Badge>
-                        </td>
-                        <td>
-                          <strong className="small">
-                            {test.description || '등록 테스트'}
-                          </strong>
-                          <div className="subtext code-text">
-                            {test.command || '직접 입력'}
-                            {test.answer_sha && ' · 기대 출력 있음'}
-                          </div>
-                          <button
-                            className="button small test-content-button"
-                            aria-label={`테스트 ${test.index} 입력·출력 보기`}
-                            aria-haspopup="dialog"
-                            onClick={() => setEditing(test)}
-                          >
-                            <Icon name="file" size={15} />
-                            입력·출력 보기
-                          </button>
-                        </td>
-                        <td>
-                          <select
-                            disabled={!editable || !set.groups_enabled}
-                            aria-label={`테스트 ${test.index} 그룹`}
-                            value={test.group}
+              <>
+                <BulkTests
+                  key={selected}
+                  setName={selected}
+                  indices={selectedIndices}
+                  reset={() => setSelection({ name: selected, indices: [] })}
+                />
+                <div className="table-scroll">
+                  <table className="data-table tests-table">
+                    <thead>
+                      <tr>
+                        <th>
+                          <input
+                            aria-label="등록 테스트 전체 선택"
+                            type="checkbox"
+                            disabled={!editable}
+                            checked={
+                              rows.length > 0 &&
+                              selectedIndices.length === rows.length
+                            }
                             onChange={(e) =>
-                              mutate((d) => {
-                                const item = Object.values(
-                                  d.testsets[selected].tests,
-                                ).find((t) => t.index === test.index);
-                                if (item) item.group = e.target.value;
+                              setSelection({
+                                name: selected,
+                                indices: e.target.checked
+                                  ? rows.map((t) => t.index)
+                                  : [],
                               })
                             }
-                          >
-                            <option value="">미지정</option>
-                            {Object.keys(set.groups).map((g) => (
-                              <option key={g}>{g}</option>
-                            ))}
-                          </select>
-                        </td>
-                        {doc.info.points_enabled && (
+                          />
+                        </th>
+                        <th>번호</th>
+                        <th>테스트 내용</th>
+                        <th>그룹</th>
+                        {doc.info.points_enabled && <th>점수</th>}
+                        <th>지문 예제</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((test) => (
+                        <tr key={test.index}>
                           <td>
                             <input
-                              aria-label={`테스트 ${test.index} 점수`}
-                              className="tiny-input"
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              value={test.points}
+                              type="checkbox"
+                              aria-label={`테스트 ${test.index} 선택`}
                               disabled={!editable}
+                              checked={selectedIndices.includes(test.index)}
                               onChange={(e) =>
-                                mutate((d) => {
-                                  const item = Object.values(
-                                    d.testsets[selected].tests,
-                                  ).find((t) => t.index === test.index);
-                                  if (item)
-                                    item.points = Number(e.target.value);
+                                setSelection({
+                                  name: selected,
+                                  indices: e.target.checked
+                                    ? [...selectedIndices, test.index]
+                                    : selectedIndices.filter(
+                                        (index) => index !== test.index,
+                                      ),
                                 })
                               }
                             />
                           </td>
-                        )}
-                        <td>
-                          <label className="checkbox">
-                            <input
-                              type="checkbox"
-                              checked={test.sample}
-                              disabled={!editable}
+                          <td>
+                            <Badge>#{test.index}</Badge>
+                          </td>
+                          <td>
+                            <strong className="small">
+                              {test.description || '등록 테스트'}
+                            </strong>
+                            <div className="subtext code-text">
+                              {test.command || '직접 입력'}
+                              {test.answer_sha && ' · 기대 출력 있음'}
+                            </div>
+                            <button
+                              className="button small test-content-button"
+                              aria-label={`테스트 ${test.index} 입력·출력 보기`}
+                              aria-haspopup="dialog"
+                              onClick={() => setEditing(test)}
+                            >
+                              <Icon name="file" size={15} />
+                              입력·출력 보기
+                            </button>
+                          </td>
+                          <td>
+                            <select
+                              disabled={!editable || !set.groups_enabled}
+                              aria-label={`테스트 ${test.index} 그룹`}
+                              value={test.group}
                               onChange={(e) =>
                                 mutate((d) => {
                                   const item = Object.values(
                                     d.testsets[selected].tests,
                                   ).find((t) => t.index === test.index);
-                                  if (item) item.sample = e.target.checked;
+                                  if (item) item.group = e.target.value;
                                 })
                               }
-                            />
-                            {test.sample && <Badge tone="accent">예제</Badge>}
-                          </label>
-                        </td>
-                        <td>
-                          <button
-                            className="icon-button"
-                            disabled={!editable}
-                            aria-label={`테스트 ${test.index} 제거`}
-                            onClick={() =>
-                              mutate((d) => {
-                                for (const [key, value] of Object.entries(
-                                  d.testsets[selected].tests,
-                                ))
-                                  if (value.index === test.index)
-                                    delete d.testsets[selected].tests[key];
-                              })
-                            }
-                          >
-                            <Icon name="trash" size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                            >
+                              <option value="">미지정</option>
+                              {Object.keys(set.groups).map((g) => (
+                                <option key={g}>{g}</option>
+                              ))}
+                            </select>
+                          </td>
+                          {doc.info.points_enabled && (
+                            <td>
+                              <input
+                                aria-label={`테스트 ${test.index} 점수`}
+                                className="tiny-input"
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                value={test.points}
+                                disabled={!editable}
+                                onChange={(e) =>
+                                  mutate((d) => {
+                                    const item = Object.values(
+                                      d.testsets[selected].tests,
+                                    ).find((t) => t.index === test.index);
+                                    if (item)
+                                      item.points = Number(e.target.value);
+                                  })
+                                }
+                              />
+                            </td>
+                          )}
+                          <td>
+                            <label className="checkbox">
+                              <input
+                                type="checkbox"
+                                checked={test.sample}
+                                disabled={!editable}
+                                onChange={(e) =>
+                                  mutate((d) => {
+                                    const item = Object.values(
+                                      d.testsets[selected].tests,
+                                    ).find((t) => t.index === test.index);
+                                    if (item) item.sample = e.target.checked;
+                                  })
+                                }
+                              />
+                              {test.sample && <Badge tone="accent">예제</Badge>}
+                            </label>
+                          </td>
+                          <td>
+                            <button
+                              className="icon-button"
+                              disabled={!editable}
+                              aria-label={`테스트 ${test.index} 제거`}
+                              onClick={() =>
+                                mutate((d) => {
+                                  for (const [key, value] of Object.entries(
+                                    d.testsets[selected].tests,
+                                  ))
+                                    if (value.index === test.index)
+                                      delete d.testsets[selected].tests[key];
+                                })
+                              }
+                            >
+                              <Icon name="trash" size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             ) : (
               <Empty
                 icon="tests"

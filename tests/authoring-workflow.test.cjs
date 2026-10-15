@@ -78,6 +78,74 @@ const { sourceRoles, reuseAsSolution, solutionReuseIssue } =
 const { documentChanges, diffLines } = source('lib/documentChanges.ts');
 const { preparationCautions } = source('lib/readiness.ts');
 const { loopScript } = source('lib/generationScript.ts');
+const { bulkTests } = source('lib/bulkTests.ts');
+
+test('bulk operations preserve originals and validate a whole move before applying it', () => {
+  const doc = workspace();
+  doc.info.skip_duplicate_validation = false;
+  doc.testsets.tests.script = '';
+  doc.testsets.tests.groups_enabled = true;
+  doc.testsets.tests.groups = { small: {} };
+  doc.testsets.target = {
+    script: '',
+    tests: {},
+    groups_enabled: true,
+    groups: { large: {} },
+  };
+  const source = Object.values(doc.testsets.tests.tests)[0];
+  source.group = 'small';
+  source.description = 'original';
+  source.sample = true;
+  source.statement_output = 'custom';
+  const moved = bulkTests(doc, 'tests', [source.index], 'move', {
+    target: 'target',
+    group: 'large',
+    limit: 1000,
+  });
+  assert.equal(Object.keys(moved.testsets.tests.tests).length, 0);
+  assert.equal(
+    Object.values(moved.testsets.target.tests)[0].statement_output,
+    'custom',
+  );
+  assert.equal(Object.values(moved.testsets.target.tests)[0].group, 'large');
+  assert.equal(Object.values(doc.testsets.tests.tests)[0].group, 'small');
+  assert.throws(
+    () =>
+      bulkTests(doc, 'tests', [source.index], 'copy', {
+        target: 'target',
+        group: 'missing',
+      }),
+    /그룹/,
+  );
+  assert.equal(Object.keys(doc.testsets.target.tests).length, 0);
+  const changed = bulkTests(doc, 'tests', [source.index], 'sample-off');
+  assert.equal(Object.values(changed.testsets.tests.tests)[0].sample, false);
+  assert.equal(source.sample, true);
+});
+
+test('bulk copies reject capacity overflow and live scripts without partially changing a set', () => {
+  const doc = workspace();
+  doc.testsets.tests.script = '';
+  doc.testsets.target = {
+    script: '',
+    tests: { one: { index: 1, input_sha: 'different' } },
+    groups: {},
+    groups_enabled: false,
+  };
+  const index = Object.values(doc.testsets.tests.tests)[0].index;
+  assert.throws(
+    () =>
+      bulkTests(doc, 'tests', [index], 'copy', {
+        target: 'target',
+        group: '',
+        limit: 1,
+      }),
+    /한도/,
+  );
+  assert.equal(Object.keys(doc.testsets.target.tests).length, 1);
+  doc.testsets.tests.script = 'gen 1 > $';
+  assert.throws(() => bulkTests(doc, 'tests', [index], 'delete'), /생성 결과/);
+});
 
 test('loop builder emits bounded declarative groups without executing commands', () => {
   assert.equal(
