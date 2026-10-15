@@ -284,6 +284,7 @@ test('matrix preserves missing measurements and filters an observed cover withou
     source('pages/workspace/TestVerdictMatrix.tsx').default,
     { job },
   );
+  await act(async () => host.querySelector('.matrix-summary').click());
   assert.match(host.textContent, /미실행/);
   const select = host.querySelector('select');
   await act(async () => {
