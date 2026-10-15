@@ -86,7 +86,7 @@ label {
   font-weight: 600;
   color: #334155;
 }
-input:not([type='checkbox']),
+input:not([type='checkbox'], .sr-only),
 select,
 textarea {
   width: 100%;
@@ -102,7 +102,7 @@ textarea {
     border-color 0.15s,
     box-shadow 0.15s;
 }
-input:not([type='checkbox']),
+input:not([type='checkbox'], .sr-only),
 select {
   height: 42px;
 }
