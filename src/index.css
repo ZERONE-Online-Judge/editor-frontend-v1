@@ -1758,6 +1758,34 @@ svg {
   margin-left: auto;
   font-size: 10px;
 }
+.verification-progress {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 12px;
+  background: #f8f9ff;
+}
+.verification-progress .section-heading {
+  margin: 0;
+}
+.verification-percent {
+  color: var(--zoj-accent);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.verification-progress progress,
+.solution-run-progress progress {
+  display: block;
+  width: 100%;
+  height: 8px;
+  accent-color: var(--zoj-accent);
+}
+.solution-run-progress {
+  display: grid;
+  gap: 8px;
+  margin-block: 12px;
+}
 .spinner {
   height: 18px;
   width: 18px;

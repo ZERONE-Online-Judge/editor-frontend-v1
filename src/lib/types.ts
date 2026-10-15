@@ -173,6 +173,10 @@ export type JobKind =
   | 'package'
   | 'render';
 export type CaseResult = {
+  output_truncated?: boolean;
+  output_size?: number | null;
+  output_total_bytes?: number | null;
+  output_error?: string | null;
   group?: string;
   testset: string;
   index: number;
@@ -324,6 +328,14 @@ export type Job = {
   started_at: number | null;
   finished_at: number | null;
   result: {
+    verification_progress?: {
+      phase: 'preparing' | 'judging' | 'complete';
+      current: number;
+      total: number;
+      percent: number;
+      completed_solutions?: number;
+      total_solutions?: number;
+    };
     stress_configuration?: StressConfiguration;
     scope?: InvocationScope;
     auto_apply?: { status: 'applied' | 'blocked'; message?: string };
@@ -375,6 +387,9 @@ export type Job = {
     };
     events?: { label: string }[];
     solutions?: {
+      state?: 'queued' | 'running' | 'completed';
+      completed_tests?: number;
+      total_tests?: number;
       name: string;
       tag: string;
       matched: boolean;

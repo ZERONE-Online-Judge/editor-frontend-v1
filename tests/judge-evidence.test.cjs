@@ -52,6 +52,7 @@ loaded.require = (id) => {
     id === './InvocationControls' ||
     id === './ExecutionLimitsInfo' ||
     id === './TestVerdictMatrix' ||
+    id === './VerificationProgress' ||
     id === './ZojPublishing' ||
     id === 'react-router-dom'
   )
@@ -106,7 +107,7 @@ test('Remote judge evidence preserves real input and does not fetch an absent ou
   ]);
   assert.equal(values[0], '1 2\n3 4\n');
   assert.equal(values[1], '3\n7\n');
-  assert.match(values[2], /개별 출력 전문을 제공하지 않습니다/);
+  assert.match(values[2], /저장된 실제 출력이 없습니다/);
 });
 test('Compilation failures show an explanation without fetching empty testcase hashes', async () => {
   const values = await render({ input: '', answer: '', actual: null });

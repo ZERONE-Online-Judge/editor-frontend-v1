@@ -25,6 +25,10 @@ import StressRunConditions, {
 import InvocationControls from './InvocationControls';
 import ExecutionLimitsInfo from './ExecutionLimitsInfo';
 import TestVerdictMatrix from './TestVerdictMatrix';
+import VerificationProgress, {
+  SolutionRunProgress,
+  SolutionRunStatus,
+} from './VerificationProgress';
 import { useAuth } from '../../lib/authContext';
 import type { ExecutionEnvironment, InvocationScope } from '../../lib/types';
 import {
@@ -548,6 +552,7 @@ export default function Executions({
                 </p>
               )}
               {job.kind === 'stress' && <StressRunConditions job={job} />}
+              <VerificationProgress job={job} />
               {job.status !== 'queued' &&
                 job.status !== 'running' &&
                 job.result.summary && (
@@ -735,14 +740,15 @@ export default function Executions({
                     <Badge tone="accent">
                       {solution.tag} · {tags[solution.tag as keyof typeof tags]}
                     </Badge>
-                    <Badge tone={solution.matched ? 'success' : 'danger'}>
-                      {solution.matched
-                        ? solution.expectations_complete === false
-                          ? '일부 범위 미확인'
-                          : '기대 판정 일치'
-                        : '기대 판정 불일치'}
-                    </Badge>
+                    <SolutionRunStatus
+                      solution={solution}
+                      jobStatus={job.status}
+                    />
                   </div>
+                  <SolutionRunProgress
+                    solution={solution}
+                    jobStatus={job.status}
+                  />
                   {solution.expectations?.length ? (
                     <div className="table-scroll">
                       <table className="data-table">
@@ -843,8 +849,8 @@ export default function Executions({
                       ))}
                       {solution.complete === false && (
                         <Notice tone="info">
-                          첫 실패로 채점이 종료되어 나머지 테스트의 판정은
-                          확인하지 않았습니다.
+                          이 기록은 전체 테스트의 판정이 확인되지 않았습니다.
+                          컴파일·실행 오류와 실제 실행 범위를 확인하세요.
                         </Notice>
                       )}
                     </div>
@@ -1203,6 +1209,10 @@ export default function Executions({
             input={caseResult.input_sha}
             answer={caseResult.answer_sha}
             actual={caseResult.actual_sha}
+            outputTruncated={caseResult.output_truncated}
+            outputSize={caseResult.output_size}
+            outputTotalBytes={caseResult.output_total_bytes}
+            outputError={caseResult.output_error}
           />
           {caseResult.comment && (
             <CodeEditor
@@ -1222,11 +1232,19 @@ export function CodeEvidence({
   input,
   answer,
   actual,
+  outputTruncated = false,
+  outputSize,
+  outputTotalBytes,
+  outputError,
 }: {
   problemId: string;
   input: string;
   answer: string;
   actual: string | null;
+  outputTruncated?: boolean;
+  outputSize?: number | null;
+  outputTotalBytes?: number | null;
+  outputError?: string | null;
 }) {
   const [values, setValues] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -1238,7 +1256,8 @@ export function CodeEvidence({
           ? blobText(problemId, sha)
           : Promise.resolve(
               index === 2
-                ? '채점기가 개별 출력 전문을 제공하지 않습니다. 채점기 원본 기록을 확인하세요.'
+                ? outputError ||
+                    '이 실행 기록에는 저장된 실제 출력이 없습니다. 컴파일·실행 환경 오류 또는 이전 채점 기록인지 확인하세요.'
                 : '개별 테스트가 지정되지 않은 판정입니다.',
             ),
       ),
@@ -1252,17 +1271,35 @@ export function CodeEvidence({
     return () => {
       active = false;
     };
-  }, [problemId, input, answer, actual]);
+  }, [problemId, input, answer, actual, outputError]);
   if (error) return <Notice tone="error">{error}</Notice>;
   return (
     <div className="evidence-grid">
       {['입력', '기대 출력', '실제 출력'].map((label, i) => (
         <div key={label} className="evidence-file">
+          {i === 2 && outputTruncated && (
+            <Notice>
+              실제 출력 중 {outputSize == null ? '일부' : bytes(outputSize)}
+              {outputTotalBytes == null
+                ? ''
+                : ` / 전체 ${bytes(outputTotalBytes)}`}
+              만 보관했습니다. 화면과 다운로드 파일 모두 보관된 부분입니다.
+            </Notice>
+          )}
+          {i === 2 && outputError && (
+            <Notice tone="error">{outputError}</Notice>
+          )}
           <BlobDownload
             problemId={problemId}
             sha={[input, answer, actual][i]}
-            filename={['input.in', 'expected.out', 'actual.out'][i]}
-            label={`${label} 다운로드`}
+            filename={
+              [
+                'input.in',
+                'expected.out',
+                outputTruncated ? 'actual.partial.out' : 'actual.out',
+              ][i]
+            }
+            label={`${label}${i === 2 && outputTruncated ? '(일부)' : ''} 다운로드`}
           />
           <CodeEditor
             value={values[i] ?? '불러오는 중…'}

@@ -12,6 +12,12 @@ const dom = new JSDOM('<body></body>', {
 global.window = dom.window;
 global.document = dom.window.document;
 global.IS_REACT_ACT_ENVIRONMENT = true;
+window.HTMLDialogElement.prototype.showModal = function () {
+  this.open = true;
+};
+window.HTMLDialogElement.prototype.close = function () {
+  this.open = false;
+};
 const React = require('react');
 const { act } = React;
 const { createRoot } = require('react-dom/client');
@@ -34,6 +40,8 @@ function source(relative) {
         ...source('lib/api.ts'),
         api: get,
         post: post,
+        blobText: async (problem, sha) =>
+          sha === 'actual' ? 'Wrong\n' : '1 2\n',
         put: async () => {
           throw new Error('Unexpected save');
         },
@@ -118,7 +126,7 @@ async function get(url) {
     if (detailGate?.id === id) return detailGate.promise;
     const value = jobs.find((row) => row.id === id);
     if (!value) throw new Error('기록을 찾을 수 없습니다.');
-    return value;
+    return JSON.parse(JSON.stringify(value));
   }
   throw new Error('Unexpected GET ' + url);
 }
@@ -273,6 +281,172 @@ test('Linux packages explicitly use the Editor replay runtime', async () => {
   assert.equal(requests[0].body.kind, 'package');
   assert.equal(requests[0].body.options.export_format, 'linux');
   assert.equal(requests[0].body.options.execution_backend, 'editor');
+});
+
+function liveVerification(status = 'running') {
+  const row = job('live-verification', 'verify', '전체 풀이 검증');
+  row.status = status;
+  const caseRow = (index, verdict, extra = {}) => ({
+    testset: 'tests',
+    index,
+    verdict,
+    cpu_ms: 15,
+    wall_ms: null,
+    memory_kb: 1024,
+    comment: '',
+    input_sha: 'input',
+    answer_sha: 'answer',
+    actual_sha: 'actual',
+    ...extra,
+  });
+  row.result.verification_progress = {
+    phase: 'judging',
+    current: 3,
+    total: 8,
+    percent: 37,
+    completed_solutions: 1,
+    total_solutions: 4,
+  };
+  row.result.solutions = [
+    {
+      name: 'main.py',
+      tag: 'MA',
+      state: 'completed',
+      matched: true,
+      skipped: false,
+      completed_tests: 2,
+      total_tests: 2,
+      cases: [caseRow(1, 'AC'), caseRow(2, 'AC')],
+    },
+    {
+      name: 'wrong.cpp',
+      tag: 'WA',
+      state: 'running',
+      matched: false,
+      skipped: false,
+      completed_tests: 1,
+      total_tests: 2,
+      cases: [
+        caseRow(1, 'WA', {
+          output_truncated: true,
+          output_size: 6,
+          output_total_bytes: 128,
+        }),
+      ],
+    },
+    {
+      name: 'slow.cpp',
+      tag: 'TL',
+      state: 'running',
+      matched: false,
+      skipped: false,
+      completed_tests: 0,
+      total_tests: 2,
+      cases: [],
+    },
+    {
+      name: 'memory.cpp',
+      tag: 'ML',
+      state: 'queued',
+      matched: false,
+      skipped: false,
+      completed_tests: 0,
+      total_tests: 2,
+      cases: [],
+    },
+  ];
+  jobs = [row];
+  return row;
+}
+
+test('All four solutions and confirmed partial results appear while the full verification is still running', async () => {
+  liveVerification();
+  await mount('invocations?job=live-verification');
+  assert.equal(host.querySelectorAll('.solution-result').length, 4);
+  assert.equal(host.querySelectorAll('.case-chip').length, 3);
+  const progress = host.querySelector('[aria-label="전체 풀이 검증"]');
+  assert.equal(progress.value, 37);
+  assert.equal(progress.max, 100);
+  assert.match(
+    host.querySelector('.verification-progress').textContent,
+    /3 \/ 8개/,
+  );
+  assert.match(
+    host.querySelectorAll('.solution-result')[1].textContent,
+    /검증 중/,
+  );
+  assert.match(
+    host.querySelectorAll('.solution-result')[3].textContent,
+    /채점 대기/,
+  );
+  assert.equal(
+    host.querySelectorAll('.solution-result-heading .badge.danger').length,
+    0,
+  );
+  await act(async () => host.querySelectorAll('.case-chip')[2].click());
+  await flush();
+  const actual = host.querySelector('a[download="actual.partial.out"]');
+  assert.equal(actual.getAttribute('href'), '/api/problems/p/blobs/actual');
+  assert.ok(
+    [...host.querySelectorAll('textarea')].some(
+      (item) => item.value === 'Wrong\n',
+    ),
+  );
+  assert.match(
+    host.querySelector('.evidence-grid').textContent,
+    /전체 128 B.*보관/,
+  );
+});
+
+test('Polling adds later solution outcomes without waiting for the first solution or reopening the page', async () => {
+  const row = liveVerification();
+  let poll;
+  const previous = window.setTimeout;
+  window.setTimeout = (callback, delay, ...args) => {
+    if (delay === 1800) {
+      poll = callback;
+      return 999999;
+    }
+    return previous.call(window, callback, delay, ...args);
+  };
+  try {
+    await mount('invocations?job=live-verification');
+    assert.equal(typeof poll, 'function');
+    row.result.solutions[2].cases.push({
+      ...row.result.solutions[1].cases[0],
+      verdict: 'TLE',
+    });
+    row.result.solutions[2].completed_tests = 1;
+    row.result.verification_progress = {
+      ...row.result.verification_progress,
+      current: 4,
+      percent: 50,
+    };
+    await act(async () => poll());
+    await flush();
+    assert.equal(host.querySelector('[aria-label="전체 풀이 검증"]').value, 50);
+    assert.match(
+      host.querySelectorAll('.solution-result')[2].textContent,
+      /TLE/,
+    );
+    assert.equal(host.querySelectorAll('.solution-result').length, 4);
+  } finally {
+    window.setTimeout = previous;
+  }
+});
+
+test('Cancelled verification preserves the real percentage and labels pending solutions as interrupted', async () => {
+  liveVerification('cancelled');
+  await mount('invocations?job=live-verification');
+  assert.equal(host.querySelector('[aria-label="전체 풀이 검증"]').value, 37);
+  assert.match(
+    host.querySelector('.verification-progress').textContent,
+    /검증 중단/,
+  );
+  assert.match(
+    host.querySelectorAll('.solution-result')[1].textContent,
+    /검증 중단/,
+  );
 });
 
 test('selected test preparation requests only the chosen indices and operation', async () => {
