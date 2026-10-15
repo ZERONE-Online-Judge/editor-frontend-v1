@@ -701,6 +701,89 @@ svg {
 .stress-results details > section {
   margin-top: 16px;
 }
+.stress-run-conditions {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 14px;
+  background: #f8f9ff;
+}
+.stress-run-conditions h4,
+.stress-run-conditions p {
+  margin: 0;
+}
+.stress-run-conditions h4 {
+  margin-bottom: 6px;
+}
+.stress-condition-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 14px 20px;
+  margin: 0;
+}
+.stress-condition-grid dt,
+.stress-command-block > strong {
+  color: #66728e;
+  font-size: 11px;
+  font-weight: 600;
+}
+.stress-condition-grid dd {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: #344461;
+  overflow-wrap: anywhere;
+}
+.stress-condition-wide {
+  grid-column: 1 / -1;
+}
+.stress-candidate-list {
+  display: grid;
+  gap: 5px;
+  max-height: 150px;
+  overflow: auto;
+}
+.stress-command {
+  min-width: 0;
+  margin: 7px 0 0;
+  padding: 12px;
+  border: 1px solid #e1e5f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #283856;
+  font:
+    12px/1.7 'SFMono-Regular',
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.stress-command code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.stress-run-conditions summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: #485775;
+  cursor: pointer;
+}
+.stress-run-conditions details > .stress-condition-grid {
+  margin-top: 14px;
+}
+.stress-seed-progress {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--zoj-border);
+  font-size: 12px;
+}
+.job-row > .job-stress-context {
+  color: #6254b9;
+}
 .data-table {
   width: 100%;
   border-collapse: collapse;

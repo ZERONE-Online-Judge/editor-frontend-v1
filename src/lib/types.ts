@@ -197,6 +197,7 @@ export type CounterexampleFinding = {
 export type Counterexample = {
   id: string;
   iteration: number;
+  seed?: number;
   command: string;
   input_sha: string;
   answer_sha: string;
@@ -207,6 +208,26 @@ export type InvocationScope = {
   solutions: string[];
   test_indices: number[];
   test_count: number;
+};
+export type StressConfiguration = {
+  generator: string;
+  seed_start: number;
+  seed_step: number;
+  seed_mode: 'placeholder' | 'append';
+  reference: string;
+  candidates: { name: string; tag?: string }[];
+  testset: string;
+  iterations: number;
+  duration_seconds: number | null;
+  stop_on_first: boolean;
+  counterexample_limit: number;
+  counterexample_verdicts: string[];
+  time_limit_ms: number;
+  memory_limit_mb: number;
+  validator: string;
+  extra_validators: string[];
+  checker: string;
+  interactor: string;
 };
 export type Job = {
   application?: {
@@ -222,11 +243,14 @@ export type Job = {
   document_hash: string;
   workspace_version: number;
   revision: number;
-  options: Record<string, unknown>;
+  options: Record<string, unknown> & {
+    stress_configuration?: StressConfiguration;
+  };
   created_at: number;
   started_at: number | null;
   finished_at: number | null;
   result: {
+    stress_configuration?: StressConfiguration;
     scope?: InvocationScope;
     auto_apply?: { status: 'applied' | 'blocked'; message?: string };
     runtime?: {
@@ -292,6 +316,7 @@ export type Job = {
     }[];
     counterexample?: {
       iteration: number;
+      seed?: number;
       command: string;
       verdict: string;
       input_sha: string;
@@ -307,6 +332,8 @@ export type Job = {
       duplicates_skipped: number;
       counterexample_count: number;
       stop_reason: string | null;
+      last_seed?: number | null;
+      last_command?: string | null;
     };
     candidate_summaries?: {
       name: string;

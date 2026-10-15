@@ -524,6 +524,177 @@ test('a rejected request shows no misleading result link', async () => {
   assert.equal(host.querySelector('.notice a'), null);
 });
 
+test('stress history shows saved request conditions without using current source settings', async () => {
+  const row = job('stress-saved', 'stress', '첫 반례 발견');
+  row.options = {
+    generator: 'gen --new-form {seed}',
+    reference: '',
+    candidates: ['wrong.py'],
+    iterations: 999,
+    stress_configuration: {
+      generator: 'gen --size 100 "{seed}"',
+      seed_start: 1,
+      seed_step: 1,
+      seed_mode: 'placeholder',
+      reference: 'saved-main.cpp',
+      candidates: [
+        { name: 'wrong.py', tag: 'WA' },
+        { name: 'slow.py', tag: 'TL' },
+      ],
+      testset: 'saved-tests',
+      iterations: 100,
+      duration_seconds: 30,
+      stop_on_first: false,
+      counterexample_limit: 5,
+      counterexample_verdicts: ['WA', 'TLE'],
+      time_limit_ms: 1500,
+      memory_limit_mb: 256,
+      validator: 'saved-validator.cpp',
+      extra_validators: ['extra-validator.cpp'],
+      checker: 'std::wcmp',
+      interactor: '',
+    },
+  };
+  jobs = [row];
+  state.document.info.time_limit_ms = 5000;
+  state.document.info.memory_limit_mb = 1024;
+  await mount('invocations?job=stress-saved');
+  const panel = host.querySelector(
+    '[aria-label="실행 당시 스트레스 테스트 조건"]',
+  );
+  assert.ok(panel);
+  assert.match(panel.textContent, /saved-main.cpp/);
+  assert.match(panel.textContent, /saved-tests/);
+  assert.match(panel.textContent, /wrong.py · 오답/);
+  assert.match(panel.textContent, /slow.py · 시간 초과/);
+  assert.match(panel.textContent, /최대 100회 · 30초/);
+  assert.match(panel.textContent, /반례 입력 5개까지 수집/);
+  assert.match(panel.textContent, /WA · TLE/);
+  assert.match(panel.textContent, /1500ms · 256MiB/);
+  assert.match(panel.textContent, /extra-validator.cpp/);
+  assert.doesNotMatch(panel.textContent, /5000ms|1024MiB|999회|--new-form/);
+  assert.equal(
+    panel.querySelector('pre code').textContent,
+    'gen --size 100 "{seed}"',
+  );
+  assert.match(
+    host.querySelector('.job-stress-context').title,
+    /gen --size 100 "\{seed\}" · 최대 100회 · 30초/,
+  );
+  assert.deepEqual(requests, []);
+});
+
+test('legacy stress records expose stored options and counterexample commands without claiming missing limits', async () => {
+  const row = job('legacy-stress', 'stress', '완료');
+  row.options = {
+    generator: 'gen --size 100',
+    candidate: 'old-wrong.py',
+    reference: '',
+    testset: 'tests',
+    iterations: 50,
+    duration_seconds: null,
+    stop_on_first: true,
+    counterexample_verdicts: ['WA'],
+  };
+  row.result.counterexample = {
+    iteration: 3,
+    command: 'gen --size 100 3',
+    verdict: 'WA',
+    input_sha: 'input',
+    answer_sha: 'answer',
+    actual_sha: 'actual',
+    comment: '',
+  };
+  jobs = [row];
+  await mount('stress?job=legacy-stress');
+  const panel = host.querySelector('.stress-run-conditions');
+  assert.match(panel.textContent, /마지막 인자로 시드 추가/);
+  assert.match(panel.textContent, /Main \(파일명 미기록\)/);
+  assert.match(panel.textContent, /old-wrong.py/);
+  assert.match(panel.textContent, /최대 50회 · 개별 시간 조건 없음/);
+  assert.match(panel.textContent, /첫 반례 입력의 모든 비교를 마치고 종료/);
+  assert.doesNotMatch(panel.textContent, /풀이별 입력당 제한|생성 요청 시드/);
+  assert.equal(
+    host.querySelector('.counterexample pre code').textContent,
+    'gen --size 100 3',
+  );
+  assert.deepEqual(requests, []);
+});
+
+test('failed stress runs distinguish the last requested seed from completed iterations', async () => {
+  const row = job('failed-stress', 'stress', '생성기 오류');
+  row.status = 'failed';
+  row.options = {
+    generator: 'gen {seed}',
+    reference: 'original.cpp',
+    candidates: ['wrong.py'],
+    iterations: 100,
+    duration_seconds: 10,
+    stop_on_first: false,
+    counterexample_limit: 5,
+  };
+  row.result.stress = {
+    iterations_started: 7,
+    iterations_completed: 6,
+    elapsed_seconds: 8.5,
+    duplicates_skipped: 1,
+    counterexample_count: 1,
+    stop_reason: null,
+    last_seed: 7,
+    last_command: 'gen 7 --label "<img src=x>"',
+  };
+  row.result.counterexamples = [
+    {
+      id: 'example',
+      iteration: 2,
+      seed: 2,
+      command: 'gen 2',
+      input_sha: 'in',
+      answer_sha: 'ans',
+      findings: [
+        { solution: 'wrong.py', verdict: 'WA', actual_sha: 'out', comment: '' },
+      ],
+    },
+  ];
+  jobs = [row];
+  await mount('stress?job=failed-stress');
+  const panel = host.querySelector('.stress-run-conditions');
+  assert.match(panel.textContent, /생성 요청 시드: 1 ~ 7 · 6회 완료/);
+  assert.equal(
+    [...panel.querySelectorAll('pre code')][1].textContent,
+    'gen 7 --label "<img src=x>"',
+  );
+  assert.equal(panel.querySelector('img'), null);
+  assert.match(
+    host.querySelector('.counterexample').textContent,
+    /반복 2 · 시드 2/,
+  );
+  assert.equal(
+    host.querySelector('.counterexample pre code').textContent,
+    'gen 2',
+  );
+  assert.deepEqual(requests, []);
+});
+
+test('queued stress records show request limits without inventing executed seeds', async () => {
+  const row = job('queued-stress', 'stress', '검증 워커 배정 대기');
+  row.status = 'queued';
+  row.options = {
+    generator: 'gen {seed}',
+    candidates: ['wrong.py'],
+    iterations: 50,
+    duration_seconds: null,
+    stop_on_first: true,
+  };
+  jobs = [row];
+  await mount('stress?job=queued-stress');
+  const panel = host.querySelector('.stress-run-conditions');
+  assert.match(panel.textContent, /최대 50회/);
+  assert.doesNotMatch(panel.textContent, /생성 요청 시드|50회 완료/);
+  assert.equal(panel.querySelector('.stress-seed-progress'), null);
+  assert.deepEqual(requests, []);
+});
+
 test('polling new jobs does not replace the record currently being viewed', async () => {
   const nativeInterval = window.setInterval;
   let refresh;

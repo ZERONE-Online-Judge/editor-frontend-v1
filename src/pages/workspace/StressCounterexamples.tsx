@@ -192,12 +192,21 @@ export default function StressCounterexamples({
                 />
                 <strong>반례 #{index + 1}</strong>
                 <span className="muted small">
-                  반복 {example.iteration} ·{' '}
+                  반복 {example.iteration}
+                  {example.seed != null ? ` · 시드 ${example.seed}` : ''} ·{' '}
                   {example.findings
                     .map((item) => `${item.solution}: ${item.verdict}`)
                     .join(' · ')}
                 </span>
               </label>
+              {example.command && (
+                <div className="stress-command-block">
+                  <strong>이 반례를 생성한 명령</strong>
+                  <pre className="stress-command">
+                    <code>{example.command}</code>
+                  </pre>
+                </div>
+              )}
               <details>
                 <summary>입력·출력과 풀이별 판정 보기</summary>
                 {example.findings.map((finding) => (

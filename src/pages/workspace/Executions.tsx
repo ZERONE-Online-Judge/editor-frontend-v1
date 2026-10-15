@@ -16,6 +16,9 @@ import ZojPublishing from './ZojPublishing';
 import InvocationComments from './InvocationComments';
 import StressControls from './StressControls';
 import StressCounterexamples from './StressCounterexamples';
+import StressRunConditions, {
+  StressHistorySummary,
+} from './StressRunConditions';
 import InvocationControls from './InvocationControls';
 import ExecutionLimitsInfo from './ExecutionLimitsInfo';
 import { useAuth } from '../../lib/authContext';
@@ -461,6 +464,7 @@ export default function Executions({
                   r{row.revision} · {time(row.created_at)}
                 </small>
                 <span>{row.result.summary || '검증 워커 배정 대기'}</span>
+                {row.kind === 'stress' && <StressHistorySummary job={row} />}
               </button>
             ))
           ) : (
@@ -530,6 +534,7 @@ export default function Executions({
                   {job.options.note}
                 </p>
               )}
+              {job.kind === 'stress' && <StressRunConditions job={job} />}
               {job.status !== 'queued' &&
                 job.status !== 'running' &&
                 job.result.summary && (
