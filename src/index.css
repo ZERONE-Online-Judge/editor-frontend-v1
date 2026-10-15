@@ -1874,6 +1874,22 @@ svg {
 .evidence-grid textarea {
   font-size: 11px;
 }
+.download-toolbar,
+.evidence-file {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.evidence-file > .button {
+  justify-self: start;
+}
+.download-panel {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--zoj-border);
+}
+.test-download-actions {
+  margin-top: 8px;
+}
 .counterexample {
   display: grid;
   gap: 16px;

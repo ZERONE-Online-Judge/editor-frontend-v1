@@ -4,6 +4,8 @@ import { blobText, upload } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
 import GeneratorLoop from './GeneratorLoop';
 import BulkTests from './BulkTests';
+import { BlobDownload, DownloadActions } from '../../components/Downloads';
+import { testDownloads } from '../../lib/downloads';
 import type { Test } from '../../lib/types';
 import {
   Badge,
@@ -270,6 +272,22 @@ export default function Tests() {
             </div>
             {rows.length ? (
               <>
+                <div className="download-panel">
+                  <DownloadActions
+                    problemId={data.problem.id}
+                    files={testDownloads(selected, rows)}
+                    selectedFiles={testDownloads(
+                      selected,
+                      rows.filter((test) =>
+                        selectedIndices.includes(test.index),
+                      ),
+                    )}
+                    filename={`${selected.slice(0, 85)}-tests.zip`}
+                    allLabel="이 세트 전체 다운로드"
+                    selectionLabel={`선택 다운로드${selectedIndices.length ? ` (${selectedIndices.length}개 테스트)` : ''}`}
+                    note="실제 채점용 입력(.in)과 기대 출력(.out)을 번호별로 묶습니다. 아직 생성되지 않은 파일과 지문 표시용 값은 포함하지 않습니다."
+                  />
+                </div>
                 <BulkTests
                   key={selected}
                   setName={selected}
@@ -284,7 +302,6 @@ export default function Tests() {
                           <input
                             aria-label="등록 테스트 전체 선택"
                             type="checkbox"
-                            disabled={!editable}
                             checked={
                               rows.length > 0 &&
                               selectedIndices.length === rows.length
@@ -314,7 +331,6 @@ export default function Tests() {
                             <input
                               type="checkbox"
                               aria-label={`테스트 ${test.index} 선택`}
-                              disabled={!editable}
                               checked={selectedIndices.includes(test.index)}
                               onChange={(e) =>
                                 setSelection({
@@ -348,6 +364,20 @@ export default function Tests() {
                               <Icon name="file" size={15} />
                               입력·출력 보기
                             </button>
+                            <div className="actions test-download-actions">
+                              <BlobDownload
+                                problemId={data.problem.id}
+                                sha={test.input_sha}
+                                filename={`${String(test.index).padStart(4, '0')}.in`}
+                                label="입력 다운로드"
+                              />
+                              <BlobDownload
+                                problemId={data.problem.id}
+                                sha={test.answer_sha}
+                                filename={`${String(test.index).padStart(4, '0')}.out`}
+                                label="기대 출력 다운로드"
+                              />
+                            </div>
                           </td>
                           <td>
                             <select
@@ -597,6 +627,22 @@ function TestEditor({
         </>
       }
     >
+      {test && (
+        <div className="actions">
+          <BlobDownload
+            problemId={data.problem.id}
+            sha={test.input_sha}
+            filename={`${String(test.index).padStart(4, '0')}.in`}
+            label="저장된 입력 다운로드"
+          />
+          <BlobDownload
+            problemId={data.problem.id}
+            sha={test.answer_sha}
+            filename={`${String(test.index).padStart(4, '0')}.out`}
+            label="저장된 기대 출력 다운로드"
+          />
+        </div>
+      )}
       <fieldset disabled={!editable || busy} className="form-grid">
         <label>
           테스트 번호

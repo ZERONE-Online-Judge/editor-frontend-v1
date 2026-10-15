@@ -11,6 +11,8 @@ import {
 import { useWorkspace } from '../../lib/workspace';
 import SolutionExpectations from './SolutionExpectations';
 import ResourceOptions from './ResourceOptions';
+import { DownloadActions } from '../../components/Downloads';
+import { sourceDownloads } from '../../lib/downloads';
 import type {
   Language,
   Solution,
@@ -43,6 +45,12 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
   const [reusing, setReusing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [category, setCategory] = useState('all');
+  const [selection, setSelection] = useState<{
+    problemId: string;
+    keys: string[];
+  }>({ problemId: '', keys: [] });
+  const selectedKeys =
+    selection.problemId === data.problem.id ? selection.keys : [];
   const allItems = solutions
     ? Object.values(doc.solutions).map((file) => ({ file, isSolution: true }))
     : [
@@ -61,6 +69,16 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
       (category === 'solution'
         ? isSolution
         : !isSolution && file.kind === category),
+  );
+  const fileKey = ({
+    file,
+    isSolution,
+  }: {
+    file: SourceFile;
+    isSolution: boolean;
+  }) => `${isSolution ? 'solution' : 'file'}:${file.name}`;
+  const selectedItems = allItems.filter((item) =>
+    selectedKeys.includes(fileKey(item)),
   );
   function edit(file: SourceFile | null, isSolution = solutions) {
     setEditingSolution(isSolution);
@@ -200,6 +218,19 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
         </div>
       )}
       <section className="card no-padding">
+        <div className="download-panel">
+          <DownloadActions
+            problemId={data.problem.id}
+            files={sourceDownloads(items)}
+            selectedFiles={sourceDownloads(selectedItems)}
+            filename={solutions ? 'solutions.zip' : 'problem-files.zip'}
+            allLabel={
+              category === 'all' ? '전체 다운로드' : '표시된 파일 다운로드'
+            }
+            selectionLabel={`선택 다운로드${selectedItems.length ? ` (${selectedItems.length}개)` : ''}`}
+            note="체크박스로 파일을 선택해 ZIP으로 받으세요. 풀이와 나머지 자료는 폴더를 나누고 원래 파일 이름을 유지합니다."
+          />
+        </div>
         {!solutions && (
           <div className="card-heading">
             <label>
@@ -223,6 +254,34 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
             <table className="data-table">
               <thead>
                 <tr>
+                  <th>
+                    <input
+                      type="checkbox"
+                      aria-label="표시된 파일 전체 선택"
+                      checked={
+                        items.length > 0 &&
+                        items.every((item) =>
+                          selectedKeys.includes(fileKey(item)),
+                        )
+                      }
+                      onChange={(event) =>
+                        setSelection({
+                          problemId: data.problem.id,
+                          keys: event.target.checked
+                            ? [
+                                ...new Set([
+                                  ...selectedKeys,
+                                  ...items.map(fileKey),
+                                ]),
+                              ]
+                            : selectedKeys.filter(
+                                (key) =>
+                                  !items.some((item) => fileKey(item) === key),
+                              ),
+                        })
+                      }
+                    />
+                  </th>
                   <th>파일</th>
                   <th>{solutions ? '기대 판정' : '역할 · 분류'}</th>
                   <th>언어</th>
@@ -233,6 +292,24 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
               <tbody>
                 {items.map(({ file, isSolution }) => (
                   <tr key={`${isSolution ? 'solution' : 'file'}:${file.name}`}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`${file.name} 선택`}
+                        checked={selectedKeys.includes(
+                          fileKey({ file, isSolution }),
+                        )}
+                        onChange={(event) => {
+                          const key = fileKey({ file, isSolution });
+                          setSelection({
+                            problemId: data.problem.id,
+                            keys: event.target.checked
+                              ? [...selectedKeys, key]
+                              : selectedKeys.filter((value) => value !== key),
+                          });
+                        }}
+                      />
+                    </td>
                     <td>
                       <button
                         className="file-title text-button"

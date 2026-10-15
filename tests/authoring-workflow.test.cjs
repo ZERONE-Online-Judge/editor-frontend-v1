@@ -444,6 +444,52 @@ test('Validator selection omits unrelated and generator sources', async () => {
   );
   await close();
 });
+
+test('Read-only users can select code for download while editing stays disabled', async () => {
+  workspace();
+  context.editable = false;
+  const { host, close } = await mount(
+    source('pages/workspace/Files.tsx').default,
+  );
+  const selection = host.querySelector('[aria-label="표시된 파일 전체 선택"]');
+  assert.equal(selection.disabled, false);
+  await act(async () => selection.click());
+  assert.match(
+    host.querySelector('.download-toolbar').textContent,
+    /선택 다운로드 \(3개\)/,
+  );
+  assert.ok(
+    [...host.querySelectorAll('[aria-label$="제거"]')].every(
+      (button) => button.disabled,
+    ),
+  );
+  assert.equal(host.querySelectorAll('a[download]').length, 3);
+  await close();
+});
+
+test('Read-only users can select tests and download available files without changing samples', async () => {
+  const doc = workspace();
+  doc.testsets.tests.groups_enabled = false;
+  doc.testsets.tests.groups = {};
+  context.editable = false;
+  const { host, close } = await mount(
+    source('pages/workspace/Tests.tsx').default,
+  );
+  const selection = host.querySelector('[aria-label="등록 테스트 전체 선택"]');
+  assert.equal(selection.disabled, false);
+  await act(async () => selection.click());
+  assert.match(
+    host.querySelector('.download-toolbar').textContent,
+    /선택 다운로드 \(1개 테스트\)/,
+  );
+  const input = host.querySelector('.test-download-actions a');
+  assert.equal(input.getAttribute('download'), '0001.in');
+  assert.equal(input.getAttribute('href'), '/api/problems/fixture/blobs/input');
+  assert.ok(host.querySelector('.test-download-actions button').disabled);
+  assert.ok(host.querySelector('[aria-label="테스트 1 제거"]').disabled);
+  assert.equal(Object.values(doc.testsets.tests.tests)[0].sample, true);
+  await close();
+});
 test('Preparation recommendations do not count as missing required data', () => {
   const doc = fixture();
   reuseAsSolution(doc, 'main.cpp', 'MA');

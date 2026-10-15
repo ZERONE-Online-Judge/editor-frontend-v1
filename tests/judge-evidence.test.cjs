@@ -19,6 +19,21 @@ loaded.filename = file;
 loaded.paths = Module._nodeModulePaths(path.dirname(file));
 const native = loaded.require.bind(loaded);
 loaded.require = (id) => {
+  if (id === '../../components/Downloads')
+    return {
+      BlobDownload: ({ problemId, sha, filename, label }) =>
+        sha
+          ? React.createElement(
+              'a',
+              {
+                href: `/api/problems/${problemId}/blobs/${sha}`,
+                download: filename,
+              },
+              label,
+            )
+          : React.createElement('button', { disabled: true }, label),
+    };
+  if (id === '../../lib/downloads') return {};
   if (id === '../../lib/api')
     return {
       blobText: async (problem, sha) => {

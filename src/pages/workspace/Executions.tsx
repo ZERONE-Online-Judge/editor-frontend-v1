@@ -11,6 +11,8 @@ import {
   bytes,
 } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
+import { BlobDownload, DownloadActions } from '../../components/Downloads';
+import { testDownloads } from '../../lib/downloads';
 import type { CaseResult, Job } from '../../lib/types';
 import ZojPublishing from './ZojPublishing';
 import InvocationComments from './InvocationComments';
@@ -711,6 +713,20 @@ export default function Executions({
                     '자동 반영되지 않았습니다. 실행 당시 자료와 작업 사본을 확인하세요.'}
                 </Notice>
               )}
+              {job.kind === 'prepare' &&
+                Object.entries(job.result.testsets || {}).map(
+                  ([name, tests]) => (
+                    <DownloadActions
+                      key={name}
+                      problemId={data.problem.id}
+                      files={testDownloads(name, tests)}
+                      filename={`${name.slice(0, 85)}-tests.zip`}
+                      allLabel={`${name} 생성 파일 다운로드`}
+                      selectable={false}
+                      note="이 실행에서 저장된 실제 입력·기대 출력을 받습니다. 작업 사본에 반영하기 전에도 다운로드할 수 있습니다."
+                    />
+                  ),
+                )}
               <TestVerdictMatrix job={job} />
               {job.result.solutions?.map((solution) => (
                 <div className="solution-result" key={solution.name}>
@@ -1241,13 +1257,20 @@ export function CodeEvidence({
   return (
     <div className="evidence-grid">
       {['입력', '기대 출력', '실제 출력'].map((label, i) => (
-        <CodeEditor
-          key={label}
-          value={values[i] ?? '불러오는 중…'}
-          readOnly
-          label={label}
-          rows={6}
-        />
+        <div key={label} className="evidence-file">
+          <BlobDownload
+            problemId={problemId}
+            sha={[input, answer, actual][i]}
+            filename={['input.in', 'expected.out', 'actual.out'][i]}
+            label={`${label} 다운로드`}
+          />
+          <CodeEditor
+            value={values[i] ?? '불러오는 중…'}
+            readOnly
+            label={label}
+            rows={6}
+          />
+        </div>
       ))}
     </div>
   );

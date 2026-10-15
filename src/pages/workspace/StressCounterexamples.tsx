@@ -7,6 +7,8 @@ import type {
 } from '../../lib/types';
 import { Notice } from '../../components/ui';
 import StressDiscoveryStatistics from './StressDiscoveryStatistics';
+import { DownloadActions } from '../../components/Downloads';
+import { counterexampleDownloads } from '../../lib/downloads';
 
 const stopReasons: Record<string, string> = {
   duration: '실행 시간 도달',
@@ -231,6 +233,18 @@ export default function StressCounterexamples({
       ) : null}
       {examples.length ? (
         <>
+          <DownloadActions
+            problemId={problemId}
+            files={counterexampleDownloads(examples, useReduced)}
+            selectedFiles={counterexampleDownloads(
+              examples,
+              useReduced,
+              selected,
+            )}
+            filename={`stress-${job.id.slice(0, 12)}.zip`}
+            selectionLabel={`선택 다운로드${selected.length ? ` (${selected.length}개 반례)` : ''}`}
+            note="입력·기대 출력과 모든 비교 풀이의 실제 출력을 함께 받습니다. 아래 원본·축소본 선택을 그대로 적용하며, 실행 중에도 수집된 반례를 다운로드할 수 있습니다."
+          />
           <div className="section-heading">
             <h4>
               유효한 반례 입력 {examples.length}개
