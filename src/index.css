@@ -3338,3 +3338,56 @@ svg {
     margin-top: 8px;
   }
 }
+
+.review-report-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+.review-report-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+.review-report-filter select {
+  width: auto;
+  max-width: 100%;
+}
+.review-report-list {
+  display: grid;
+  gap: 0.75rem;
+}
+.review-report-list article {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--zoj-border);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.review-report-list article > div {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.review-report-list article > strong {
+  display: block;
+}
+.review-report-list p {
+  font-size: 0.85rem;
+  line-height: 1.7;
+  margin-block: 0.5rem;
+  white-space: pre-wrap;
+}
+.review-report-list a {
+  font-size: 0.85rem;
+  color: var(--zoj-accent);
+}
+.review-report-method {
+  font-size: 0.75rem;
+  line-height: 1.7;
+  margin-top: 1rem;
+  overflow-wrap: anywhere;
+}

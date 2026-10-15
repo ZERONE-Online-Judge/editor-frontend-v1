@@ -573,3 +573,72 @@ test('solution scopes keep testset defaults separate from group overrides', asyn
   );
   await close();
 });
+
+test('review report filters evidence without claiming unsaved edits were checked', async () => {
+  const { ReviewReportView } = source('pages/workspace/ReviewReport.tsx');
+  const target = document.createElement('div');
+  document.body.appendChild(target);
+  const root = createRoot(target);
+  const report = {
+    document_hash: 'a'.repeat(64),
+    generated_at: 1000,
+    categories: { tests: '테스트 구조', solutions: '풀이 검증' },
+    counts: { warning: 1, recommendation: 1 },
+    evidence_jobs: ['evidence'],
+    method: '실행 기록 근거',
+    items: [
+      {
+        code: 'DUPLICATE',
+        severity: 'recommendation',
+        category: 'tests',
+        message: '동일 입력',
+        section: 'tests',
+        evidence: 'SHA-256 일치',
+      },
+      {
+        code: 'WRONG',
+        severity: 'warning',
+        category: 'solutions',
+        message: '기대 판정 불일치',
+        section: 'executions',
+        evidence: '전체 실행',
+        job_id: 'evidence',
+      },
+    ],
+  };
+  await act(async () =>
+    root.render(
+      React.createElement(ReviewReportView, {
+        report,
+        problemId: 'problem',
+        stale: true,
+      }),
+    ),
+  );
+  assert.match(target.textContent, /이전 저장 자료 기준/);
+  assert.ok(
+    target.querySelector('a[href="/problems/problem/executions?job=evidence"]'),
+  );
+  const select = target.querySelector('select');
+  await act(async () => {
+    select.value = 'tests';
+    select.dispatchEvent(new window.Event('change', { bubbles: true }));
+  });
+  assert.match(target.textContent, /동일 입력/);
+  assert.doesNotMatch(target.textContent, /기대 판정 불일치/);
+  await act(async () => root.unmount());
+  target.remove();
+});
+
+test('preparation readiness includes scoped wrong tags but excludes globally skipped solutions', () => {
+  const doc = fixture();
+  reuseAsSolution(doc, 'main.cpp', 'OK');
+  doc.solutions['main.cpp'].group_tags = { tests: { small: 'TL' } };
+  assert.ok(
+    !preparationCautions(doc).some((c) => c.code === 'NO_WRONG_SOLUTIONS'),
+  );
+  doc.solutions['main.cpp'].tag = 'NR';
+  assert.ok(
+    preparationCautions(doc).some((c) => c.code === 'NO_WRONG_SOLUTIONS'),
+  );
+});

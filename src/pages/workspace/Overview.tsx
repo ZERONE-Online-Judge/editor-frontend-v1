@@ -4,6 +4,7 @@ import { patch, put } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
 import { Badge, Icon, Modal, SectionHeading } from '../../components/ui';
 import { preparationCautions } from '../../lib/readiness';
+import ReviewReport from './ReviewReport';
 export default function Overview() {
   const {
     data,
@@ -214,6 +215,7 @@ export default function Overview() {
           </label>
         </fieldset>
       </section>
+      <ReviewReport />
       <section className="card">
         <SectionHeading
           title="패키지 준비 상태"

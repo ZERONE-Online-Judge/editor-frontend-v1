@@ -47,7 +47,7 @@ export default function SolutionExpectations({
       <p className="muted small">
         그룹 설정 → 세트 설정 → 기본 판정 순서로 적용합니다. WA·TL 등은 해당
         범위에서 한 번 이상 재현되어야 합니다. NR은 해당 범위를 실행하지
-        않습니다.
+        않습니다. 기본 판정이 NR인 풀이는 전체 실행에서 제외합니다.
       </p>
       {Object.entries(document.testsets).map(([setName, set]) => (
         <fieldset key={setName} disabled={disabled}>

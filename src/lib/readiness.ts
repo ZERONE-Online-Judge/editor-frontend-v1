@@ -71,8 +71,16 @@ export function preparationCautions(doc: ProblemDocument): Caution[] {
       true,
     );
   if (
-    !Object.values(doc.solutions).some((s) =>
-      ['WA', 'TL', 'ML', 'RE', 'RJ'].includes(s.tag),
+    !Object.values(doc.solutions).some(
+      (s) =>
+        s.tag !== 'NR' &&
+        [
+          s.tag,
+          ...Object.values(s.extra_tags),
+          ...Object.values(s.group_tags || {}).flatMap(Object.values),
+        ].some((tag) =>
+          ['WA', 'TL', 'ML', 'RE', 'RJ', 'PE', 'TM'].includes(tag),
+        ),
     )
   )
     add(
