@@ -727,6 +727,67 @@ svg {
   margin-top: 8px;
   max-width: 720px;
 }
+.package-import-summary {
+  display: grid;
+  gap: 20px;
+  color: var(--zoj-ink);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.package-import-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.package-import-counts > div {
+  padding: 12px;
+  border-radius: 10px;
+  background: #f5f6fc;
+}
+.package-import-counts dt {
+  color: var(--zoj-muted);
+  font-size: 11px;
+}
+.package-import-counts dd {
+  margin: 2px 0 0;
+  font-weight: 650;
+}
+.package-import-warnings {
+  padding: 14px;
+  border: 1px solid #f4d598;
+  border-radius: 12px;
+  background: #fffbeb;
+  overflow-wrap: anywhere;
+}
+.package-import-summary ul {
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+.package-import-summary li + li {
+  margin-top: 7px;
+}
+.package-import-originals {
+  padding: 14px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 12px;
+}
+.package-import-originals summary {
+  font-weight: 600;
+}
+.package-import-originals p {
+  margin-top: 12px;
+  color: var(--zoj-muted);
+}
+.package-import-originals ul {
+  max-height: 240px;
+  overflow: auto;
+}
+.package-import-originals li > * {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
 .test-bulk-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

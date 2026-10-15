@@ -5,6 +5,9 @@ import { useAuth } from '../lib/authContext';
 import type { Problem, Folder } from '../lib/types';
 import { folderPath, folderDescendants } from '../lib/organization';
 import { Badge, Empty, Icon, Modal, Notice } from '../components/ui';
+import PackageImportSummary, {
+  type ImportReport,
+} from '../components/PackageImportSummary';
 import {
   FolderInvitations,
   NewSharedFolder,
@@ -729,7 +732,10 @@ export default function Problems() {
       {importing && (
         <ImportProblem
           folderId={folderId}
-          onClose={() => setImporting(false)}
+          onClose={() => {
+            setImporting(false);
+            void refresh();
+          }}
           onCreated={(id) => navigate(`/problems/${id}/overview`)}
         />
       )}
@@ -1044,17 +1050,21 @@ function ImportProblem({
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [imported, setImported] = useState<{
+    id: string;
+    import_report?: ImportReport;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function submit() {
     if (!file) return;
     setBusy(true);
     try {
-      const result = await api<{ id: string }>(
+      const result = await api<{ id: string; import_report?: ImportReport }>(
         `/imports?name=${encodeURIComponent(name)}&slug=${encodeURIComponent(slug)}${folderId ? `&folder_id=${folderId}` : ''}`,
         { method: 'POST', body: file },
       );
-      onCreated(result.id);
+      setImported(result);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1063,50 +1073,76 @@ function ImportProblem({
   }
   return (
     <Modal
-      title="문제 패키지 가져오기"
-      onClose={onClose}
+      title={imported ? '문제 가져오기 완료' : '문제 패키지 가져오기'}
+      onClose={() => {
+        if (!busy) onClose();
+      }}
       footer={
-        <>
-          <button className="button" onClick={onClose}>
-            취소
-          </button>
-          <button
-            className="button primary"
-            disabled={busy || !file || !name || !slug}
-            onClick={() => void submit()}
-          >
-            {busy ? '가져오는 중…' : '문제 등록'}
-          </button>
-        </>
+        imported ? (
+          <>
+            <button className="button" onClick={onClose}>
+              목록으로
+            </button>
+            <button
+              className="button primary"
+              onClick={() => onCreated(imported.id)}
+            >
+              문제 열기
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="button" disabled={busy} onClick={onClose}>
+              취소
+            </button>
+            <button
+              className="button primary"
+              disabled={busy || !file || !name || !slug}
+              onClick={() => void submit()}
+            >
+              {busy ? '가져오는 중…' : '문제 등록'}
+            </button>
+          </>
+        )
       }
     >
-      <p className="muted">
-        Editor 패키지 또는 problem.xml과 생성된 테스트가 포함된 Polygon Linux
-        ZIP을 올리세요.
-      </p>
-      <label>
-        문제 이름
-        <input value={name} onChange={(e) => setName(e.target.value)} />
-      </label>
-      <label>
-        문제 식별자
-        <input
-          value={slug}
-          onChange={(e) => setSlug(e.target.value)}
-          placeholder="a-plus-b"
-        />
-      </label>
-      <label className="upload-area">
-        <Icon name="upload" size={25} />
-        <strong>{file?.name || 'ZIP 파일 선택'}</strong>
-        <small>{file ? bytes(file.size) : '최대 128MiB'}</small>
-        <input
-          type="file"
-          accept=".zip"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
-        />
-      </label>
-      {error && <Notice tone="error">{error}</Notice>}
+      {imported ? (
+        imported.import_report ? (
+          <PackageImportSummary report={imported.import_report} />
+        ) : (
+          <p>문제를 가져왔습니다. 문제 열기를 눌러 자료를 확인하세요.</p>
+        )
+      ) : (
+        <>
+          <p className="muted">
+            Editor 패키지 또는 problem.xml과 생성된 테스트가 포함된 Polygon
+            Linux ZIP을 올리세요.
+          </p>
+          <label>
+            문제 이름
+            <input value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label>
+            문제 식별자
+            <input
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder="a-plus-b"
+            />
+          </label>
+          <label className="upload-area">
+            <Icon name="upload" size={25} />
+            <strong>{file?.name || 'ZIP 파일 선택'}</strong>
+            <small>{file ? bytes(file.size) : '최대 128MiB'}</small>
+            <input
+              type="file"
+              accept=".zip"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+            />
+          </label>
+          {error && <Notice tone="error">{error}</Notice>}
+        </>
+      )}
     </Modal>
   );
 }
