@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+import { folderRoles } from '../../lib/sharedFolders';
 import { useCallback, useEffect, useState } from 'react';
 import { api, post, put, patch, time } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
@@ -20,6 +22,7 @@ export default function Collaboration({
 }
 function AccessPanel() {
   const { data, editable, notify } = useWorkspace();
+  const canManage = editable && data.problem.can_manage_access !== false;
   const [rows, setRows] = useState<Access[]>([]);
   const [login, setLogin] = useState('');
   const [role, setRole] = useState('WRITE');
@@ -34,8 +37,8 @@ function AccessPanel() {
     [data.problem.id, notify],
   );
   useEffect(() => {
-    if (editable) void load();
-  }, [load, editable]);
+    if (canManage) void load();
+  }, [load, canManage]);
   async function change(
     target: string,
     type: string,
@@ -63,9 +66,21 @@ function AccessPanel() {
         title="협업 권한"
         description="Editor에 로그인한 사용자를 추가합니다. 권한 변경은 커밋 없이 즉시 적용됩니다."
       />
-      {!editable ? (
+      {data.problem.workspace_id && (
         <Notice>
-          쓰기 권한이 있는 사용자가 협업 권한을 관리할 수 있습니다.
+          공유 작업 폴더 <strong>{data.problem.workspace_name}</strong>에서{' '}
+          {folderRoles[data.problem.workspace_role || 'VIEWER']} 권한을
+          받았습니다. 폴더를 통한 권한은{' '}
+          <Link to={`/problems?folder=${data.problem.workspace_id}`}>
+            공유 폴더의 구성원
+          </Link>
+          에서 관리합니다. 아래의 문제별 직접 공유는 별도 권한으로 유지됩니다.
+        </Notice>
+      )}
+      {!canManage ? (
+        <Notice>
+          개인 문제는 쓰기 권한이 있는 사용자가, 공유 폴더의 문제는 문제
+          소유자가 직접 공유를 관리할 수 있습니다.
         </Notice>
       ) : (
         <>

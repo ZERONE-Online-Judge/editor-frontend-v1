@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { api, bytes, patch, post, put, time } from '../lib/api';
+import { api, ApiError, bytes, patch, post, put, time } from '../lib/api';
 import { useAuth } from '../lib/authContext';
 import type { Problem, Folder } from '../lib/types';
 import { folderPath, folderDescendants } from '../lib/organization';
 import { Badge, Empty, Icon, Modal, Notice } from '../components/ui';
+import {
+  FolderInvitations,
+  NewSharedFolder,
+  SharedFolderMembers,
+} from '../components/SharedFolders';
+import {
+  folderRoles,
+  shareScopeChanges,
+  canEditFolder,
+  canOrganizeProblem,
+  folderDestinations,
+} from '../lib/sharedFolders';
 
 export default function Problems() {
   const { user } = useAuth();
@@ -26,6 +38,13 @@ export default function Problems() {
   const [moveIds, setMoveIds] = useState<string[] | null>(null);
   const [folderEdit, setFolderEdit] = useState<Folder | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Folder | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [newShared, setNewShared] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareMove, setShareMove] = useState<{
+    ids: string[];
+    destination: string | null;
+  } | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   async function refresh() {
     setLoading(true);
@@ -37,6 +56,7 @@ export default function Problems() {
       setRows(problems);
       setFolders(tree);
       setSelection([]);
+      setRefreshTick((t) => t + 1);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -69,6 +89,10 @@ export default function Problems() {
   }, [filter]);
   const path = folderPath(folders, folderId);
   const current = folders.find((f) => f.id === folderId);
+  const writable = canEditFolder(current) && (!folderId || !!current);
+  const sharedRoot = current?.workspace_id
+    ? folders.find((f) => f.id === current.workspace_id)
+    : undefined;
   const visible = rows.filter(
     (p) =>
       (filter !== 'mine' || p.owner === user?.handle) &&
@@ -81,22 +105,42 @@ export default function Problems() {
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
+  const movable = visible.filter((p) => canOrganizeProblem(p, user?.handle));
   const children = folders.filter((f) => f.parent_id === folderId);
   function chooseFolder(id: string) {
     setParams(id === 'all' ? {} : { folder: id });
     setQuery('');
     setSelection([]);
   }
-  async function move(ids: string[], destination: string | null) {
+  async function move(
+    ids: string[],
+    destination: string | null,
+    confirmed = false,
+  ) {
     if (busy) return;
+    if (
+      !confirmed &&
+      shareScopeChanges(
+        rows,
+        ids,
+        folders.find((f) => f.id === destination),
+      )
+    ) {
+      setShareMove({ ids, destination });
+      setMoveIds(null);
+      setError('');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
       await post('/folders/move-problems', {
         problem_ids: ids,
         folder_id: destination,
+        share_confirmed: confirmed,
       });
       setMoveIds(null);
+      setShareMove(null);
       setMessage(
         `${ids.length}개 문제를 ${
           destination
@@ -108,7 +152,11 @@ export default function Problems() {
       );
       await refresh();
     } catch (e) {
-      setError((e as Error).message);
+      if (e instanceof ApiError && e.code === 'share_confirmation_required') {
+        setShareMove({ ids, destination });
+        setMoveIds(null);
+        setError('');
+      } else setError((e as Error).message);
     } finally {
       setBusy(false);
       setDragging(null);
@@ -120,9 +168,17 @@ export default function Problems() {
     if (id && rows.some((p) => p.id === id && !p.deleted))
       void move(selection.includes(id) ? selection : [id], destination);
   }
-  function tree(parent: string | null, depth = 0): React.ReactNode {
+  function tree(
+    parent: string | null,
+    depth = 0,
+    shared = false,
+  ): React.ReactNode {
     return folders
-      .filter((f) => f.parent_id === parent)
+      .filter(
+        (f) =>
+          f.parent_id === parent &&
+          (parent !== null || !!f.workspace_id === shared),
+      )
       .map((f) => (
         <div key={f.id}>
           <button
@@ -133,10 +189,17 @@ export default function Problems() {
             onDrop={(e) => drop(e, f.id)}
           >
             <Icon name="folder" size={17} />
-            <span>{f.name}</span>
+            <span>
+              {f.name}
+              {!parent && f.workspace_role && (
+                <small className="folder-role-label">
+                  {folderRoles[f.workspace_role]}
+                </small>
+              )}
+            </span>
             <small>{rows.filter((p) => p.folder_id === f.id).length}</small>
           </button>
-          {tree(f.id, depth + 1)}
+          {tree(f.id, depth + 1, shared)}
         </div>
       ));
   }
@@ -149,17 +212,32 @@ export default function Problems() {
           <p>폴더로 정리하고, 함께 완성한 문제를 ZOJ로 보내세요.</p>
         </div>
         <div className="actions">
-          <button className="button" onClick={() => setImporting(true)}>
+          <button
+            className="button"
+            disabled={!writable}
+            onClick={() => setImporting(true)}
+          >
             <Icon name="upload" />
             패키지 가져오기
           </button>
-          <button className="button primary" onClick={() => setCreate(true)}>
+          <button
+            className="button primary"
+            disabled={!writable}
+            onClick={() => setCreate(true)}
+          >
             <Icon name="plus" />새 문제
           </button>
         </div>
       </div>
       {error && <Notice tone="error">{error}</Notice>}
       {message && <Notice tone="success">{message}</Notice>}
+      <FolderInvitations
+        refreshTick={refreshTick}
+        onAccepted={(id) => {
+          chooseFolder(id);
+          void refresh();
+        }}
+      />
       <div className="project-layout">
         <aside
           className={`card folder-sidebar ${dragging ? 'accepts-drop' : ''}`}
@@ -170,7 +248,10 @@ export default function Problems() {
             <button
               className="icon-button"
               aria-label="새 폴더 만들기"
-              onClick={() => setFolderEdit('new')}
+              onClick={() => {
+                chooseFolder('root');
+                setFolderEdit('new');
+              }}
             >
               <Icon name="plus" />
             </button>
@@ -192,9 +273,25 @@ export default function Problems() {
             <span>분류되지 않은 문제</span>
           </button>
           <div className="folder-tree">{tree(null)}</div>
+          <p className="folder-hint">개인 폴더 정리는 나에게만 적용됩니다.</p>
+          <div className="folder-sidebar-heading shared-sidebar-heading">
+            <strong>공유 작업 폴더</strong>
+            <button
+              className="icon-button"
+              aria-label="공유 작업 폴더 만들기"
+              onClick={() => setNewShared(true)}
+            >
+              <Icon name="plus" />
+            </button>
+          </div>
+          <div className="folder-tree">{tree(null, 0, true)}</div>
+          {!folders.some((f) => f.workspace_id) && (
+            <p className="folder-hint">
+              폴더를 만들고 동료를 초대해 문제를 함께 준비하세요.
+            </p>
+          )}
           <p className="folder-hint">
-            문제를 폴더로 끌어 놓거나 선택 후 이동하세요. 내 폴더 정리는
-            동료에게 영향을 주지 않습니다.
+            공유 폴더의 문제 이동과 정리는 구성원 모두에게 적용됩니다.
           </p>
         </aside>
         <div className="project-content">
@@ -218,15 +315,27 @@ export default function Problems() {
             <div className="actions">
               <button
                 className="button small"
+                disabled={!writable}
                 onClick={() => setFolderEdit('new')}
               >
                 <Icon name="plus" size={15} />
                 폴더 만들기
               </button>
-              {current && (
+              {sharedRoot && (
+                <button
+                  className="button small"
+                  onClick={() => setSharing(true)}
+                >
+                  구성원 · {folderRoles[current?.workspace_role || 'VIEWER']}
+                </button>
+              )}
+              {current && writable && (
                 <>
                   <button
                     className="text-button"
+                    disabled={
+                      current.id === current.workspace_id && !current.can_manage
+                    }
                     onClick={() => setFolderEdit(current)}
                   >
                     폴더 편집
@@ -234,6 +343,10 @@ export default function Problems() {
                   <button
                     className="icon-button"
                     aria-label={`${current.name} 폴더 삭제`}
+                    disabled={
+                      current.id === current.workspace_id &&
+                      current.workspace_role !== 'OWNER'
+                    }
                     onClick={() => setDeleting(current)}
                   >
                     <Icon name="trash" size={16} />
@@ -242,6 +355,20 @@ export default function Problems() {
               )}
             </div>
           </div>
+          {current?.workspace_id && (
+            <div className="shared-folder-banner">
+              <Badge>{folderRoles[current.workspace_role || 'VIEWER']}</Badge>
+              <span>
+                공유 작업 폴더 · 구성원은 하위 폴더와 문제에 같은 권한으로
+                접근합니다.
+              </span>
+            </div>
+          )}
+          {folderId && !current && !loading && (
+            <Notice>
+              접근할 수 없거나 삭제된 폴더입니다. 전체 문제에서 다시 선택하세요.
+            </Notice>
+          )}
           {!query && filter !== 'deleted' && children.length > 0 && (
             <div className="folder-grid">
               {children.map((f) => (
@@ -332,13 +459,15 @@ export default function Problems() {
                           <input
                             type="checkbox"
                             aria-label="표시된 문제 모두 선택"
-                            checked={visible.every((p) =>
-                              selection.includes(p.id),
-                            )}
+                            disabled={movable.length === 0}
+                            checked={
+                              movable.length > 0 &&
+                              movable.every((p) => selection.includes(p.id))
+                            }
                             onChange={(e) =>
                               setSelection(
                                 e.target.checked
-                                  ? visible.map((p) => p.id)
+                                  ? movable.map((p) => p.id)
                                   : [],
                               )
                             }
@@ -356,7 +485,11 @@ export default function Problems() {
                     {visible.map((p) => (
                       <tr
                         key={p.id}
-                        draggable={!p.deleted && !busy}
+                        draggable={
+                          !p.deleted &&
+                          !busy &&
+                          canOrganizeProblem(p, user?.handle)
+                        }
                         onDragStart={(e) => {
                           e.dataTransfer.setData(
                             'application/x-zoj-problem',
@@ -371,6 +504,7 @@ export default function Problems() {
                           <td className="check-cell">
                             <input
                               type="checkbox"
+                              disabled={!canOrganizeProblem(p, user?.handle)}
                               aria-label={`${p.name} 선택`}
                               checked={selection.includes(p.id)}
                               onChange={(e) =>
@@ -425,7 +559,11 @@ export default function Problems() {
                               ? '소유자'
                               : p.role === 'WRITE'
                                 ? '편집 가능'
-                                : '읽기 전용'}
+                                : p.reviewer
+                                  ? '검수자'
+                                  : p.translator
+                                    ? '번역자'
+                                    : '읽기 전용'}
                           </Badge>
                         </td>
                         <td>
@@ -458,6 +596,7 @@ export default function Problems() {
                             <div className="actions">
                               <button
                                 className="icon-button"
+                                disabled={!canOrganizeProblem(p, user?.handle)}
                                 aria-label={`${p.name} 폴더 이동`}
                                 onClick={() => setMoveIds([p.id])}
                               >
@@ -487,10 +626,15 @@ export default function Problems() {
                       ? '검색 결과가 없습니다.'
                       : '이 폴더에 아직 문제가 없습니다.'
                 }
-                description="새 문제를 만들거나 다른 폴더의 문제를 옮겨 보세요."
+                description={
+                  writable
+                    ? '새 문제를 만들거나 다른 폴더의 문제를 옮겨 보세요.'
+                    : '이 폴더의 자료를 열람할 수 있습니다. 문제 추가는 편집자 이상 권한이 필요합니다.'
+                }
                 action={
                   filter !== 'deleted' &&
-                  !query && (
+                  !query &&
+                  writable && (
                     <button
                       className="button primary"
                       onClick={() => setCreate(true)}
@@ -504,6 +648,77 @@ export default function Problems() {
           </section>
         </div>
       </div>
+      {newShared && (
+        <NewSharedFolder
+          onClose={() => setNewShared(false)}
+          onCreated={(id) => {
+            setNewShared(false);
+            chooseFolder(id);
+            void refresh();
+          }}
+        />
+      )}
+      {sharing && sharedRoot && (
+        <SharedFolderMembers
+          folder={sharedRoot}
+          onClose={() => setSharing(false)}
+          onChanged={() => void refresh()}
+          onLeft={() => {
+            setSharing(false);
+            chooseFolder('all');
+            void refresh();
+          }}
+        />
+      )}
+      {shareMove && (
+        <Modal
+          title="공유 범위를 바꾸어 이동할까요?"
+          onClose={() => {
+            if (!busy) setShareMove(null);
+          }}
+          footer={
+            <>
+              <button
+                className="button"
+                disabled={busy}
+                onClick={() => setShareMove(null)}
+              >
+                취소
+              </button>
+              <button
+                className="button primary"
+                disabled={busy}
+                onClick={() =>
+                  void move(shareMove.ids, shareMove.destination, true)
+                }
+              >
+                {busy ? '옮기는 중…' : '공유 범위 확인 · 이동'}
+              </button>
+            </>
+          }
+        >
+          <p>
+            <strong>{shareMove.ids.length}개 문제</strong>를{' '}
+            <strong>
+              {shareMove.destination
+                ? folderPath(folders, shareMove.destination)
+                    .map((f) => f.name)
+                    .join(' / ')
+                : '개인 영역'}
+            </strong>
+            으로 옮깁니다.
+          </p>
+          <p>
+            새 공유 폴더의 모든 구성원이 문제 자료에 접근하게 됩니다. 이전 공유
+            폴더를 통한 접근은 해제되며 문제별 직접 공유와 원래 소유권은
+            유지됩니다.
+          </p>
+          <Notice>
+            공유 범위를 바꾸는 이동은 문제 소유자만 할 수 있습니다.
+          </Notice>
+          {error && <Notice tone="error">{error}</Notice>}
+        </Modal>
+      )}
       {create && (
         <CreateProblem
           folderId={folderId}
@@ -571,8 +786,10 @@ export default function Problems() {
           }
         >
           <p>
-            <strong>{deleting.name}</strong> 폴더를 삭제합니다. 문제와 하위
-            폴더는 상위 위치로 옮겨지며, 문제 자체는 삭제되지 않습니다.
+            <strong>{deleting.name}</strong> 폴더를 삭제합니다.{' '}
+            {deleting.id === deleting.workspace_id
+              ? '공유 작업 폴더는 모든 하위 폴더와 문제(휴지통 포함)를 옮겨 비운 뒤 소유자만 삭제할 수 있습니다.'
+              : '문제와 하위 폴더는 상위 위치로 옮겨지며, 문제 자체는 삭제되지 않습니다.'}
           </p>
           {error && <Notice tone="error">{error}</Notice>}
         </Modal>
@@ -648,10 +865,13 @@ function MoveModal({
           onChange={(e) => setDestination(e.target.value)}
         >
           <option value="">분류되지 않은 문제</option>
-          <FolderOptions folders={folders} />
+          <FolderOptions folders={folderDestinations(folders)} />
         </select>
       </label>
-      <p className="muted">문제 주소와 공유 권한, 작업 사본은 유지됩니다.</p>
+      <p className="muted">
+        문제 주소와 작업 사본은 유지됩니다. 공유 폴더 안의 이동은 구성원
+        모두에게 적용되며, 공유 범위가 바뀌면 다음 단계에서 확인합니다.
+      </p>
       {error && <Notice tone="error">{error}</Notice>}
     </Modal>
   );
@@ -722,8 +942,17 @@ function FolderModal({
           value={destination}
           onChange={(e) => setDestination(e.target.value)}
         >
-          <option value="">최상위</option>
-          <FolderOptions folders={folders} exclude={folder?.id} />
+          {(!folder?.workspace_id || folder.id === folder.workspace_id) && (
+            <option value="">최상위</option>
+          )}
+          <FolderOptions
+            folders={
+              folder?.id === folder?.workspace_id && folder
+                ? []
+                : folderDestinations(folders, folder)
+            }
+            exclude={folder?.id}
+          />
         </select>
       </label>
       {error && <Notice tone="error">{error}</Notice>}

@@ -3391,3 +3391,119 @@ svg {
   margin-top: 1rem;
   overflow-wrap: anywhere;
 }
+
+/* Shared folders use the same project tree and permission vocabulary. */
+.shared-invitations {
+  margin-bottom: 24px;
+}
+.shared-invitations h2 {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 1.1rem;
+}
+.shared-sidebar-heading {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border, #e1e5f0);
+}
+.folder-role-label {
+  display: block;
+  font-weight: 400;
+  font-size: 11px;
+}
+.shared-folder-banner {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0 0 18px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--bg-subtle, #f5f6ff);
+  font-size: 13px;
+}
+.shared-scope {
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--bg-subtle, #f5f6ff);
+  margin-bottom: 24px;
+}
+.shared-scope p {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.shared-invite-form {
+  margin-bottom: 24px;
+}
+.shared-invite-form fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.shared-invite-form label:first-child {
+  flex: 1 1 220px;
+}
+.shared-invite-form label {
+  min-width: 120px;
+}
+.shared-member-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border, #e1e5f0);
+}
+.shared-member-row > div:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.shared-member-row small {
+  display: block;
+  color: var(--text-muted, #737c91);
+  margin-top: 4px;
+}
+.shared-member-row p {
+  margin: 5px 0 0;
+  font-size: 13px;
+}
+.shared-member-row select {
+  width: auto;
+}
+.shared-role-guide {
+  margin: 24px 0;
+  padding: 14px;
+  border: 1px solid var(--border, #e1e5f0);
+  border-radius: 12px;
+  font-size: 13px;
+}
+.shared-role-guide summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.shared-remove-confirm {
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid #f2b4b4;
+  border-radius: 12px;
+  background: #fff5f5;
+}
+.danger-text {
+  color: #bb2b2b;
+}
+@media (max-width: 600px) {
+  .shared-member-row .actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .shared-invite-form fieldset > * {
+    width: 100%;
+  }
+}

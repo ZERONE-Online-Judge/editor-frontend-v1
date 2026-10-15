@@ -114,7 +114,13 @@ export type ProblemDocument = {
   checker_tests: Record<string, UnitTest>;
   materials: Record<string, Material>;
 };
+export type FolderRole =
+  'OWNER' | 'ADMIN' | 'EDITOR' | 'REVIEWER' | 'TRANSLATOR' | 'VIEWER';
 export type Problem = {
+  workspace_id?: string | null;
+  workspace_name?: string | null;
+  workspace_role?: FolderRole | null;
+  can_manage_access?: boolean;
   folder_id: string | null;
   id: string;
   slug: string;
@@ -140,6 +146,10 @@ export type Caution = {
   blocking: boolean;
 };
 export type Folder = {
+  workspace_id?: string | null;
+  workspace_role?: FolderRole | null;
+  can_edit?: boolean;
+  can_manage?: boolean;
   id: string;
   parent_id: string | null;
   name: string;
