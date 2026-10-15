@@ -3551,3 +3551,97 @@ svg {
     width: 100%;
   }
 }
+
+.revision-update-notice {
+  --revision-notice-top: 88px;
+  position: fixed;
+  top: var(--revision-notice-top);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  width: min(840px, calc(100% - 32px));
+  max-height: calc(100dvh - var(--revision-notice-top) - 16px);
+  overflow-y: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #d6d2fb;
+  border-radius: 16px;
+  background: #faf9ff;
+  box-shadow: 0 12px 36px #312e811a;
+}
+.revision-update-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: #eeebff;
+  color: var(--zoj-accent);
+}
+.revision-update-copy {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.revision-update-copy strong {
+  font-size: 14px;
+  color: var(--zoj-ink);
+}
+.revision-update-copy p,
+.revision-update-copy small {
+  display: block;
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #64748b;
+}
+.revision-update-message {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #6d5eaa;
+}
+.revision-update-close {
+  flex-shrink: 0;
+  color: #7a8799;
+}
+/* Keep the less urgent reminder out of the live commit notice's space. */
+:root:has(.revision-update-notice) .password-setup-guidance {
+  visibility: hidden;
+}
+@media print {
+  .revision-update-notice {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .revision-update-notice {
+    --revision-notice-top: 80px;
+  }
+}
+@media (max-width: 600px) {
+  .revision-update-notice {
+    --revision-notice-top: 116px;
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 14px;
+  }
+  .revision-update-icon {
+    height: 28px;
+    width: 28px;
+  }
+  .revision-update-notice > .button {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .revision-update-close {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}

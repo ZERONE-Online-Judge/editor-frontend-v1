@@ -20,6 +20,8 @@ import { WorkspaceContext } from '../lib/workspace';
 import type { NoticeAction } from '../lib/workspace';
 import { Badge, Icon, Modal, Notice } from '../components/ui';
 import PreparationNotice from '../components/PreparationNotice';
+import RevisionNotice from '../components/RevisionNotice';
+import { useRevisionUpdates } from '../lib/useRevisionUpdates';
 import { preparationCautions } from '../lib/readiness';
 const CommitChanges = lazy(() => import('../components/CommitChanges'));
 import Overview from './workspace/Overview';
@@ -69,6 +71,19 @@ export default function ProblemWorkspace() {
   const { problemId = '', tab = 'overview' } = useParams();
   const [data, setData] = useState<WorkspaceData | null>(null);
   const [doc, setDoc] = useState<ProblemDocument | null>(null);
+  const revisionHead = useRevisionUpdates(
+    problemId,
+    data?.problem.id === problemId ? data.problem.revision : null,
+  );
+  const sharedRevision = Math.max(
+    data?.problem.revision ?? 0,
+    revisionHead?.revision ?? 0,
+  );
+  const displayedRevision =
+    data?.problem.role === 'READ' && !data.problem.translator
+      ? data.problem.revision
+      : (data?.base_revision ?? 0);
+  const hasNewRevision = sharedRevision > displayedRevision;
   const dirtyRef = useRef(false);
   const activeProblem = useRef(problemId);
   const [busy, setBusy] = useState(false);
@@ -326,6 +341,15 @@ export default function ProblemWorkspace() {
   ) {
     setBusy(true);
     try {
+      if (
+        action === 'update' &&
+        data?.problem.role === 'READ' &&
+        !data.problem.translator
+      ) {
+        await reload();
+        notify('최신 공유 리비전을 불러왔습니다.');
+        return;
+      }
       const version = await save();
       setBusy(true);
       await post(`/problems/${problemId}/${action}`, { version, ...body });
@@ -400,9 +424,14 @@ export default function ProblemWorkspace() {
             </div>
             <div className="working-state">
               <Icon name="branch" size={15} />
-              <span>공유 r{data.problem.revision}</span>
+              <span>공유 r{sharedRevision}</span>
               <span className="separator">·</span>
-              <span>내 작업 사본 r{data.base_revision}</span>
+              <span>
+                {data.problem.role === 'READ' && !data.problem.translator
+                  ? '현재 보는 리비전'
+                  : '내 작업 사본'}{' '}
+                r{displayedRevision}
+              </span>
               <span
                 className={`working-dot ${dirty ? 'warning' : data.problem.modified ? 'accent' : 'success'}`}
               />
@@ -411,8 +440,11 @@ export default function ProblemWorkspace() {
                   ? '저장하지 않은 변경'
                   : data.problem.modified
                     ? '커밋하지 않은 변경'
-                    : '최신 상태'}
+                    : hasNewRevision
+                      ? '새 리비전 도착'
+                      : '최신 상태'}
               </span>
+              {hasNewRevision && <Badge tone="accent">업데이트 가능</Badge>}
             </div>
           </div>
           <div className="actions">
@@ -450,6 +482,15 @@ export default function ProblemWorkspace() {
             )}
           </div>
         </div>
+        <RevisionNotice
+          problemId={problemId}
+          revision={sharedRevision}
+          baseRevision={displayedRevision}
+          head={revisionHead}
+          dirty={dirty}
+          busy={busy}
+          onUpdate={() => void workingAction('update')}
+        />
         <div className="workspace-layout">
           <aside className="problem-sidebar" aria-label="문제 작업 메뉴">
             {sections.map((group) => (

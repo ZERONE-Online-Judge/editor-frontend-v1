@@ -24,6 +24,11 @@ const { createRoot } = require('react-dom/client');
 const Router = require('react-router-dom');
 const h = React.createElement;
 let state, jobs, requests, requestError, detailGate, advancedLimits;
+let revisionRequests,
+  workspaceReads,
+  saveEnabled,
+  updateSnapshot,
+  updateFailure;
 const cache = new Map();
 function source(relative) {
   const file = path.resolve(__dirname, '../src', relative);
@@ -42,9 +47,7 @@ function source(relative) {
         post: post,
         blobText: async (problem, sha) =>
           sha === 'actual' ? 'Wrong\n' : '1 2\n',
-        put: async () => {
-          throw new Error('Unexpected save');
-        },
+        put: putWorking,
       };
     if (
       /\/workspace\/(Overview|Collaboration|Revisions|Review|Materials)$/.test(
@@ -90,7 +93,16 @@ function job(id, kind, summary) {
     result: { summary },
   };
 }
-async function get(url) {
+async function get(url, options = {}) {
+  if (url.includes('/revision-status?'))
+    return new Promise((resolve, reject) => {
+      revisionRequests.push({ url, signal: options.signal, resolve, reject });
+      options.signal?.addEventListener(
+        'abort',
+        () => reject(new Error('aborted')),
+        { once: true },
+      );
+    });
   if (url === '/execution-environment')
     return {
       default_backend: 'zoj',
@@ -114,11 +126,14 @@ async function get(url) {
       },
       capacity: { running_jobs: 1, queued_jobs: 3 },
     };
-  if (url === '/problems/p') return JSON.parse(JSON.stringify(state));
+  if (url === '/problems/p') {
+    workspaceReads++;
+    return JSON.parse(JSON.stringify(state));
+  }
   if (url.startsWith('/problems/p/revisions/'))
     return JSON.parse(JSON.stringify(state.document));
   if (url.endsWith('/preparation-status'))
-    return { version: 1, pending_preparations: [] };
+    return { version: state.version, pending_preparations: [] };
   if (url === '/problems/p/jobs') return [...jobs];
   if (url.endsWith('/comments')) return [];
   const id = url.split('/jobs/')[1];
@@ -132,6 +147,14 @@ async function get(url) {
 }
 async function post(url, body) {
   requests.push({ url, body });
+  if (url === '/problems/p/update') {
+    if (updateFailure) throw updateFailure;
+    state = {
+      ...global.structuredClone(updateSnapshot),
+      version: state.version + 1,
+    };
+    return { version: state.version };
+  }
   if (requestError) throw new Error(requestError);
   if (url.endsWith('/counterexamples/apply'))
     return {
@@ -149,8 +172,27 @@ async function post(url, body) {
   jobs.unshift(result);
   return result;
 }
+async function putWorking(url, body) {
+  if (!saveEnabled) throw new Error('Unexpected save');
+  assert.equal(url, '/problems/p/working-copy');
+  requests.push({ url, body: global.structuredClone(body) });
+  assert.equal(body.version, state.version);
+  state.document = global.structuredClone(body.document);
+  state.version++;
+  return {
+    version: state.version,
+    document_hash: 'saved-draft',
+    cautions: [],
+    modified: true,
+  };
+}
 let root, host;
 beforeEach(() => {
+  revisionRequests = [];
+  workspaceReads = 0;
+  saveEnabled = false;
+  updateSnapshot = null;
+  updateFailure = null;
   requests = [];
   requestError = null;
   detailGate = null;
@@ -1229,4 +1271,247 @@ test('the builder rejects inverted ranges and unbounded combinations without gen
       ),
     /정수 범위/,
   );
+});
+
+async function remoteCommit(revision) {
+  await act(async () =>
+    revisionRequests.at(-1).resolve({
+      revision,
+      author: '공동 출제자',
+      message: '최댓값 테스트 보강',
+      created_at: 1778506713,
+    }),
+  );
+  await flush();
+}
+async function editStatement(value) {
+  const field = host.querySelector('textarea[aria-label="문제 지문 · LaTeX"]');
+  assert.ok(field);
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype,
+      'value',
+    ).set.call(field, value);
+    field.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+}
+
+test('A remote commit announces itself over the workspace without reloading or replacing an unsaved statement', async () => {
+  await mount('statements');
+  await editStatement('아직 저장하지 않은 지문');
+  await remoteCommit(2);
+  const banner = host.querySelector('[aria-label="새 커밋 안내"]');
+  assert.match(banner.textContent, /새로운 변경사항이 있습니다/);
+  assert.match(banner.textContent, /공동 출제자.*r2.*업데이트를 눌러/);
+  assert.match(banner.textContent, /최댓값 테스트 보강/);
+  assert.match(banner.textContent, /작성 중인 변경/);
+  assert.equal(
+    host.querySelector('textarea[aria-label="문제 지문 · LaTeX"]').value,
+    '아직 저장하지 않은 지문',
+  );
+  assert.equal(workspaceReads, 1);
+  assert.deepEqual(requests, []);
+  assert.match(host.querySelector('.working-state').textContent, /공유 r2/);
+});
+
+test('The notice update button saves the current draft before merging and clears after loading the new base', async () => {
+  await mount('statements');
+  saveEnabled = true;
+  await editStatement('내 지문은 유지');
+  state.problem.revision = 2;
+  updateSnapshot = global.structuredClone(state);
+  updateSnapshot.problem.modified = false;
+  updateSnapshot.base_revision = 2;
+  updateSnapshot.document.info.name = '동료가 수정한 제목';
+  updateSnapshot.document.statements.korean.legend = '내 지문은 유지';
+  await remoteCommit(2);
+  await act(async () =>
+    host.querySelector('.revision-update-notice .primary').click(),
+  );
+  await flush();
+  assert.deepEqual(
+    requests.map((row) => row.url),
+    ['/problems/p/working-copy', '/problems/p/update'],
+  );
+  assert.equal(
+    requests[0].body.document.statements.korean.legend,
+    '내 지문은 유지',
+  );
+  assert.equal(requests[1].body.version, 2);
+  assert.equal(host.querySelector('.revision-update-notice'), null);
+  assert.equal(host.querySelector('h1').textContent, '동료가 수정한 제목');
+  assert.equal(
+    host.querySelector('textarea[aria-label="문제 지문 · LaTeX"]').value,
+    '내 지문은 유지',
+  );
+  assert.match(
+    host.querySelector('.working-state').textContent,
+    /내 작업 사본 r2/,
+  );
+});
+
+test('A conflicting update keeps both the local statement and the pending revision notice', async () => {
+  await mount('statements');
+  saveEnabled = true;
+  await editStatement('충돌해도 보존할 지문');
+  updateFailure = new (source('lib/api.ts').ApiError)(409, {
+    message: '같은 항목을 수정한 변경이 있습니다.',
+    conflicts: ['statements/korean/legend'],
+  });
+  await remoteCommit(2);
+  await act(async () =>
+    host.querySelector('.revision-update-notice .primary').click(),
+  );
+  await flush();
+  assert.ok(host.querySelector('.revision-update-notice'));
+  assert.match(
+    host.querySelector('.workspace-main').textContent,
+    /같은 항목.*충돌 해결/,
+  );
+  assert.equal(
+    host.querySelector('textarea[aria-label="문제 지문 · LaTeX"]').value,
+    '충돌해도 보존할 지문',
+  );
+  assert.equal(workspaceReads, 1);
+});
+
+test('Dismissing one revision does not hide a later commit or the toolbar update state', async () => {
+  await mount('statements');
+  await remoteCommit(2);
+  await act(async () =>
+    host.querySelector('[aria-label="새 커밋 안내 닫기"]').click(),
+  );
+  assert.equal(host.querySelector('.revision-update-notice'), null);
+  assert.match(
+    host.querySelector('.working-state').textContent,
+    /업데이트 가능/,
+  );
+  await act(async () => window.dispatchEvent(new window.Event('focus')));
+  await flush();
+  assert.match(revisionRequests.at(-1).url, /after=2&/);
+  await remoteCommit(3);
+  assert.match(
+    host.querySelector('.revision-update-notice').textContent,
+    /공유 r3/,
+  );
+});
+
+test('Read-only collaborators see new commits but do not get a false notice from an unused old working copy', async () => {
+  state.problem.role = 'READ';
+  state.base_revision = 0;
+  await mount('statements');
+  assert.equal(host.querySelector('.revision-update-notice'), null);
+  assert.match(
+    host.querySelector('.working-state').textContent,
+    /현재 보는 리비전 r1/,
+  );
+  await remoteCommit(2);
+  assert.ok(host.querySelector('.revision-update-notice'));
+  assert.equal(workspaceReads, 1);
+  state.problem.revision = 2;
+  state.document.statements.korean.legend = '공유된 최신 지문';
+  await act(async () =>
+    host.querySelector('.revision-update-notice .primary').click(),
+  );
+  await flush();
+  assert.equal(host.querySelector('.revision-update-notice'), null);
+  assert.equal(
+    host.querySelector('textarea[aria-label="문제 지문 · LaTeX"]').value,
+    '공유된 최신 지문',
+  );
+  assert.equal(
+    requests.length,
+    0,
+    'Viewing an update must not merge a stale private working copy',
+  );
+});
+
+test('Hidden windows abort their watch and resume once on return without applying stale replies', async () => {
+  await mount('statements');
+  assert.equal(revisionRequests.length, 1);
+  const original = revisionRequests[0];
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    value: 'hidden',
+  });
+  await act(async () =>
+    document.dispatchEvent(new window.Event('visibilitychange')),
+  );
+  assert.equal(original.signal.aborted, true);
+  await act(async () =>
+    original.resolve({
+      revision: 9,
+      author: '오래된 요청',
+      message: '',
+      created_at: 0,
+    }),
+  );
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    value: 'visible',
+  });
+  await act(async () => {
+    document.dispatchEvent(new window.Event('visibilitychange'));
+    window.dispatchEvent(new window.Event('focus'));
+  });
+  await flush();
+  assert.equal(revisionRequests.length, 2);
+  await remoteCommit(2);
+  assert.match(
+    host.querySelector('.revision-update-notice').textContent,
+    /공유 r2/,
+  );
+  assert.doesNotMatch(
+    host.querySelector('.revision-update-notice').textContent,
+    /r9/,
+  );
+});
+
+test('Losing access stops the watch instead of repeatedly requesting a private problem', async () => {
+  await mount('statements');
+  await act(async () =>
+    revisionRequests[0].reject(
+      new (source('lib/api.ts').ApiError)(404, {
+        message: '문제를 찾을 수 없습니다.',
+      }),
+    ),
+  );
+  await act(async () => window.dispatchEvent(new window.Event('focus')));
+  await flush();
+  assert.equal(revisionRequests.length, 1);
+});
+
+test('A temporary network failure retries and reconnect events do not create duplicate watches', async () => {
+  await mount('statements');
+  const scheduled = [];
+  const originalTimeout = window.setTimeout;
+  window.setTimeout = (callback, delay, ...args) => {
+    if (delay === 2000) {
+      scheduled.push(callback);
+      return 0;
+    }
+    return originalTimeout.call(window, callback, delay, ...args);
+  };
+  try {
+    await act(async () =>
+      revisionRequests[0].reject(new Error('Network unavailable')),
+    );
+    assert.equal(scheduled.length, 1);
+    assert.equal(revisionRequests.length, 1);
+    await act(async () => scheduled[0]());
+    assert.equal(revisionRequests.length, 2);
+    await act(async () => {
+      window.dispatchEvent(new window.Event('online'));
+      window.dispatchEvent(new window.Event('focus'));
+    });
+    assert.equal(revisionRequests.length, 2);
+    await remoteCommit(2);
+    assert.match(
+      host.querySelector('.revision-update-notice').textContent,
+      /공유 r2/,
+    );
+    assert.equal(workspaceReads, 1);
+  } finally {
+    window.setTimeout = originalTimeout;
+  }
 });
