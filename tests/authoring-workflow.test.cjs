@@ -79,6 +79,43 @@ const { documentChanges, diffLines } = source('lib/documentChanges.ts');
 const { preparationCautions } = source('lib/readiness.ts');
 const { loopScript } = source('lib/generationScript.ts');
 const { bulkTests } = source('lib/bulkTests.ts');
+const {
+  effectiveStatement,
+  translationCanonical,
+  statementCanonical,
+  translationHash,
+} = source('lib/sharedStatements.ts');
+
+test('shared statement hashes match the server and keep original language fields separate', async () => {
+  const korean = {
+    name: '공유',
+    legend: '정수 $N$',
+    input: '',
+    output: '',
+    scoring: '',
+    interaction: '',
+    notes: '',
+    tutorial: '',
+    show_in_review: true,
+  };
+  const doc = {
+    statements: { korean, english: { ...korean, name: 'Shared', legend: 'N' } },
+    common_statement: '공통 $N$',
+    common_tutorial: 'SECRET_COMMON',
+    translation_source: 'korean',
+  };
+  assert.equal(
+    await translationHash(translationCanonical(doc)),
+    'ffdb9a14348e743a44a1ad73170944afd369784d2b0f3ab325857abb829a501c',
+  );
+  assert.equal(
+    await translationHash(statementCanonical(doc, 'english')),
+    '1027d4b5e644e683f43916316918f4760d62b6ea30f7d096d56a56c3dd552630',
+  );
+  assert.equal(effectiveStatement(doc, 'english').legend, '공통 $N$\n\nN');
+  assert.equal(effectiveStatement(doc, 'english').tutorial, 'SECRET_COMMON');
+  assert.equal(doc.statements.english.tutorial, '');
+});
 
 test('bulk operations preserve originals and validate a whole move before applying it', () => {
   const doc = workspace();

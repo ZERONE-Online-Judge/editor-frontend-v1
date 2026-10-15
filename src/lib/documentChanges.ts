@@ -77,6 +77,19 @@ export function documentChanges(
           a === undefined ? 'added' : b === undefined ? 'removed' : 'changed',
       });
   };
+  for (const [key, label] of Object.entries({
+    common_statement: '공통 설명',
+    common_tutorial: '공통 해설',
+    translation_source: '번역 기준 원문',
+    translation_reviews: '번역 검토 상태',
+  }))
+    add(
+      key,
+      '지문',
+      label,
+      before[key as keyof ProblemDocument],
+      after[key as keyof ProblemDocument],
+    );
   for (const key of Object.keys(infoNames))
     add(
       `info/${key}`,

@@ -8,7 +8,13 @@ export function preparationCautions(doc: ProblemDocument): Caution[] {
     section: string,
     blocking = false,
   ) => rows.push({ code, message, section, blocking });
-  if (!Object.values(doc.statements).some((s) => s.legend.trim()))
+  if (
+    !Object.keys(doc.statements).length ||
+    !(
+      doc.common_statement?.trim() ||
+      Object.values(doc.statements).some((s) => s.legend.trim())
+    )
+  )
     add('NO_STATEMENT', '문제 지문을 작성하세요.', 'statements', true);
   if (!doc.checker) add('NO_CHECKER', 'checker를 선택하세요.', 'checker', true);
   if (!doc.validator)

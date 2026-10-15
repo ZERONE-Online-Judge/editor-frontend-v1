@@ -4,6 +4,7 @@ import { useWorkspace } from '../../lib/workspace';
 import { Icon, SectionHeading, CodeEditor } from '../../components/ui';
 import Markdown from '../../components/Markdown';
 import type { Statement } from '../../lib/types';
+import SharedStatements from './SharedStatements';
 const fields: { key: keyof Statement; title: string; rows: number }[] = [
   { key: 'legend', title: '문제 지문', rows: 12 },
   { key: 'input', title: '입력 형식', rows: 6 },
@@ -29,7 +30,9 @@ export default function Statements() {
   const [newLanguage, setNewLanguage] = useState('english');
   const [preview, setPreview] = useState(true);
   const statement = doc.statements[language];
-  const canEdit = editable || data.problem.translator;
+  const canEdit =
+    editable ||
+    (data.problem.translator && language !== doc.translation_source);
   return (
     <div className="section-stack">
       <SectionHeading
@@ -43,7 +46,12 @@ export default function Statements() {
             </button>
             <button
               className="button"
-              disabled={(!canEdit && !data.problem.reviewer) || busy}
+              disabled={
+                (!editable &&
+                  !data.problem.translator &&
+                  !data.problem.reviewer) ||
+                busy
+              }
               onClick={() =>
                 void run('render').catch((e) => notify(e.message, true))
               }
@@ -54,6 +62,7 @@ export default function Statements() {
           </>
         }
       />
+      <SharedStatements language={language} />
       <div className="card language-toolbar">
         <div className="tabs">
           {Object.keys(doc.statements).map((lang) => (

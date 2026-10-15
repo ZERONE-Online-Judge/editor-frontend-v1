@@ -83,7 +83,7 @@ function source(relative) {
 }
 const Review = source('pages/workspace/Review.tsx').default;
 
-async function mount(sampleOverrides = {}) {
+async function mount(sampleOverrides = {}, sharedOverrides = {}) {
   const statement = {
     name: '줄 세기',
     legend: '줄의 개수를 구하세요.',
@@ -109,6 +109,7 @@ async function mount(sampleOverrides = {}) {
         korean: statement,
         english: { ...statement, name: 'Count lines' },
       },
+      ...sharedOverrides,
       testsets: {
         tests: {
           tests: {
@@ -159,6 +160,21 @@ test('review and print use separate display samples including an empty override'
     context.document.testsets.tests.tests.one.answer_sha,
     'sample-answer',
   );
+  await close();
+});
+
+test('common editorial stays in the excluded editorial print section', async () => {
+  const { host, close } = await mount(
+    {},
+    {
+      common_statement: 'COMMON_PROBLEM',
+      common_tutorial: 'SECRET_COMMON_TUTORIAL',
+    },
+  );
+  assert.match(host.textContent, /COMMON_PROBLEM/);
+  const editorial = host.querySelector('.review-editorial');
+  assert.match(editorial.textContent, /SECRET_COMMON_TUTORIAL/);
+  assert.equal(editorial.dataset.printIncluded, 'false');
   await close();
 });
 function checkbox(host, label) {

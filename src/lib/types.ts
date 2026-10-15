@@ -94,6 +94,13 @@ export type Material = {
   testsets: string[];
 };
 export type ProblemDocument = {
+  common_statement?: string;
+  common_tutorial?: string;
+  translation_source?: string | null;
+  translation_reviews?: Record<
+    string,
+    { source_hash: string; target_hash: string }
+  >;
   info: Info;
   statements: Record<string, Statement>;
   files: Record<string, SourceFile>;

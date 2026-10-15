@@ -666,6 +666,16 @@ svg {
   border-block: 1px solid var(--zoj-border);
   background: #fafbff;
 }
+.shared-statements {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+}
+.shared-statements summary {
+  cursor: pointer;
+  font-weight: 600;
+}
 .test-bulk-actions fieldset {
   min-width: 0;
   border: 0;

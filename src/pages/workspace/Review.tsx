@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useWorkspace } from '../../lib/workspace';
 import { blobText } from '../../lib/api';
+import { effectiveStatement } from '../../lib/sharedStatements';
 import {
   CodeEditor,
   Empty,
@@ -56,7 +57,7 @@ export default function Review() {
     items: { input: string; answer: string }[];
     error: string;
   }>({ key: '', items: [], error: '' });
-  const statement = doc.statements[language];
+  const statement = effectiveStatement(doc, language);
   const sampleKey = JSON.stringify(
     Object.values(doc.testsets).flatMap((set) =>
       Object.values(set.tests)
