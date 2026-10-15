@@ -89,6 +89,76 @@ test('loop builder emits bounded declarative groups without executing commands',
   assert.throws(() => loopScript('gen {seed}', 3, 1, 1, ''), /방향/);
   assert.throws(() => loopScript('gen {seed}', 1, 3, 0, ''), /방향/);
 });
+
+test('matrix preserves missing measurements and filters an observed cover without deleting tests', async () => {
+  const row = (index, detected) => ({
+    id: `tests/${index}`,
+    testset: 'tests',
+    index,
+    group: '',
+    detected,
+    missing_targets: [],
+    skipped: [],
+    same_pattern_as: [],
+    same_pattern_count: 0,
+    exclusive_detections: [],
+    no_detection: !detected.length,
+  });
+  const job = {
+    result: {
+      test_matrix: {
+        solutions: ['main', 'wrong'],
+        targets: ['wrong'],
+        uncovered_solutions: [],
+        unassigned_errors: [],
+        cover: { test_ids: ['tests/2'], method: 'exact', covered_solutions: 1 },
+        rows: [row(1, []), row(2, ['wrong'])],
+      },
+      solutions: [
+        {
+          name: 'main',
+          cases: [
+            {
+              testset: 'tests',
+              index: 1,
+              verdict: 'AC',
+              cpu_ms: null,
+              memory_kb: null,
+            },
+          ],
+        },
+        {
+          name: 'wrong',
+          cases: [
+            {
+              testset: 'tests',
+              index: 2,
+              verdict: 'WA',
+              cpu_ms: 12,
+              memory_kb: 64,
+            },
+          ],
+        },
+      ],
+    },
+  };
+  const { host, close } = await mount(
+    source('pages/workspace/TestVerdictMatrix.tsx').default,
+    { job },
+  );
+  assert.match(host.textContent, /미실행/);
+  const select = host.querySelector('select');
+  await act(async () => {
+    select.value = 'cpu';
+    select.dispatchEvent(new window.Event('change', { bubbles: true }));
+  });
+  assert.match(host.textContent, /12ms/);
+  assert.match(host.textContent, /—/);
+  await act(async () => host.querySelector('input[type=checkbox]').click());
+  assert.equal(host.querySelectorAll('tbody tr').length, 1);
+  assert.equal(job.result.test_matrix.rows.length, 2);
+  await close();
+});
 const file = (name, extra = {}) => ({
   name,
   kind: 'source',

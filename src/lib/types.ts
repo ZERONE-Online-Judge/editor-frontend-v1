@@ -315,6 +315,33 @@ export type Job = {
     error?: string;
     verified?: boolean;
     mismatches?: string[];
+    test_matrix?: {
+      version: number;
+      solutions: string[];
+      targets: string[];
+      uncovered_solutions: string[];
+      rows: {
+        id: string;
+        testset: string;
+        index: number;
+        group: string;
+        detected: string[];
+        missing_targets: string[];
+        no_detection: boolean;
+        max_cpu_ms: number | null;
+        max_memory_kb: number | null;
+        same_pattern_as: string[];
+        same_pattern_count: number;
+        skipped: string[];
+        exclusive_detections: string[];
+      }[];
+      cover: {
+        test_ids: string[];
+        method: 'exact' | 'greedy';
+        covered_solutions: number;
+      };
+      unassigned_errors: { solution: string; verdict: string }[];
+    };
     events?: { label: string }[];
     solutions?: {
       name: string;

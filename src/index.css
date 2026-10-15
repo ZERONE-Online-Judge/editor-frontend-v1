@@ -652,6 +652,19 @@ svg {
   border-radius: 12px;
   min-width: 0;
 }
+.test-verdict-matrix {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+}
+.test-verdict-matrix .table-scroll {
+  max-width: 100%;
+  min-width: 0;
+}
+.test-verdict-matrix .matrix-cover-row {
+  background: #f3f1ff;
+}
 .scoped-expectations summary {
   cursor: pointer;
   font-weight: 600;

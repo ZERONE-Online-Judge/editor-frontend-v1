@@ -22,6 +22,7 @@ import StressRunConditions, {
 } from './StressRunConditions';
 import InvocationControls from './InvocationControls';
 import ExecutionLimitsInfo from './ExecutionLimitsInfo';
+import TestVerdictMatrix from './TestVerdictMatrix';
 import { useAuth } from '../../lib/authContext';
 import type { ExecutionEnvironment, InvocationScope } from '../../lib/types';
 import {
@@ -701,6 +702,7 @@ export default function Executions({
                     '자동 반영되지 않았습니다. 실행 당시 자료와 작업 사본을 확인하세요.'}
                 </Notice>
               )}
+              <TestVerdictMatrix job={job} />
               {job.result.solutions?.map((solution) => (
                 <div className="solution-result" key={solution.name}>
                   <div className="solution-result-heading">
