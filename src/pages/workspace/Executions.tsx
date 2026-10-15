@@ -16,6 +16,7 @@ import ZojPublishing from './ZojPublishing';
 import InvocationComments from './InvocationComments';
 import StressControls from './StressControls';
 import StressCounterexamples from './StressCounterexamples';
+import { retryStressOptions } from '../../lib/stressOptions';
 import StressRunConditions, {
   StressHistorySummary,
 } from './StressRunConditions';
@@ -852,6 +853,35 @@ export default function Executions({
                   job={job}
                   problemId={data.problem.id}
                   testsets={Object.keys(doc.testsets)}
+                  testsetGroups={Object.fromEntries(
+                    Object.entries(doc.testsets).map(([name, set]) => [
+                      name,
+                      set.groups_enabled ? Object.keys(set.groups) : [],
+                    ]),
+                  )}
+                  advanced={Boolean(environment?.limits?.stress_patterns)}
+                  retryBusy={busy}
+                  retryUncovered={
+                    canInvoke && environment?.limits?.stress_patterns
+                      ? (names) => {
+                          try {
+                            const options = retryStressOptions(job, names);
+                            if (
+                              names.some((name) => !doc.solutions[name]) ||
+                              (typeof options.reference === 'string' &&
+                                options.reference &&
+                                !doc.solutions[options.reference])
+                            )
+                              throw new Error(
+                                '현재 문제에서 사라진 풀이가 있습니다. 실행 조건을 새로 선택하세요.',
+                              );
+                            void start('stress', options);
+                          } catch (error) {
+                            notify((error as Error).message, true);
+                          }
+                        }
+                      : undefined
+                  }
                   allowed={
                     editable &&
                     !dirty &&

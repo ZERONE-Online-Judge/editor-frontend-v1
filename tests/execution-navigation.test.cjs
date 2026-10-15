@@ -17,7 +17,7 @@ const { act } = React;
 const { createRoot } = require('react-dom/client');
 const Router = require('react-router-dom');
 const h = React.createElement;
-let state, jobs, requests, requestError, detailGate;
+let state, jobs, requests, requestError, detailGate, advancedLimits;
 const cache = new Map();
 function source(relative) {
   const file = path.resolve(__dirname, '../src', relative);
@@ -100,6 +100,7 @@ async function get(url) {
         worker_concurrency: 4,
         judge_concurrency: 2,
         active_jobs_per_user: 5,
+        ...(advancedLimits || {}),
       },
       capacity: { running_jobs: 1, queued_jobs: 3 },
     };
@@ -122,6 +123,13 @@ async function get(url) {
 async function post(url, body) {
   requests.push({ url, body });
   if (requestError) throw new Error(requestError);
+  if (url.endsWith('/counterexamples/apply'))
+    return {
+      added_count: body.counterexample_ids.length,
+      duplicate_count: 0,
+      version: state.version,
+      needs_context_validation: false,
+    };
   assert.equal(url, '/problems/p/jobs');
   const result = job(
     'new-' + body.kind,
@@ -136,6 +144,7 @@ beforeEach(() => {
   requests = [];
   requestError = null;
   detailGate = null;
+  advancedLimits = null;
   const main = {
     name: 'main.py',
     kind: 'source',
@@ -725,4 +734,289 @@ test('polling new jobs does not replace the record currently being viewed', asyn
   } finally {
     window.setInterval = nativeInterval;
   }
+});
+
+function discoveryLimits() {
+  advancedLimits = {
+    stress_patterns: 20,
+    stress_counterexamples: 200,
+    minimize_attempts: 200,
+    minimize_seconds: 60,
+    minimize_input_bytes: 1048576,
+  };
+}
+function control(label, selector = 'input,select') {
+  const field = [...host.querySelectorAll('label')].find((element) =>
+    element.textContent.trim().startsWith(label),
+  );
+  assert.ok(field, label);
+  const input = field.querySelector(selector);
+  assert.ok(input, label);
+  return input;
+}
+async function setControl(label, value) {
+  const input = control(label);
+  await act(() => {
+    if (input.tagName === 'SELECT') {
+      input.value = value;
+      input.dispatchEvent(new window.Event('change', { bubbles: true }));
+    } else {
+      Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      ).set.call(input, String(value));
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    }
+  });
+  await flush();
+}
+function addGroup() {
+  state.document.testsets.tests.groups_enabled = true;
+  state.document.testsets.tests.groups.small = {
+    points_policy: 'COMPLETE_GROUP',
+    feedback_policy: 'COMPLETE',
+    dependencies: [],
+  };
+}
+
+test('stress pattern builder submits modes, integer ranges, seeds, group, focus and reduction together', async () => {
+  discoveryLimits();
+  addGroup();
+  state.document.solutions['wrong.py'] = {
+    ...state.document.solutions['main.py'],
+    name: 'wrong.py',
+    tag: 'WA',
+  };
+  await mount('stress');
+  await act(() => {
+    host.querySelector('.stress-pattern-builder').open = true;
+  });
+  await setControl('명령 템플릿', 'gen {mode} {N} {lo} {hi} {seed}');
+  await setControl('mode 목록', 'random, negative');
+  await setControl('N 최솟값', 2);
+  await setControl('N 최댓값', 9);
+  await setControl('값 범위 하한', -10);
+  await setControl('값 범위 상한', 10);
+  await click('조합을 패턴에 적용');
+  assert.equal(host.querySelectorAll('.stress-pattern-row').length, 2);
+  assert.equal(control('생성기 명령').value, 'gen random [2..9] -10 10 {seed}');
+  await setControl('시작 시드', 41);
+  await setControl('시드 증가량', 2);
+  await setControl('검증·등록 그룹', 'small');
+  await setControl('반례 발견 후', 'all');
+  assert.equal(control('미검출 풀이에 집중').checked, true);
+  assert.equal(control('미검출 풀이에 집중').disabled, true);
+  await act(() => control('발견한 반례 자동 축소').click());
+  await click('스트레스 테스트 시작');
+  assert.equal(requests.length, 1);
+  const options = requests[0].body.options;
+  assert.deepEqual(options.patterns, [
+    { name: 'mode random', command: 'gen random [2..9] -10 10 {seed}' },
+    { name: 'mode negative', command: 'gen negative [2..9] -10 10 {seed}' },
+  ]);
+  assert.equal(options.seed_start, 41);
+  assert.equal(options.seed_step, 2);
+  assert.equal(options.group, 'small');
+  assert.equal(options.stop_mode, 'all_candidates');
+  assert.equal(options.focus_uncovered, true);
+  assert.equal(options.minimize, true);
+});
+
+test('an uncovered retry continues seeds and never sends server-owned metadata back as options', async () => {
+  discoveryLimits();
+  state.document.solutions['slow.py'] = {
+    ...state.document.solutions['main.py'],
+    name: 'slow.py',
+    tag: 'TL',
+  };
+  const row = job('retry-stress', 'stress', '반복 횟수 한도');
+  row.options = {
+    generator: 'gen {seed}',
+    reference: 'main.py',
+    candidates: ['other.py', 'slow.py'],
+    seed_start: 100,
+    seed_step: 2,
+    iterations: 10,
+    testset: 'tests',
+    duration_seconds: 30,
+    runtime_revision: 'server-only',
+    source_document_hash: 'server-only',
+    permission_mode: 'write',
+    stress_configuration: { generator: 'gen {seed}' },
+  };
+  row.result.stress = {
+    iterations_started: 4,
+    iterations_completed: 4,
+    elapsed_seconds: 2,
+    counterexample_count: 1,
+    duplicates_skipped: 0,
+    stop_reason: 'iterations',
+    last_seed: 106,
+  };
+  row.result.uncovered_candidates = ['slow.py'];
+  jobs = [row];
+  await mount('stress?job=retry-stress');
+  assert.match(host.querySelector('.stress-uncovered').textContent, /slow.py/);
+  await click('미검출 풀이만 다음 시드부터 실행');
+  assert.equal(requests.length, 1);
+  const options = requests[0].body.options;
+  assert.deepEqual(options.candidates, ['slow.py']);
+  assert.equal(options.seed_start, 108);
+  assert.equal(options.stop_mode, 'all_candidates');
+  for (const key of [
+    'runtime_revision',
+    'source_document_hash',
+    'permission_mode',
+    'stress_configuration',
+  ])
+    assert.equal(key in options, false);
+});
+
+test('counterexample filters, exact cover and reduced group registration preserve their selected evidence', async () => {
+  discoveryLimits();
+  addGroup();
+  const row = job('collected-stress', 'stress', '수집 완료');
+  row.options = { generator: 'gen {seed}', testset: 'tests', group: 'small' };
+  const a = 'a'.repeat(32),
+    b = 'b'.repeat(32),
+    c = 'c'.repeat(32);
+  const finding = (solution, verdict) => ({
+    solution,
+    verdict,
+    actual_sha: 'actual',
+    comment: '',
+  });
+  const example = (id, findings) => ({
+    id,
+    iteration: 1,
+    seed: 1,
+    command: 'gen 1',
+    input_sha: 'input',
+    answer_sha: 'answer',
+    findings,
+  });
+  const first = example(a, [
+    finding('wrong.py', 'WA'),
+    finding('slow.py', 'TLE'),
+  ]);
+  first.minimized = {
+    input_sha: 'reduced-input',
+    answer_sha: 'reduced-answer',
+    input_bytes: 5,
+    findings: first.findings,
+  };
+  first.minimization = {
+    status: 'finished',
+    attempts: 8,
+    accepted_steps: 2,
+    original_bytes: 40,
+    final_bytes: 5,
+    elapsed_seconds: 1,
+  };
+  row.result.counterexamples = [
+    first,
+    example(b, [finding('wrong.py', 'WA')]),
+    example(c, [finding('crash.cpp', 'RE')]),
+  ];
+  row.result.coverage = {
+    method: 'exact',
+    example_ids: [a, c],
+    covered_pairs: 3,
+    pairs: [],
+  };
+  jobs = [row];
+  await mount('stress?job=collected-stress');
+  await setControl('관측 판정으로 분류', 'TLE');
+  assert.equal(host.querySelectorAll('.counterexample').length, 1);
+  assert.match(
+    host.querySelector('.counterexample').textContent,
+    /검증된 축소본/,
+  );
+  await click('최소 커버 선택 · 2개');
+  assert.deepEqual(requests, []);
+  assert.equal(control('등록할 테스트 그룹').value, 'small');
+  await act(() => control('검증된 축소본 보기·등록에 사용').click());
+  assert.match(
+    host.querySelector('.counterexample').textContent,
+    /이 반례를 생성한 명령/,
+  );
+  await act(() => control('검증된 축소본 보기·등록에 사용').click());
+  await click('선택한 2개 반례를 테스트에 추가');
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].body.counterexample_ids, [a, c]);
+  assert.equal(requests[0].body.use_minimized, true);
+  assert.equal(requests[0].body.group, 'small');
+});
+
+test('pattern statistics use compared unique inputs instead of attempted generations', async () => {
+  const row = job('pattern-stress', 'stress', '완료');
+  row.result.pattern_summaries = [
+    {
+      index: 0,
+      name: 'small',
+      command: 'gen [1..10]',
+      attempts: 10,
+      valid_inputs: 5,
+      duplicates_skipped: 5,
+      compared_inputs: 5,
+      counterexample_inputs: 2,
+      findings: 3,
+      solution_findings: { 'wrong.py': 2, 'slow.py': 1 },
+    },
+  ];
+  jobs = [row];
+  await mount('stress?job=pattern-stress');
+  const statistics = host.querySelector('.stress-pattern-statistics');
+  assert.match(statistics.textContent, /40.0%/);
+  assert.doesNotMatch(statistics.textContent, /20.0%/);
+  assert.match(statistics.textContent, /wrong.py 2회/);
+});
+
+test('the builder rejects inverted ranges and unbounded combinations without generating commands', () => {
+  const { composeStressPatterns, retryStressOptions } = source(
+    'lib/stressOptions.ts',
+  );
+  const values = {
+    template: 'gen {mode} {N} {lo} {hi} {seed}',
+    modes: 'one,two',
+    nMin: 1,
+    nMax: 10,
+    valueMin: -1,
+    valueMax: 2,
+    limit: 20,
+  };
+  assert.throws(
+    () => composeStressPatterns({ ...values, nMin: 20 }),
+    /올바른 정수/,
+  );
+  assert.throws(
+    () => composeStressPatterns({ ...values, limit: 1 }),
+    /최대 1개/,
+  );
+  assert.throws(
+    () => composeStressPatterns({ ...values, template: 'gen "{mode}" {seed}' }),
+    /독립된 인자/,
+  );
+  assert.throws(
+    () => composeStressPatterns({ ...values, template: 'gen {toString}' }),
+    /지원하지 않는 자리표시자/,
+  );
+  assert.equal(
+    retryStressOptions(
+      { options: {}, result: { stress: { iterations_started: 4 } } },
+      ['wrong'],
+    ).seed_start,
+    5,
+  );
+  assert.throws(
+    () =>
+      retryStressOptions(
+        {
+          options: { seed_step: 1 },
+          result: { stress: { last_seed: Number.MAX_SAFE_INTEGER } },
+        },
+        ['wrong'],
+      ),
+    /정수 범위/,
+  );
 });

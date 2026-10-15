@@ -33,6 +33,7 @@ loaded.require = (id) => {
     id === './StressControls' ||
     id === './StressCounterexamples' ||
     id === './StressRunConditions' ||
+    id === '../../lib/stressOptions' ||
     id === './InvocationControls' ||
     id === './ExecutionLimitsInfo' ||
     id === './ZojPublishing' ||

@@ -54,7 +54,7 @@ function conditions(job: Job): Partial<StressConfiguration> {
 
 export function StressHistorySummary({ job }: { job: Job }) {
   const config = conditions(job);
-  const summary = `${config.generator || '생성기 명령 미기록'}${config.iterations ? ` · 최대 ${config.iterations}회` : ''}${config.duration_seconds ? ` · ${config.duration_seconds}초` : ''}`;
+  const summary = `${config.patterns && config.patterns.length > 1 ? `패턴 ${config.patterns.length}개 · ` : ''}${config.generator || '생성기 명령 미기록'}${config.iterations ? ` · 최대 ${config.iterations}회` : ''}${config.duration_seconds ? ` · ${config.duration_seconds}초` : ''}`;
   return (
     <span className="job-stress-context" title={summary}>
       {summary}
@@ -79,10 +79,26 @@ export default function StressRunConditions({ job }: { job: Job }) {
         </p>
       </div>
       <div className="stress-command-block">
-        <strong>생성기 명령</strong>
-        <pre className="stress-command">
-          <code>{config.generator || '기록되지 않았습니다.'}</code>
-        </pre>
+        {config.patterns && config.patterns.length > 1 ? (
+          <>
+            <strong>생성기 패턴 · 순서대로 순환</strong>
+            {config.patterns.map((pattern, index) => (
+              <div className="stress-saved-pattern" key={index}>
+                <small>{pattern.name}</small>
+                <pre className="stress-command">
+                  <code>{pattern.command}</code>
+                </pre>
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
+            <strong>생성기 명령</strong>
+            <pre className="stress-command">
+              <code>{config.generator || '기록되지 않았습니다.'}</code>
+            </pre>
+          </>
+        )}
       </div>
       <dl className="stress-condition-grid">
         <div>
@@ -91,9 +107,11 @@ export default function StressRunConditions({ job }: { job: Job }) {
             {config.seed_start}부터 {config.seed_step}씩 증가 · 반복 번호 사용
           </dd>
           <dd className="muted small">
-            {config.seed_mode === 'placeholder'
-              ? '{seed}를 시드로 치환'
-              : '마지막 인자로 시드 추가'}
+            {config.patterns && config.patterns.length > 1
+              ? '각 패턴의 {seed}를 치환하며 생략하면 마지막 인자로 추가'
+              : config.seed_mode === 'placeholder'
+                ? '{seed}를 시드로 치환'
+                : '마지막 인자로 시드 추가'}
           </dd>
         </div>
         <div>
@@ -118,6 +136,7 @@ export default function StressRunConditions({ job }: { job: Job }) {
         <div>
           <dt>Validator 테스트 세트</dt>
           <dd>{config.testset || '미기록'}</dd>
+          {config.group && <dd>그룹 · {config.group}</dd>}
         </div>
         <div>
           <dt>반복·시간 한도</dt>
@@ -136,13 +155,30 @@ export default function StressRunConditions({ job }: { job: Job }) {
         <div>
           <dt>반례 종료 조건</dt>
           <dd>
-            {config.stop_on_first === true
-              ? '첫 반례 입력의 모든 비교를 마치고 종료'
-              : config.stop_on_first === false
-                ? `반례 입력 ${config.counterexample_limit ?? '?'}개까지 수집`
-                : '기록되지 않았습니다.'}
+            {config.stop_mode === 'all_candidates'
+              ? '모든 비교 풀이에서 최소 1개씩 발견'
+              : config.stop_on_first === true
+                ? '첫 반례 입력의 모든 비교를 마치고 종료'
+                : config.stop_on_first === false
+                  ? `반례 입력 ${config.counterexample_limit ?? '?'}개까지 수집`
+                  : '기록되지 않았습니다.'}
           </dd>
         </div>
+        {config.focus_uncovered && (
+          <div>
+            <dt>비교 대상 정책</dt>
+            <dd>반례가 확인된 풀이는 제외 · 미검출 풀이만 계속 검사</dd>
+          </div>
+        )}
+        {config.minimize && (
+          <div>
+            <dt>자동 축소</dt>
+            <dd>
+              반례별 최대 {config.minimize_attempts}회 ·{' '}
+              {config.minimize_seconds}초
+            </dd>
+          </div>
+        )}
         <div className="stress-condition-wide">
           <dt>수집할 판정</dt>
           <dd>
@@ -169,6 +205,14 @@ export default function StressRunConditions({ job }: { job: Job }) {
               <pre className="stress-command">
                 <code>{stats.last_command}</code>
               </pre>
+              {stats.last_range_values?.length ? (
+                <p className="muted small">
+                  범위 치환 ·{' '}
+                  {stats.last_range_values
+                    .map((value) => `${value.expression} → ${value.value}`)
+                    .join(' · ')}
+                </p>
+              ) : null}
               <p className="muted small">
                 생성 요청 기준입니다. 생성·검증·비교 중 중단된 반복은 완료
                 횟수에 포함되지 않습니다.

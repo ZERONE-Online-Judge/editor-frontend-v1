@@ -166,6 +166,12 @@ export type ExecutionLimits = {
   stress_iterations: number;
   stress_seconds: number;
   counterexample_targets: number[];
+  stress_patterns?: number;
+  stress_counterexamples?: number;
+  stress_evidence_bytes?: number;
+  minimize_attempts?: number;
+  minimize_seconds?: number;
+  minimize_input_bytes?: number;
   generator_arguments: number;
   generator_cpu_ms: number;
   generator_memory_mb: number;
@@ -202,7 +208,34 @@ export type Counterexample = {
   input_sha: string;
   answer_sha: string;
   findings: CounterexampleFinding[];
+  input_bytes?: number;
+  pattern_index?: number;
+  pattern_name?: string;
+  range_values?: { expression: string; value: number }[];
+  minimized?: {
+    input_sha: string;
+    answer_sha: string;
+    input_bytes: number;
+    findings: CounterexampleFinding[];
+  };
+  minimization?: {
+    status:
+      | 'running'
+      | 'finished'
+      | 'budget'
+      | 'input_limit'
+      | 'unsupported'
+      | 'interrupted'
+      | 'evidence_limit';
+    attempts: number;
+    accepted_steps: number;
+    original_bytes: number;
+    final_bytes: number;
+    elapsed_seconds: number;
+    strategy?: 'integer_array' | 'integer_values';
+  };
 };
+export type StressPattern = { name: string; command: string };
 export type InvocationScope = {
   testset: string;
   solutions: string[];
@@ -228,6 +261,14 @@ export type StressConfiguration = {
   extra_validators: string[];
   checker: string;
   interactor: string;
+  patterns?: StressPattern[];
+  sampling_version?: string;
+  stop_mode?: 'first' | 'target' | 'all_candidates';
+  focus_uncovered?: boolean;
+  group?: string;
+  minimize?: boolean;
+  minimize_attempts?: number;
+  minimize_seconds?: number;
 };
 export type Job = {
   application?: {
@@ -334,13 +375,42 @@ export type Job = {
       stop_reason: string | null;
       last_seed?: number | null;
       last_command?: string | null;
+      last_pattern_index?: number | null;
+      last_range_values?: { expression: string; value: number }[];
+      phase?: 'search' | 'minimize' | 'finished';
+      evidence_bytes?: number;
+      search_stop_reason?: string | null;
     };
+    pattern_summaries?: (StressPattern & {
+      index: number;
+      attempts: number;
+      valid_inputs: number;
+      duplicates_skipped: number;
+      compared_inputs: number;
+      counterexample_inputs: number;
+      findings: number;
+      solution_findings: Record<string, number>;
+    })[];
+    coverage?: {
+      example_ids: string[];
+      method: 'exact' | 'greedy';
+      covered_pairs: number;
+      pairs: { solution: string; verdict: string }[];
+    };
+    uncovered_candidates?: string[];
+    counterexample_categories?: {
+      solution: string;
+      tag: string;
+      verdict: string;
+      example_ids: string[];
+    }[];
     candidate_summaries?: {
       name: string;
       tag: string;
       tested: number;
       verdicts: Record<string, number>;
       first_counterexample_id: string | null;
+      counterexamples?: number;
     }[];
     iterations?: number;
     package?: {

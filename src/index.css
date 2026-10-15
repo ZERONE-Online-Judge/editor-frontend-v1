@@ -642,6 +642,103 @@ svg {
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 10px;
 }
+.stress-results {
+  grid-template-columns: minmax(0, 1fr);
+}
+.stress-results > * {
+  min-width: 0;
+}
+.stress-results > section.notice {
+  display: grid;
+  gap: 4px;
+}
+.stress-patterns,
+.stress-pattern-row,
+.stress-pattern-builder > .form-grid,
+.stress-reduction-control,
+.stress-cover-selection,
+.stress-uncovered {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.stress-pattern-row + .stress-pattern-row {
+  padding-top: 16px;
+  border-top: 1px solid var(--zoj-border);
+}
+.stress-pattern-builder,
+.stress-reduction-control {
+  padding: 16px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 12px;
+  background: #f8f9ff;
+}
+.stress-pattern-builder > .form-grid {
+  margin-top: 16px;
+}
+.stress-pattern-builder summary,
+.stress-reduction-control summary,
+.stress-pattern-statistics summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  color: #485775;
+}
+.stress-reduction-control .checkbox small,
+.stress-controls .checkbox > small,
+.stress-results .checkbox > small {
+  grid-column: 1 / -1;
+  white-space: normal;
+  font-weight: 400;
+}
+.stress-reduction-control details > .form-grid {
+  margin-block: 12px;
+}
+.stress-cover-selection {
+  padding: 14px;
+  border: 1px solid #dedcf5;
+  border-radius: 10px;
+  background: #f8f7ff;
+}
+.stress-cover-selection .button,
+.stress-uncovered .button {
+  justify-self: start;
+  height: auto;
+  min-height: 36px;
+  white-space: normal;
+}
+.stress-wrap,
+.stress-uncovered p,
+.stress-saved-pattern {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.stress-saved-pattern {
+  margin-top: 10px;
+}
+.stress-saved-pattern small {
+  color: #66728e;
+}
+.stress-pattern-statistics .table-scroll {
+  margin-top: 12px;
+}
+.stress-pattern-statistics td:first-child {
+  min-width: 160px;
+}
+.stress-reduction-summary p {
+  margin-top: 7px;
+  white-space: normal;
+}
+.notice.stress-reduction-summary {
+  display: grid;
+  gap: 4px;
+}
+.stress-controls .checkbox:has(> small),
+.stress-results .checkbox:has(> small) {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+}
 .invocation-controls fieldset,
 .stress-controls fieldset {
   min-width: 0;

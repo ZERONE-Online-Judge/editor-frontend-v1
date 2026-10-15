@@ -52,6 +52,25 @@ export default function ExecutionLimitsInfo({
             <dt>생성기 인자</dt>
             <dd>최대 {limits.generator_arguments}개</dd>
           </div>
+          {stress && limits.stress_patterns != null && (
+            <>
+              <div>
+                <dt>생성기 패턴</dt>
+                <dd>최대 {limits.stress_patterns}개</dd>
+              </div>
+              <div>
+                <dt>자동 축소 입력 크기</dt>
+                <dd>{bytes(limits.minimize_input_bytes || 0)}</dd>
+              </div>
+              <div>
+                <dt>반례별 축소 한도</dt>
+                <dd>
+                  최대 {limits.minimize_attempts}회 · {limits.minimize_seconds}
+                  초
+                </dd>
+              </div>
+            </>
+          )}
           <div>
             <dt>ZOJ 풀이 연결</dt>
             <dd>작업당 동시 {limits.judge_concurrency}개</dd>
