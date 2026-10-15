@@ -262,6 +262,16 @@ async function click(label) {
   await act(async () => el.click());
   await flush();
 }
+
+test('Linux packages explicitly use the Editor replay runtime', async () => {
+  await mount('packages');
+  await setControl('패키지 형식', 'linux');
+  await click('검증 후 패키지 생성');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.kind, 'package');
+  assert.equal(requests[0].body.options.export_format, 'linux');
+  assert.equal(requests[0].body.options.execution_backend, 'editor');
+});
 for (const [tab, button, kind] of [
   ['tests', '입력·정답 생성', 'prepare'],
   ['validator', '테스트 실행', 'validator-tests'],

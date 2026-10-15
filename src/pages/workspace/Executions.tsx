@@ -342,11 +342,18 @@ export default function Executions({
                 패키지 형식
                 <select
                   value={exportFormat}
-                  onChange={(e) => setExportFormat(e.target.value)}
+                  onChange={(e) => {
+                    setExportFormat(e.target.value);
+                    if (e.target.value === 'linux')
+                      setExecutionBackend('editor');
+                  }}
                 >
                   <option value="zoj">ZOJ 문제 ZIP · 대회에 등록</option>
                   <option value="editor">
                     Editor / Polygon 형식 · 작업 자료
+                  </option>
+                  <option value="linux">
+                    Linux 재현 패키지 · Editor 격리 환경
                   </option>
                 </select>
               </label>
@@ -384,7 +391,9 @@ export default function Executions({
             <p className="muted">
               {exportFormat === 'zoj'
                 ? '선택한 언어를 ZOJ의 기본 지문으로 지정하고, 작성한 다른 번역 지문도 함께 내보냅니다. 참가자는 지문 화면에서 언어를 선택할 수 있습니다. 예제·전체 입력과 정답·검증 코드·checker·validator와 원본 Editor 자료를 함께 보관합니다. 그룹·부분 점수 등 지원하지 않는 채점 방식은 생성 전에 안내합니다.'
-                : 'Editor에서 다시 열 수 있는 작업 자료와 problem.xml, 생성된 테스트, 모든 지문 언어를 포함합니다.'}
+                : exportFormat === 'linux'
+                  ? '전체 생성 테스트·정답·소스·검증 환경과 고정된 실행 코드를 담습니다. Python과 준비된 Docker 이미지로 API 키·서비스 DB 없이 오프라인 재실행할 수 있습니다. Editor 실행 정책을 재현하며, ZOJ 대회 채점기의 언어별 보정과 다른 하드웨어에서의 시간 일치를 보장하는 패키지는 아닙니다.'
+                  : 'Editor에서 다시 열 수 있는 작업 자료와 problem.xml, 생성된 테스트, 모든 지문 언어를 포함합니다.'}
             </p>
           </section>
           <div className="workspace-guide">
