@@ -90,6 +90,39 @@ test('loop builder emits bounded declarative groups without executing commands',
   assert.throws(() => loopScript('gen {seed}', 1, 3, 0, ''), /방향/);
 });
 
+test('resource policy offers supported language scoping without claiming runtime attachment', async () => {
+  let changed;
+  const policy = {
+    languages: ['cpp17', 'cpp20'],
+    targets: ['SOLUTION'],
+    stages: ['COMPILE'],
+  };
+  const { host, close } = await mount(
+    source('pages/workspace/ResourceOptions.tsx').default,
+    {
+      policy,
+      disabled: false,
+      change: (value) => {
+        changed = value;
+      },
+    },
+  );
+  const cpp20 = [...host.querySelectorAll('label')]
+    .find((label) => label.textContent.trim() === 'C++20')
+    .querySelector('input');
+  await act(async () => cpp20.click());
+  assert.deepEqual(changed, {
+    languages: ['cpp17'],
+    targets: ['SOLUTION'],
+    stages: ['COMPILE'],
+  });
+  assert.match(
+    host.textContent,
+    /실행 시 원본 리소스 파일은 제공하지 않습니다/,
+  );
+  await close();
+});
+
 test('matrix preserves missing measurements and filters an observed cover without deleting tests', async () => {
   const row = (index, detected) => ({
     id: `tests/${index}`,

@@ -33,6 +33,8 @@ export type Statement = {
 export type Language =
   'cpp17' | 'cpp20' | 'c17' | 'c99' | 'python3' | 'java17' | 'java8' | 'text';
 export type SourceFile = {
+  resource_policy?: ResourcePolicy | null;
+  attach_to_build?: boolean | null;
   roles?: SourceRole[];
   name: string;
   kind: 'source' | 'resource' | 'aux' | 'statement';
@@ -41,6 +43,11 @@ export type SourceFile = {
   size: number;
   compile_with_solution?: boolean;
   entry_class?: string;
+};
+export type ResourcePolicy = {
+  languages: Language[];
+  targets: ['SOLUTION'];
+  stages: ['COMPILE'];
 };
 export type SourceRole = 'validator' | 'checker' | 'generator' | 'interactor';
 export type SolutionTag =

@@ -10,12 +10,14 @@ import {
 } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
 import SolutionExpectations from './SolutionExpectations';
+import ResourceOptions from './ResourceOptions';
 import type {
   Language,
   Solution,
   SolutionTag,
   SourceFile,
   SourceRole,
+  ResourcePolicy,
 } from '../../lib/types';
 import {
   roleLabels,
@@ -40,7 +42,8 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
   const [removingSolution, setRemovingSolution] = useState(false);
   const [reusing, setReusing] = useState(false);
   const [busy, setBusy] = useState(false);
-  const items = solutions
+  const [category, setCategory] = useState('all');
+  const allItems = solutions
     ? Object.values(doc.solutions).map((file) => ({ file, isSolution: true }))
     : [
         ...Object.values(doc.files).map((file) => ({
@@ -52,6 +55,13 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
           isSolution: true,
         })),
       ];
+  const items = allItems.filter(
+    ({ file, isSolution }) =>
+      category === 'all' ||
+      (category === 'solution'
+        ? isSolution
+        : !isSolution && file.kind === category),
+  );
   function edit(file: SourceFile | null, isSolution = solutions) {
     setEditingSolution(isSolution);
     setEditing(file);
@@ -190,6 +200,24 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
         </div>
       )}
       <section className="card no-padding">
+        {!solutions && (
+          <div className="card-heading">
+            <label>
+              파일 분류 보기
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                <option value="all">전체</option>
+                <option value="source">Source · 실행 소스</option>
+                <option value="resource">Resource · 컴파일 리소스</option>
+                <option value="aux">Aux · 제작 보조 자료</option>
+                <option value="solution">Solution · 풀이</option>
+                <option value="statement">지문 리소스</option>
+              </select>
+            </label>
+          </div>
+        )}
         {items.length ? (
           <div className="table-scroll">
             <table className="data-table">
@@ -500,6 +528,12 @@ function FileEditor({
   const [compileWithSolution, setCompileWithSolution] = useState(
     asset?.compile_with_solution || false,
   );
+  const [resourcePolicy, setResourcePolicy] = useState<ResourcePolicy | null>(
+    asset?.resource_policy || null,
+  );
+  const [attachToBuild, setAttachToBuild] = useState(
+    asset?.attach_to_build ?? asset?.kind === 'aux',
+  );
   const [entryClass, setEntryClass] = useState(asset?.entry_class || '');
   const [tag, setTag] = useState<SolutionTag>(
     asset ? doc.solutions[asset.name]?.tag || 'OK' : 'OK',
@@ -512,11 +546,13 @@ function FileEditor({
   >(asset ? doc.solutions[asset.name]?.group_tags || {} : {});
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(
-    Boolean(asset && !/\.(png|jpg|jpeg|gif|webp|pdf|zip)$/i.test(asset.name)),
+    Boolean(
+      asset && !/\.(png|jpg|jpeg|gif|webp|pdf|zip|a|o)$/i.test(asset.name),
+    ),
   );
   const [error, setError] = useState('');
   const binary = Boolean(
-    asset && /\.(png|jpg|jpeg|gif|webp|pdf|zip)$/i.test(asset.name),
+    asset && /\.(png|jpg|jpeg|gif|webp|pdf|zip|a|o)$/i.test(asset.name),
   );
   useEffect(() => {
     let active = true;
@@ -554,6 +590,14 @@ function FileEditor({
       setError('풀이에는 실행 가능한 소스 언어를 지정하세요.');
       return;
     }
+    if (
+      kind === 'resource' &&
+      resourcePolicy &&
+      !resourcePolicy.languages.length
+    ) {
+      setError('리소스 적용 언어를 하나 이상 선택하세요.');
+      return;
+    }
     setBusy(true);
     try {
       const blob =
@@ -568,6 +612,10 @@ function FileEditor({
           ...blob,
           compile_with_solution: compileWithSolution,
           entry_class: entryClass,
+          ...(kind === 'resource' && resourcePolicy
+            ? { resource_policy: resourcePolicy }
+            : {}),
+          ...(kind === 'aux' ? { attach_to_build: attachToBuild } : {}),
         };
         if (solutions) {
           if (tag === 'MA')
@@ -587,8 +635,18 @@ function FileEditor({
               : {}),
           };
           for (const role of ['checker', 'validator', 'interactor'] as const)
-            if (!roles.includes(role) && d[role] === name) d[role] = '';
-          if (!roles.includes('validator'))
+            if (
+              (kind !== 'source' ||
+                language === 'text' ||
+                !roles.includes(role)) &&
+              d[role] === name
+            )
+              d[role] = '';
+          if (
+            kind !== 'source' ||
+            language === 'text' ||
+            !roles.includes('validator')
+          )
             d.extra_validators = d.extra_validators.filter((n) => n !== name);
         }
       });
@@ -666,7 +724,10 @@ function FileEditor({
             파일 분류
             <select
               value={kind}
-              onChange={(e) => setKind(e.target.value as SourceFile['kind'])}
+              onChange={(e) => {
+                setKind(e.target.value as SourceFile['kind']);
+                if (e.target.value === 'aux') setAttachToBuild(false);
+              }}
             >
               <option value="source">실행 소스</option>
               <option value="resource">컴파일 리소스</option>
@@ -703,9 +764,10 @@ function FileEditor({
           </fieldset>
         )}
         {!solutions &&
-          ['cpp17', 'cpp20', 'c17', 'c99', 'java17', 'java8'].includes(
+          (['cpp17', 'cpp20', 'c17', 'c99', 'java17', 'java8'].includes(
             language,
-          ) && (
+          ) ||
+            (kind === 'resource' && /\.(a|o)$/i.test(name))) && (
             <label className="checkbox">
               <input
                 type="checkbox"
@@ -731,6 +793,30 @@ function FileEditor({
           </label>
         )}
       </fieldset>
+      {!solutions && kind === 'resource' && (
+        <ResourceOptions
+          policy={resourcePolicy}
+          change={setResourcePolicy}
+          disabled={!editable || busy}
+        />
+      )}
+      {!solutions && kind === 'aux' && (
+        <section className="scoped-expectations">
+          <p className="muted small">
+            Aux는 제작 참고 자료입니다. 새 보조 파일은 컴파일에 자동으로
+            첨부하지 않습니다.
+          </p>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={attachToBuild}
+              onChange={(e) => setAttachToBuild(e.target.checked)}
+              disabled={!editable || busy}
+            />
+            기존 호환: 이 보조 파일을 컴파일에도 첨부
+          </label>
+        </section>
+      )}
       {solutions && (
         <SolutionExpectations
           source={
