@@ -686,6 +686,14 @@ function GroupEditor({
               onClick={() =>
                 mutate((d) => {
                   delete d.testsets[testset].groups[key];
+                  for (const source of Object.values(d.solutions)) {
+                    if (source.group_tags?.[testset]) {
+                      delete source.group_tags[testset][key];
+                      if (!Object.keys(source.group_tags[testset]).length)
+                        delete source.group_tags[testset];
+                    }
+                    if (!d.testsets[key]) delete source.extra_tags[key];
+                  }
                   for (const test of Object.values(d.testsets[testset].tests))
                     if (test.group === key) test.group = '';
                   for (const group of Object.values(d.testsets[testset].groups))

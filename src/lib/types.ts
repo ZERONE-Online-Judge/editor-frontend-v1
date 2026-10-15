@@ -48,6 +48,7 @@ export type SolutionTag =
 export type Solution = SourceFile & {
   tag: SolutionTag;
   extra_tags: Record<string, string>;
+  group_tags?: Record<string, Record<string, string>>;
 };
 export type Test = {
   index: number;
@@ -144,6 +145,7 @@ export type JobKind =
   | 'package'
   | 'render';
 export type CaseResult = {
+  group?: string;
   testset: string;
   index: number;
   verdict: string;
@@ -320,6 +322,19 @@ export type Job = {
       matched: boolean;
       skipped: boolean;
       cases: CaseResult[];
+      expectations_complete?: boolean;
+      expectations?: {
+        testset: string;
+        group: string;
+        tag: string;
+        tested: number;
+        total: number;
+        complete: boolean;
+        matched: boolean | null;
+        skipped: boolean;
+        origin: string;
+        verdicts: string[];
+      }[];
       total_score?: number | null;
       score_scope_complete?: boolean;
       groups?: {

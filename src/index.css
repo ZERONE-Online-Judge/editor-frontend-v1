@@ -645,6 +645,27 @@ svg {
 .stress-results {
   grid-template-columns: minmax(0, 1fr);
 }
+.scoped-expectations {
+  margin-block: 18px;
+  padding: 16px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 12px;
+  min-width: 0;
+}
+.scoped-expectations summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.scoped-expectations fieldset {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 12px;
+  margin-top: 16px;
+  min-width: 0;
+  border: 1px solid var(--zoj-border);
+  border-radius: 8px;
+  padding: 12px;
+}
 .stress-results > * {
   min-width: 0;
 }

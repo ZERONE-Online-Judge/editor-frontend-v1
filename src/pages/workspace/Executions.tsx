@@ -709,9 +709,54 @@ export default function Executions({
                       {solution.tag} · {tags[solution.tag as keyof typeof tags]}
                     </Badge>
                     <Badge tone={solution.matched ? 'success' : 'danger'}>
-                      {solution.matched ? '기대 판정 일치' : '기대 판정 불일치'}
+                      {solution.matched
+                        ? solution.expectations_complete === false
+                          ? '일부 범위 미확인'
+                          : '기대 판정 일치'
+                        : '기대 판정 불일치'}
                     </Badge>
                   </div>
+                  {solution.expectations?.length ? (
+                    <div className="table-scroll">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>기대 판정 범위</th>
+                            <th>기대</th>
+                            <th>실행 / 전체</th>
+                            <th>관측</th>
+                            <th>검증</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {solution.expectations.map((scope) => (
+                            <tr key={`${scope.testset}/${scope.group}`}>
+                              <td>
+                                {scope.testset}
+                                {scope.group
+                                  ? ` / ${scope.group}`
+                                  : ' · 기본 범위'}
+                              </td>
+                              <td>{scope.tag}</td>
+                              <td>
+                                {scope.tested} / {scope.total}
+                              </td>
+                              <td>{scope.verdicts.join(' · ') || '미실행'}</td>
+                              <td>
+                                {scope.skipped
+                                  ? '실행 제외'
+                                  : scope.matched === false
+                                    ? '불일치'
+                                    : !scope.complete
+                                      ? '부분 실행 · 미확인'
+                                      : '일치'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null}
                   {solution.total_score != null && (
                     <p>점수 {solution.total_score.toLocaleString()}</p>
                   )}

@@ -316,3 +316,40 @@ test('Commit preview loads code only when expanded and renders changed lines', a
   await close();
 });
 after(() => dom.window.close());
+
+test('solution scopes keep testset defaults separate from group overrides', async () => {
+  const doc = workspace();
+  doc.testsets.tests.groups_enabled = true;
+  doc.testsets.tests.groups = { small: {}, large: {} };
+  let saved;
+  const { host, close } = await mount(
+    source('pages/workspace/SolutionExpectations.tsx').default,
+    {
+      source: { tag: 'TL', extra_tags: {}, group_tags: {} },
+      document: doc,
+      disabled: false,
+      change: (extra, groups) => {
+        saved = { extra, groups };
+      },
+    },
+  );
+  const scope = host.querySelector(
+    '[aria-label="tests / small 그룹 기대 판정"]',
+  );
+  await act(async () => {
+    scope.value = 'OK';
+    scope.dispatchEvent(new window.Event('change', { bubbles: true }));
+  });
+  assert.deepEqual(saved, { extra: {}, groups: { tests: { small: 'OK' } } });
+  const set = host.querySelector('[aria-label="tests 세트 기대 판정"]');
+  await act(async () => {
+    set.value = 'TL';
+    set.dispatchEvent(new window.Event('change', { bubbles: true }));
+  });
+  assert.deepEqual(saved, { extra: { tests: 'TL' }, groups: {} });
+  assert.equal(
+    [...scope.options].some((option) => option.value === 'MA'),
+    false,
+  );
+  await close();
+});

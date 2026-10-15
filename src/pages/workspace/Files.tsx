@@ -9,6 +9,7 @@ import {
   upload,
 } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
+import SolutionExpectations from './SolutionExpectations';
 import type {
   Language,
   Solution,
@@ -218,26 +219,34 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
                     </td>
                     <td>
                       {isSolution ? (
-                        <select
-                          aria-label={`${file.name} 기대 판정`}
-                          value={(file as Solution).tag}
-                          disabled={!editable}
-                          onChange={(e) =>
-                            mutate((d) => {
-                              if (e.target.value === 'MA')
-                                for (const s of Object.values(d.solutions))
-                                  if (s.tag === 'MA') s.tag = 'OK';
-                              d.solutions[file.name].tag = e.target
-                                .value as SolutionTag;
-                            })
-                          }
-                        >
-                          {Object.entries(tags).map(([tag, label]) => (
-                            <option key={tag} value={tag}>
-                              {tag} · {label}
-                            </option>
-                          ))}
-                        </select>
+                        <>
+                          <select
+                            aria-label={`${file.name} 기대 판정`}
+                            value={(file as Solution).tag}
+                            disabled={!editable}
+                            onChange={(e) =>
+                              mutate((d) => {
+                                if (e.target.value === 'MA')
+                                  for (const s of Object.values(d.solutions))
+                                    if (s.tag === 'MA') s.tag = 'OK';
+                                d.solutions[file.name].tag = e.target
+                                  .value as SolutionTag;
+                              })
+                            }
+                          >
+                            {Object.entries(tags).map(([tag, label]) => (
+                              <option key={tag} value={tag}>
+                                {tag} · {label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            className="text-button small"
+                            onClick={() => edit(file, true)}
+                          >
+                            세트·그룹 기대 판정
+                          </button>
+                        </>
                       ) : (
                         <div className="source-role-badges">
                           {sourceRoles(doc, file.name).length ? (
@@ -495,6 +504,12 @@ function FileEditor({
   const [tag, setTag] = useState<SolutionTag>(
     asset ? doc.solutions[asset.name]?.tag || 'OK' : 'OK',
   );
+  const [extraTags, setExtraTags] = useState(
+    asset ? doc.solutions[asset.name]?.extra_tags || {} : {},
+  );
+  const [groupTags, setGroupTags] = useState<
+    Record<string, Record<string, string>>
+  >(asset ? doc.solutions[asset.name]?.group_tags || {} : {});
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(
     Boolean(asset && !/\.(png|jpg|jpeg|gif|webp|pdf|zip)$/i.test(asset.name)),
@@ -561,7 +576,8 @@ function FileEditor({
           d.solutions[name] = {
             ...entry,
             tag,
-            extra_tags: asset ? d.solutions[asset.name].extra_tags : {},
+            extra_tags: extraTags,
+            ...(Object.keys(groupTags).length ? { group_tags: groupTags } : {}),
           };
         } else {
           d.files[name] = {
@@ -715,6 +731,19 @@ function FileEditor({
           </label>
         )}
       </fieldset>
+      {solutions && (
+        <SolutionExpectations
+          source={
+            { tag, extra_tags: extraTags, group_tags: groupTags } as Solution
+          }
+          document={doc}
+          disabled={!editable || busy}
+          change={(extra, groups) => {
+            setExtraTags(extra);
+            setGroupTags(groups);
+          }}
+        />
+      )}
       {binary ? (
         <div className="file-preview">
           <a
