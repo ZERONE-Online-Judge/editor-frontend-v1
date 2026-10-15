@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { blobText, upload } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
+import GeneratorLoop from './GeneratorLoop';
 import type { Test } from '../../lib/types';
 import {
   Badge,
@@ -193,9 +194,25 @@ export default function Tests() {
               rows={7}
               readOnly={!editable}
             />
+            <GeneratorLoop
+              key={selected}
+              groups={set.groups_enabled ? Object.keys(set.groups) : []}
+              disabled={!editable}
+              append={(script) =>
+                mutate((d) => {
+                  d.testsets[selected].script = [
+                    d.testsets[selected].script.trimEnd(),
+                    script,
+                  ]
+                    .filter(Boolean)
+                    .join('\n');
+                })
+              }
+            />
             <p className="muted small">
               파일에 등록한 생성기를 사용하세요. 이 스크립트는 셸 명령이 아닌
-              테스트 생성 규칙으로 처리합니다.
+              테스트 생성 규칙으로 처리합니다. repeat seed in 1..100 / end로
+              반복하고 group 그룹명으로 생성할 그룹을 지정할 수 있습니다.
             </p>
           </section>
           <section className="card no-padding">

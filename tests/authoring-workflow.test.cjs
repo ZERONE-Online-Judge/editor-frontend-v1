@@ -77,6 +77,18 @@ const { sourceRoles, reuseAsSolution, solutionReuseIssue } =
   source('lib/sourceRoles.ts');
 const { documentChanges, diffLines } = source('lib/documentChanges.ts');
 const { preparationCautions } = source('lib/readiness.ts');
+const { loopScript } = source('lib/generationScript.ts');
+
+test('loop builder emits bounded declarative groups without executing commands', () => {
+  assert.equal(
+    loopScript('gen 10 {seed}', 1, 3, 1, 'small'),
+    'repeat seed in 1..3\n  group small\n  gen 10 {seed} > $\nend',
+  );
+  assert.match(loopScript('gen {seed}', 5, 1, -2, ''), /5\.\.1 step -2/);
+  assert.throws(() => loopScript('gen 1', 1, 3, 1, ''), /seed/);
+  assert.throws(() => loopScript('gen {seed}', 3, 1, 1, ''), /방향/);
+  assert.throws(() => loopScript('gen {seed}', 1, 3, 0, ''), /방향/);
+});
 const file = (name, extra = {}) => ({
   name,
   kind: 'source',
