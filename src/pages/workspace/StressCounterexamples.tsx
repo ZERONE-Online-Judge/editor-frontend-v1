@@ -177,7 +177,9 @@ export default function StressCounterexamples({
             {stats.stop_reason
               ? `종료 이유: ${stopReasons[stats.stop_reason] || stats.stop_reason}`
               : active
-                ? `반복 ${stats.iterations_started} 처리 중`
+                ? stats.parallelism && stats.parallelism > 1
+                  ? `${stats.parallelism}개 병렬 처리 중 · ${stats.iterations_scheduled ?? stats.iterations_started}회 배정`
+                  : `반복 ${stats.iterations_started} 처리 중`
                 : job.status === 'cancelled'
                   ? '사용자 취소로 종료'
                   : job.status === 'failed'

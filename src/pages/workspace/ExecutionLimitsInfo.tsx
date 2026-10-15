@@ -71,6 +71,22 @@ export default function ExecutionLimitsInfo({
               </div>
             </>
           )}
+          {limits.test_parallelism != null &&
+            limits.execution_concurrency != null && (
+              <div>
+                <dt>
+                  {stress ? '스트레스 시드 병렬 처리' : '테스트 병렬 처리'}
+                </dt>
+                <dd>
+                  작업당 최대{' '}
+                  {Math.min(
+                    limits.test_parallelism,
+                    limits.execution_concurrency,
+                  )}
+                  개
+                </dd>
+              </div>
+            )}
           <div>
             <dt>ZOJ 풀이 연결</dt>
             <dd>작업당 동시 {limits.judge_concurrency}개</dd>
@@ -89,7 +105,9 @@ export default function ExecutionLimitsInfo({
         <p className="muted small">
           서버에서 조회한 설정과 처리 현황이며 15초마다 갱신합니다. 경과
           시간에는 컴파일과 채점 대기도 포함됩니다. 풀이별 CPU·메모리 제한은
-          문제 설정을 사용합니다.
+          문제 설정을 사용합니다. 병렬 실행의 완료 순서와 관계없이 결과는
+          테스트·시드 순서로 정리합니다. 종료 조건을 충족하면 진행 중인 나머지
+          실행을 취소합니다.
         </p>
         {environment?.error && (
           <p className="muted small">채점 환경 조회: {environment.error}</p>

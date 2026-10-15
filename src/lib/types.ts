@@ -209,6 +209,8 @@ export type ExecutionLimits = {
   generator_output_bytes: number;
   job_timeout_seconds: number;
   worker_concurrency: number;
+  test_parallelism?: number;
+  execution_concurrency?: number;
   judge_concurrency: number;
   active_jobs_per_user: number;
 };
@@ -439,6 +441,9 @@ export type Job = {
     counterexamples?: Counterexample[];
     stress?: {
       iterations_started: number;
+      iterations_scheduled?: number;
+      last_scheduled_seed?: number;
+      parallelism?: number;
       iterations_completed: number;
       elapsed_seconds: number;
       duplicates_skipped: number;

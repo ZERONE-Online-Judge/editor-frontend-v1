@@ -195,13 +195,30 @@ export default function StressRunConditions({ job }: { job: Job }) {
         <div className="stress-seed-progress">
           <strong>
             {stats.iterations_started > 0
-              ? `생성 요청 시드: ${config.seed_start} ~ ${lastSeed ?? stats.iterations_started}`
-              : '생성 요청 전'}{' '}
+              ? `${stats.parallelism && stats.parallelism > 1 ? '결과 확인 시드' : '생성 요청 시드'}: ${config.seed_start} ~ ${lastSeed ?? stats.iterations_started}`
+              : stats.iterations_scheduled
+                ? `${stats.iterations_scheduled}회 병렬 배정`
+                : '생성 요청 전'}{' '}
             · {stats.iterations_completed}회 완료
           </strong>
+          {stats.parallelism && stats.parallelism > 1 && (
+            <p className="muted small">
+              최대 {stats.parallelism}개 병렬 ·{' '}
+              {stats.iterations_scheduled ?? 0}회 배정
+              {stats.last_scheduled_seed != null
+                ? ` · 마지막 배정 시드 ${stats.last_scheduled_seed}`
+                : ''}
+              . 결과는 시드 순서로 반영하며 종료 후 남은 실행은 취소합니다.
+            </p>
+          )}
           {stats.last_command && (
             <details>
-              <summary>마지막 생성 요청 명령 · 시드 {lastSeed}</summary>
+              <summary>
+                {stats.parallelism && stats.parallelism > 1
+                  ? '마지막 확인 명령'
+                  : '마지막 생성 요청 명령'}{' '}
+                · 시드 {lastSeed}
+              </summary>
               <pre className="stress-command">
                 <code>{stats.last_command}</code>
               </pre>

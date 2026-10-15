@@ -98,6 +98,8 @@ async function get(url) {
         generator_output_bytes: 16777216,
         job_timeout_seconds: 600,
         worker_concurrency: 4,
+        test_parallelism: 7,
+        execution_concurrency: 5,
         judge_concurrency: 2,
         active_jobs_per_user: 5,
         ...(advancedLimits || {}),
@@ -482,6 +484,7 @@ test('execution limits reflect the server response rather than fixed UI defaults
   assert.match(panel.textContent, /Editor 작업 동시 처리 4개/);
   assert.match(panel.textContent, /진행 중 1개 · 대기 3개/);
   assert.match(panel.textContent, /작업당 동시 2개/);
+  assert.match(panel.textContent, /스트레스 시드 병렬 처리작업당 최대 5개/);
 });
 test('read-only users can view records while new execution buttons stay disabled', async () => {
   state.problem.role = 'READ';
