@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  executionResultPath,
+  matchesExecutionView,
+  type ExecutionView,
+} from '../../lib/executionNavigation';
 import {
   api,
   blobText,
@@ -41,9 +46,11 @@ import {
 export default function Executions({
   stress = false,
   packages = false,
+  verification = false,
 }: {
   stress?: boolean;
   packages?: boolean;
+  verification?: boolean;
 }) {
   const {
     data,
@@ -59,16 +66,22 @@ export default function Executions({
   const canInvoke = editable || data.problem.reviewer;
   const [rows, setRows] = useState<Job[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const search = searchParams.toString();
   const requestedJob = searchParams.get('job') || '';
-  const mode = packages ? 'package' : stress ? 'stress' : 'all';
+  const mode: ExecutionView = packages
+    ? 'package'
+    : stress
+      ? 'stress'
+      : verification
+        ? 'verify'
+        : 'all';
   const [defaultSelection, setDefaultSelection] = useState({
     problemId: data.problem.id,
     mode,
     id: '',
   });
-  const visible = rows.filter((row) =>
-    packages ? row.kind === 'package' : stress ? row.kind === 'stress' : true,
-  );
+  const visible = rows.filter((row) => matchesExecutionView(row.kind, mode));
   const selected =
     requestedJob ||
     (defaultSelection.problemId === data.problem.id &&
@@ -150,11 +163,7 @@ export default function Executions({
         if (active) {
           setRows(values);
           const candidates = values.filter((row) =>
-            packages
-              ? row.kind === 'package'
-              : stress
-                ? row.kind === 'stress'
-                : true,
+            matchesExecutionView(row.kind, mode),
           );
           setDefaultSelection((previous) =>
             previous.problemId === data.problem.id &&
@@ -178,7 +187,7 @@ export default function Executions({
       active = false;
       window.clearInterval(timer);
     };
-  }, [data.problem.id, packages, stress, mode, notify]);
+  }, [data.problem.id, mode, notify]);
   useEffect(() => {
     if (!selected) return;
     let active = true;
@@ -189,6 +198,18 @@ export default function Executions({
           `/problems/${data.problem.id}/jobs/${encodeURIComponent(selected)}`,
         );
         if (active) {
+          if ((value.kind === 'verify') !== verification) {
+            const destination = executionResultPath(
+              data.problem.id,
+              value.kind,
+              value.id,
+            ).split('?')[0];
+            navigate(
+              { pathname: destination, search: `?${search}` },
+              { replace: true },
+            );
+            return;
+          }
           setJobError(null);
           setJob(value);
           if (
@@ -212,7 +233,7 @@ export default function Executions({
       active = false;
       if (timer) window.clearTimeout(timer);
     };
-  }, [selected, data.problem.id, notify]);
+  }, [selected, data.problem.id, notify, verification, navigate, search]);
   async function start(
     kind: Job['kind'],
     options: Record<string, unknown> = {},
@@ -257,7 +278,7 @@ export default function Executions({
     }
   }
   const environmentPanel = (
-    <section className="card">
+    <section className={verification ? 'verification-environment' : 'card'}>
       <label>
         풀이 검증 환경
         <select
@@ -289,13 +310,23 @@ export default function Executions({
   return (
     <div className="section-stack">
       <SectionHeading
-        title={packages ? '패키지' : stress ? '스트레스 테스트' : '실행 결과'}
+        title={
+          packages
+            ? '패키지'
+            : stress
+              ? '스트레스 테스트'
+              : verification
+                ? '전체 검증'
+                : '실행 결과'
+        }
         description={
           packages
             ? '커밋된 리비전을 검증하고 배포 가능한 문제 패키지를 생성합니다.'
             : stress
               ? '생성기와 기준 풀이를 사용해 비교할 풀이의 유효한 반례를 찾습니다.'
-              : '각 탭에서 요청한 작업의 진행 상황과 완료 결과를 확인합니다. 아래 작업 기록에서 확인할 실행을 선택하세요.'
+              : verification
+                ? '풀이와 테스트 범위를 선택해 검증하고, 진행 상황과 저장된 검증 결과를 확인합니다.'
+                : '각 탭에서 요청한 작업의 진행 상황과 완료 결과를 확인합니다. 아래 작업 기록에서 확인할 실행을 선택하세요.'
         }
         actions={
           packages && (
@@ -319,6 +350,31 @@ export default function Executions({
       />
       <ExecutionLimitsInfo environment={environment} stress={stress} />
       {packages && environmentPanel}
+      {verification && (
+        <section
+          className="card verification-launcher"
+          aria-label="전체 검증 실행"
+        >
+          {environmentPanel}
+          {!editable && data.problem.reviewer && (
+            <Notice>
+              검수 실행은 커밋된 리비전 r{data.problem.revision}의 입력·기대
+              출력과 판정 태그를 사용합니다. 결과와 임시 코드는 검증 기록에
+              보관됩니다.
+            </Notice>
+          )}
+          <InvocationControls
+            problemId={data.problem.id}
+            document={doc}
+            revision={data.problem.revision}
+            limits={environment?.limits}
+            allowed={canInvoke}
+            writer={editable}
+            busy={busy || executionBackend === null}
+            start={(options) => void start('verify', options)}
+          />
+        </section>
+      )}
       {stress ? (
         <StressControls
           document={doc}
@@ -407,18 +463,21 @@ export default function Executions({
       <div className="execution-history-heading">
         <Icon name="history" />
         <div>
-          <h3>작업 기록 · 결과 보기</h3>
+          <h3>
+            {verification ? '검증 기록 · 결과 보기' : '작업 기록 · 결과 보기'}
+          </h3>
           <p>기록을 선택하면 해당 작업의 진행 상황과 결과가 표시됩니다.</p>
         </div>
       </div>
       <section
         className="execution-layout execution-history"
-        aria-label="저장된 실행 기록"
+        aria-label={verification ? '저장된 검증 기록' : '저장된 실행 기록'}
       >
         <section className="card execution-list no-padding">
           <div className="card-heading">
             <h3>
-              작업 기록 <span className="count">{visible.length}</span>
+              {verification ? '검증 기록' : '작업 기록'}{' '}
+              <span className="count">{visible.length}</span>
             </h3>
           </div>
           {visible.length ? (
@@ -474,7 +533,9 @@ export default function Executions({
           ) : (
             <Empty
               icon="play"
-              title="실행 기록이 없습니다."
+              title={
+                verification ? '검증 기록이 없습니다.' : '실행 기록이 없습니다.'
+              }
               description="작업을 요청하면 여기에 기록됩니다."
             />
           )}
@@ -1000,15 +1061,13 @@ export default function Executions({
           )}
         </section>
       </section>
-      {!packages && !stress && (
+      {!packages && !stress && !verification && (
         <details className="card execution-launcher">
           <summary>
             <Icon name="plus" />
             <div>
               <strong>새 작업 시작</strong>
-              <span>
-                실행 범위를 지정한 풀이 검증 또는 입력·정답 생성을 요청합니다.
-              </span>
+              <span>선택한 테스트 세트의 입력·정답 생성을 요청합니다.</span>
             </div>
             <Icon name="down" size={16} />
           </summary>
@@ -1017,30 +1076,7 @@ export default function Executions({
               작업 기록과 결과는 위에서 확인합니다. 아래 버튼은 새 실행을
               요청합니다.
             </p>
-            {environmentPanel}
-            {!editable && data.problem.reviewer && (
-              <Notice>
-                검수 실행은 커밋된 리비전 r{data.problem.revision}의 입력·기대
-                출력과 판정 태그를 사용합니다. 결과와 임시 코드는 실행 기록에만
-                보관됩니다.
-              </Notice>
-            )}
             <div className="execution-launcher-grid">
-              <section
-                className="execution-launcher-option"
-                aria-label="새 풀이 검증"
-              >
-                <InvocationControls
-                  problemId={data.problem.id}
-                  document={doc}
-                  revision={data.problem.revision}
-                  limits={environment?.limits}
-                  allowed={canInvoke}
-                  writer={editable}
-                  busy={busy}
-                  start={(options) => void start('verify', options)}
-                />
-              </section>
               <section
                 className="execution-launcher-option"
                 aria-label="새 입력·정답 생성"

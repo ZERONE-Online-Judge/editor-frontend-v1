@@ -43,6 +43,7 @@ loaded.require = (id) => {
     };
   if (
     id === '../../lib/workspace' ||
+    id === '../../lib/executionNavigation' ||
     id === '../../lib/authContext' ||
     id === './InvocationComments' ||
     id === './StressControls' ||

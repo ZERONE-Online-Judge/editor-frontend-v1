@@ -1951,6 +1951,17 @@ svg {
   border-radius: 12px;
   background: #f8f9ff;
 }
+.verification-launcher {
+  display: grid;
+  gap: 20px;
+}
+.verification-environment {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--zoj-border);
+}
+.execution-launcher-grid > :only-child {
+  grid-column: 1 / -1;
+}
 .preparation-summary[open],
 .invocation-preparation-options[open] {
   display: grid;

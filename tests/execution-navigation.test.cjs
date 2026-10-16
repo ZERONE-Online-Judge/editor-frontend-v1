@@ -325,6 +325,101 @@ test('Linux packages explicitly use the Editor replay runtime', async () => {
   assert.equal(requests[0].body.options.execution_backend, 'editor');
 });
 
+test('execution results and full verification have separate history and launch controls', async () => {
+  await mount('invocations');
+  assert.equal(host.querySelector('.invocation-controls'), null);
+  assert.match(
+    host.querySelector('.execution-list').textContent,
+    /이전 입력·정답 결과/,
+  );
+  assert.doesNotMatch(
+    host.querySelector('.execution-list').textContent,
+    /다른 최신 검증 결과/,
+  );
+  const link = host.querySelector(
+    '.problem-sidebar a[href="/problems/p/verification"]',
+  );
+  assert.equal(link.textContent.trim(), '전체 검증');
+  await act(() => link.click());
+  await flush();
+  assert.ok(host.querySelector('.verification-launcher .invocation-controls'));
+  assert.equal(host.querySelector('.execution-launcher'), null);
+  assert.match(
+    host.querySelector('.execution-list').textContent,
+    /다른 최신 검증 결과/,
+  );
+  assert.doesNotMatch(
+    host.querySelector('.execution-list').textContent,
+    /이전 입력·정답 결과/,
+  );
+  assert.deepEqual(requests, []);
+});
+
+test('old verification result links move to the new tab and preserve saved jobs and query options', async () => {
+  await mount('invocations?job=latest&view=team');
+  assert.match(
+    host.querySelector('#location').textContent,
+    /verification\?job=latest&view=team/,
+  );
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /다른 최신 검증 결과/,
+  );
+  assert.ok(host.querySelector('.verification-launcher'));
+  assert.deepEqual(requests, []);
+});
+
+test('a generation result link cannot show a mixed result inside the full verification tab', async () => {
+  await mount('verification?job=old&view=team');
+  assert.match(
+    host.querySelector('#location').textContent,
+    /invocations\?job=old&view=team/,
+  );
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /이전 입력·정답 결과/,
+  );
+  assert.equal(host.querySelector('.verification-launcher'), null);
+  assert.deepEqual(requests, []);
+});
+
+test('the solutions shortcut opens verification setup without sending a judge request', async () => {
+  await mount('solutions');
+  const link = [...host.querySelectorAll('a')].find(
+    (el) => el.textContent.trim() === '전체 검증으로 이동',
+  );
+  assert.ok(link);
+  await act(() => link.click());
+  await flush();
+  assert.ok(host.querySelector('.verification-launcher'));
+  assert.deepEqual(requests, []);
+  await click('전체 풀이 검증 시작');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.kind, 'verify');
+  const result = [...host.querySelectorAll('.notice a')].find(
+    (el) => el.textContent.trim() === '검증 결과로 이동',
+  );
+  assert.equal(
+    result.getAttribute('href'),
+    '/problems/p/verification?job=new-verify',
+  );
+});
+
+test('read-only users can view the verification history but cannot start a new verification', async () => {
+  state.problem.role = 'READ';
+  await mount('verification');
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /다른 최신 검증 결과/,
+  );
+  const start = [
+    ...host.querySelectorAll('.verification-launcher button'),
+  ].find((el) => el.textContent.trim() === '전체 풀이 검증 시작');
+  assert.ok(start.disabled);
+  await act(() => start.click());
+  assert.deepEqual(requests, []);
+});
+
 function liveVerification(status = 'running') {
   const row = job('live-verification', 'verify', '전체 풀이 검증');
   row.status = status;
@@ -403,7 +498,7 @@ function liveVerification(status = 'running') {
 
 test('All four solutions and confirmed partial results appear while the full verification is still running', async () => {
   liveVerification();
-  await mount('invocations?job=live-verification');
+  await mount('verification?job=live-verification');
   assert.equal(host.querySelectorAll('.solution-result').length, 4);
   assert.equal(host.querySelectorAll('.case-chip').length, 3);
   const progress = host.querySelector('[aria-label="전체 풀이 검증"]');
@@ -452,7 +547,7 @@ test('Polling adds later solution outcomes without waiting for the first solutio
     return previous.call(window, callback, delay, ...args);
   };
   try {
-    await mount('invocations?job=live-verification');
+    await mount('verification?job=live-verification');
     assert.equal(typeof poll, 'function');
     const panels = host.querySelectorAll('details.solution-result');
     assert.equal(panels.length, 4);
@@ -522,7 +617,7 @@ test('judge agent summaries show only maximum time and memory without nested dis
       judge_message: null,
     },
   ];
-  await mount('invocations?job=live-verification');
+  await mount('verification?job=live-verification');
   const summary = host.querySelector('.solution-judge-summary');
   assert.equal(summary.querySelectorAll('details').length, 0);
   assert.match(
@@ -549,7 +644,7 @@ test('judge agent summaries show only maximum time and memory without nested dis
 
 test('Cancelled verification preserves the real percentage and labels pending solutions as interrupted', async () => {
   liveVerification('cancelled');
-  await mount('invocations?job=live-verification');
+  await mount('verification?job=live-verification');
   assert.equal(host.querySelector('[aria-label="전체 풀이 검증"]').value, 37);
   assert.match(
     host.querySelector('.verification-progress').textContent,
@@ -588,7 +683,6 @@ for (const [tab, button, kind] of [
   ['validator', '테스트 실행', 'validator-tests'],
   ['checker', '테스트 실행', 'checker-tests'],
   ['statements', 'HTML · PDF 렌더링', 'render'],
-  ['solutions', '전체 풀이 검증', 'verify'],
 ]) {
   test(
     tab +
@@ -624,6 +718,7 @@ for (const [tab, button, kind] of [
   );
 }
 test('changing job URLs preserves query options, hides old actions during loading, and supports browser back', async () => {
+  jobs[0].kind = 'prepare';
   await mount('invocations?job=old&view=team');
   assert.match(
     host.querySelector('.execution-detail').textContent,
@@ -680,12 +775,9 @@ test('viewing a failed record keeps its error visible and never starts a new exe
   assert.deepEqual(requests, []);
 });
 test('explicit verification starts once with the chosen testset and environment', async () => {
-  await mount('invocations?job=old');
-  const launcher = host.querySelector('.execution-launcher');
-  assert.equal(launcher.open, false);
-  await act(() => {
-    launcher.open = true;
-  });
+  await mount('verification');
+  assert.ok(host.querySelector('.verification-launcher'));
+  assert.equal(host.querySelector('.execution-launcher'), null);
   const select = [...host.querySelectorAll('.invocation-controls label')]
     .find((el) => el.textContent.startsWith('검증 테스트 세트'))
     .querySelector('select');
@@ -713,7 +805,7 @@ test('explicit verification starts once with the chosen testset and environment'
   );
 });
 test('verification can explicitly bypass preparation reuse without reusing a judge result', async () => {
-  await mount('invocations?job=old');
+  await mount('verification');
   const options = host.querySelector('.invocation-preparation-options');
   assert.equal(options.open, false);
   const checkbox = options.querySelector('input[type="checkbox"]');
@@ -738,7 +830,7 @@ test('preparation counts are separate from measured judging progress and collaps
     },
     executed: { input: 0, validator: 0, answer: 0, checker: 0, sample: 0 },
   };
-  await mount('invocations?job=live-verification');
+  await mount('verification?job=live-verification');
   const summary = host.querySelector('.preparation-summary');
   assert.equal(summary.open, false);
   assert.match(
@@ -755,7 +847,7 @@ test('selected verification submits exact solution names and a normalized test r
     name: 'wrong.py',
     tag: 'WA',
   };
-  await mount('invocations?job=old');
+  await mount('verification');
   const field = (label) =>
     [...host.querySelectorAll('.invocation-controls label')]
       .find((el) => el.textContent.startsWith(label))
@@ -818,14 +910,14 @@ test('read-only users can view records while new execution buttons stay disabled
     /이전 입력·정답 결과/,
   );
   const buttons = [...host.querySelectorAll('.execution-launcher button')];
-  assert.equal(buttons.length, 2);
+  assert.equal(buttons.length, 1);
   assert.ok(buttons.every((el) => el.disabled));
   assert.deepEqual(requests, []);
 });
 test('a read-only reviewer can verify the committed revision without a working-copy save', async () => {
   state.problem.role = 'READ';
   state.problem.reviewer = true;
-  await mount('invocations?job=old');
+  await mount('verification');
   await click('전체 풀이 검증 시작');
   assert.equal(requests.length, 1);
   assert.equal(requests[0].body.options.snapshot, 'committed');
@@ -833,7 +925,7 @@ test('a read-only reviewer can verify the committed revision without a working-c
   const generation = [
     ...host.querySelectorAll('.execution-launcher button'),
   ].find((el) => el.textContent.includes('입력·정답 생성 시작'));
-  assert.equal(generation.disabled, true);
+  assert.equal(generation, undefined);
 });
 test('stress runs selected solutions against shared inputs with time and collection options', async () => {
   const main = state.document.solutions['main.py'];
@@ -1072,7 +1164,7 @@ test('polling new jobs does not replace the record currently being viewed', asyn
     return 0;
   };
   try {
-    await mount('invocations');
+    await mount('verification');
     assert.match(
       host.querySelector('.execution-detail').textContent,
       /다른 최신 검증 결과/,

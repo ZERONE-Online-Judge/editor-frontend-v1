@@ -37,7 +37,7 @@ import {
   SectionHeading,
 } from '../../components/ui';
 export default function Files({ solutions = false }: { solutions?: boolean }) {
-  const { data, document: doc, mutate, editable, notify, run } = useWorkspace();
+  const { data, document: doc, mutate, editable, notify } = useWorkspace();
   const [editing, setEditing] = useState<SourceFile | null | false>(false);
   const [editingSolution, setEditingSolution] = useState(false);
   const [removing, setRemoving] = useState<SourceFile | null>(null);
@@ -168,16 +168,13 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
               </button>
             )}
             {solutions && (
-              <button
+              <Link
                 className="button"
-                disabled={!editable && !data.problem.reviewer}
-                onClick={() =>
-                  void run('verify').catch((e) => notify(e.message, true))
-                }
+                to={`/problems/${data.problem.id}/verification`}
               >
                 <Icon name="play" />
-                전체 풀이 검증
-              </button>
+                전체 검증으로 이동
+              </Link>
             )}
             <label className={`button ${!editable || busy ? 'disabled' : ''}`}>
               <Icon name="upload" />
@@ -461,8 +458,8 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
             WA·TL·ML 태그는 전체 테스트 중 해당 판정이 실제로 나오는지
             확인합니다. 정답을 통과한 오답 풀이는 테스트 보강이 필요합니다.
           </p>
-          <Link to={`/problems/${data.problem.id}/invocations`}>
-            실행 결과 보기
+          <Link to={`/problems/${data.problem.id}/verification`}>
+            검증 결과 보기
           </Link>
         </div>
       )}

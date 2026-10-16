@@ -23,6 +23,7 @@ import PreparationNotice from '../components/PreparationNotice';
 import RevisionNotice from '../components/RevisionNotice';
 import { useRevisionUpdates } from '../lib/useRevisionUpdates';
 import { preparationCautions } from '../lib/readiness';
+import { executionResultPath } from '../lib/executionNavigation';
 const CommitChanges = lazy(() => import('../components/CommitChanges'));
 import Overview from './workspace/Overview';
 import Statements from './workspace/Statements';
@@ -51,6 +52,7 @@ const sections = [
     items: [
       ['tests', '테스트 · 생성 스크립트', 'tests'],
       ['solutions', '풀이', 'code'],
+      ['verification', '전체 검증', 'check'],
       ['invocations', '실행 결과', 'play'],
       ['stress', '스트레스 테스트', 'spark'],
     ],
@@ -269,8 +271,8 @@ export default function ProblemWorkspace() {
           `${jobLabels[kind]} 작업을 요청했습니다. 요청한 작업의 진행 상황과 결과를 확인하세요.`,
           false,
           {
-            label: '실행 결과로 이동',
-            to: `/problems/${problemId}/invocations?job=${encodeURIComponent(result.id)}`,
+            label: kind === 'verify' ? '검증 결과로 이동' : '실행 결과로 이동',
+            to: executionResultPath(problemId, kind, result.id),
           },
         );
       return result;
@@ -392,6 +394,7 @@ export default function ProblemWorkspace() {
     interactor: <ComponentTests kind="interactor" />,
     tests: <Tests />,
     invocations: <Executions key="invocations" />,
+    verification: <Executions key="verification" verification />,
     stress: <Executions key="stress" stress />,
     packages: <Executions key="packages" packages />,
     issues: <Collaboration />,
