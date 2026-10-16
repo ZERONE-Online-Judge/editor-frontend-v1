@@ -56,6 +56,8 @@ loaded.require = (id) => {
     id === './VerificationProgress' ||
     id === './SolutionResultPanel' ||
     id === './SolutionJudgeSummary' ||
+    id === './CaseResultGrid' ||
+    id === './StressTestResults' ||
     id === './ZojPublishing' ||
     id === 'react-router-dom'
   )

@@ -2135,6 +2135,24 @@ svg {
 .case-grid:empty {
   display: none;
 }
+.stress-resource-summary {
+  display: grid;
+  gap: 9px;
+}
+.stress-resource-summary > strong {
+  font-size: 12px;
+}
+.stress-case-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 14px 14px;
+}
+.stress-cases-empty {
+  padding: 0 14px 14px;
+}
 .solution-testset-cases h4 {
   padding: 10px 14px 0;
   overflow-wrap: anywhere;

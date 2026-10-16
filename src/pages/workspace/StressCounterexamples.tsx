@@ -197,7 +197,7 @@ export default function StressCounterexamples({
         retryUncovered={retryUncovered}
         retryBusy={retryBusy}
       />
-      {job.result.candidate_summaries?.length ? (
+      {!job.result.stress_results && job.result.candidate_summaries?.length ? (
         <div className="table-scroll">
           <table className="data-table">
             <thead>

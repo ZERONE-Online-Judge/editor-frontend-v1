@@ -173,6 +173,11 @@ export type JobKind =
   | 'package'
   | 'render';
 export type CaseResult = {
+  iteration?: number;
+  seed?: number;
+  command?: string;
+  pattern_name?: string;
+  range_values?: { expression: string; value: number }[];
   output_truncated?: boolean;
   output_size?: number | null;
   output_total_bytes?: number | null;
@@ -188,6 +193,14 @@ export type CaseResult = {
   input_sha: string;
   answer_sha: string;
   actual_sha: string | null;
+};
+export type StressSolutionResult = {
+  name: string;
+  tag: string;
+  role: 'reference' | 'candidate';
+  cases: CaseResult[];
+  max_cpu_ms: number | null;
+  max_memory_kb: number | null;
 };
 export type PreparedTest = Test & {
   statement_io_validation?: 'VALID' | 'NOT_REQUESTED';
@@ -331,6 +344,14 @@ export type Job = {
   started_at: number | null;
   finished_at: number | null;
   result: {
+    stress_results_version?: number;
+    stress_results?: StressSolutionResult[];
+    stress_result_summary?: {
+      executions: number;
+      testcase_count: number;
+      max_cpu_ms: number | null;
+      max_memory_kb: number | null;
+    };
     preparation_cache?: {
       enabled: boolean;
       reused: Record<

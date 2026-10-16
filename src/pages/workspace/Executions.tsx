@@ -32,6 +32,8 @@ import TestVerdictMatrix from './TestVerdictMatrix';
 import VerificationProgress from './VerificationProgress';
 import SolutionResultPanel from './SolutionResultPanel';
 import SolutionJudgeSummary from './SolutionJudgeSummary';
+import CaseResultGrid from './CaseResultGrid';
+import StressTestResults from './StressTestResults';
 import { useAuth } from '../../lib/authContext';
 import type { ExecutionEnvironment, InvocationScope } from '../../lib/types';
 import {
@@ -113,7 +115,9 @@ export default function Executions({
       ? 'korean'
       : Object.keys(doc.statements)[0] || 'korean',
   );
-  const [caseResult, setCaseResult] = useState<CaseResult | null>(null);
+  const [caseResult, setCaseResult] = useState<
+    (CaseResult & { solution_name?: string }) | null
+  >(null);
   const [executionBackend, setExecutionBackend] = useState<
     'editor' | 'zoj' | null
   >(null);
@@ -785,6 +789,14 @@ export default function Executions({
                     />
                   ),
                 )}
+              {job.kind === 'stress' && (
+                <StressTestResults
+                  job={job}
+                  onSelect={(row, name) =>
+                    setCaseResult({ ...row, solution_name: name })
+                  }
+                />
+              )}
               <TestVerdictMatrix job={job} />
               {job.result.solutions?.map((solution) => (
                 <SolutionResultPanel
@@ -873,30 +885,18 @@ export default function Executions({
                               .size > 1) && (
                             <h4 className="muted small">{setName}</h4>
                           )}
-                          <div className="case-grid">
-                            {solution.cases
-                              .filter((row) => row.testset === setName)
-                              .map((result) => (
-                                <button
-                                  key={`${result.testset}-${result.index}`}
-                                  className={`case-chip ${result.verdict === 'AC' ? 'accepted' : result.verdict === 'JUDGE_ERROR' ? 'error' : 'rejected'}`}
-                                  title={`${result.testset} · ${result.index ? `#${result.index}` : '컴파일·실행 환경'} · CPU ${result.cpu_ms == null ? '개별 값 미제공' : `${result.cpu_ms}ms`} · 메모리 ${result.memory_kb == null ? '개별 값 미제공' : `${result.memory_kb}KiB`}`}
-                                  onClick={() => setCaseResult(result)}
-                                >
-                                  <span>
-                                    {result.index ? `#${result.index}` : '환경'}
-                                  </span>
-                                  <strong>{result.verdict}</strong>
-                                  <small>
-                                    {result.cpu_ms === null
-                                      ? solution.judge_runs?.length
-                                        ? '개별 시간 미제공'
-                                        : '계측 불가'
-                                      : `${result.cpu_ms}ms`}
-                                  </small>
-                                </button>
-                              ))}
-                          </div>
+                          <CaseResultGrid
+                            cases={solution.cases.filter(
+                              (row) => row.testset === setName,
+                            )}
+                            solutionName={solution.name}
+                            onSelect={(row) =>
+                              setCaseResult({
+                                ...row,
+                                solution_name: solution.name,
+                              })
+                            }
+                          />
                         </section>
                       ),
                     )}
@@ -1088,7 +1088,7 @@ export default function Executions({
       {caseResult && (
         <Modal
           wide
-          title={`${caseResult.testset} · ${caseResult.index ? `테스트 #${caseResult.index}` : '컴파일·실행 환경'}`}
+          title={`${caseResult.solution_name ? `${caseResult.solution_name} · ` : ''}${caseResult.testset} · ${caseResult.index ? `테스트 #${caseResult.index}` : '컴파일·실행 환경'}`}
           onClose={() => setCaseResult(null)}
           footer={
             <button className="button" onClick={() => setCaseResult(null)}>
@@ -1119,8 +1119,25 @@ export default function Executions({
                 : bytes(caseResult.memory_kb * 1024)}
             </span>
           </div>
+          {caseResult.seed != null && (
+            <p className="muted small">
+              반복 {caseResult.iteration} · 시드 {caseResult.seed}
+              {caseResult.pattern_name ? ` · ${caseResult.pattern_name}` : ''}
+            </p>
+          )}
+          {caseResult.command && (
+            <pre className="stress-command">
+              <code>{caseResult.command}</code>
+            </pre>
+          )}
           <CodeEvidence
+            key={`${caseResult.solution_name}/${caseResult.input_sha}/${caseResult.actual_sha}`}
             problemId={data.problem.id}
+            answerError={
+              caseResult.iteration && !caseResult.answer_sha
+                ? '기준 풀이가 완료되지 않아 생성된 기대 출력이 없습니다.'
+                : undefined
+            }
             input={caseResult.input_sha}
             answer={caseResult.answer_sha}
             actual={caseResult.actual_sha}
@@ -1151,6 +1168,7 @@ export function CodeEvidence({
   outputSize,
   outputTotalBytes,
   outputError,
+  answerError,
 }: {
   problemId: string;
   input: string;
@@ -1160,6 +1178,7 @@ export function CodeEvidence({
   outputSize?: number | null;
   outputTotalBytes?: number | null;
   outputError?: string | null;
+  answerError?: string;
 }) {
   const [values, setValues] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -1173,7 +1192,9 @@ export function CodeEvidence({
               index === 2
                 ? outputError ||
                     '이 실행 기록에는 저장된 실제 출력이 없습니다. 컴파일·실행 환경 오류 또는 이전 채점 기록인지 확인하세요.'
-                : '개별 테스트가 지정되지 않은 판정입니다.',
+                : index === 1 && answerError
+                  ? answerError
+                  : '개별 테스트가 지정되지 않은 판정입니다.',
             ),
       ),
     )
@@ -1186,7 +1207,7 @@ export function CodeEvidence({
     return () => {
       active = false;
     };
-  }, [problemId, input, answer, actual, outputError]);
+  }, [problemId, input, answer, actual, outputError, answerError]);
   if (error) return <Notice tone="error">{error}</Notice>;
   return (
     <div className="evidence-grid">

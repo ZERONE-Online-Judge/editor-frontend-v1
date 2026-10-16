@@ -1818,3 +1818,193 @@ test('A temporary network failure retries and reconnect events do not create dup
     window.setTimeout = originalTimeout;
   }
 });
+
+function stressHistory(count = 3, status = 'completed') {
+  const row = job('stress-history', 'stress', '스트레스 실행 완료');
+  row.status = status;
+  const cases = Array.from({ length: count }, (_, offset) => ({
+    testset: 'tests',
+    index: offset + 1,
+    iteration: offset + 1,
+    seed: 42 + offset * 3,
+    command: `gen --size 100 ${42 + offset * 3}`,
+    pattern_name: 'small',
+    verdict: offset === 1 ? 'WA' : 'AC',
+    cpu_ms: offset + 5,
+    wall_ms: offset + 50,
+    memory_kb: 1024,
+    comment: 'checker message',
+    input_sha: 'input',
+    answer_sha: 'answer',
+    actual_sha: 'actual',
+  }));
+  row.result.stress_results = [
+    {
+      name: 'main.py',
+      tag: 'MA',
+      role: 'reference',
+      cases: cases.map((c) => ({ ...c, verdict: 'AC' })),
+      max_cpu_ms: 100,
+      max_memory_kb: 512,
+    },
+    {
+      name: 'wrong.py',
+      tag: 'WA',
+      role: 'candidate',
+      cases,
+      max_cpu_ms: 7,
+      max_memory_kb: 1024,
+    },
+    {
+      name: 'slow.cpp',
+      tag: 'TL',
+      role: 'candidate',
+      cases: [{ ...cases[0], verdict: 'TLE', cpu_ms: 2000, memory_kb: 2048 }],
+      max_cpu_ms: 2000,
+      max_memory_kb: 2048,
+    },
+  ];
+  row.result.stress_result_summary = {
+    testcase_count: count,
+    executions: count * 2 + 1,
+    max_cpu_ms: 2000,
+    max_memory_kb: 2048,
+  };
+  jobs = [row];
+  return row;
+}
+
+test('Stress shows each solution and opens the executed I/O, seed and individual resources', async () => {
+  stressHistory();
+  await mount('stress?job=stress-history');
+  const panels = host.querySelectorAll('.stress-test-results .solution-result');
+  assert.equal(panels.length, 3);
+  assert.equal(
+    host.querySelectorAll('.stress-test-results .case-chip').length,
+    7,
+  );
+  const summary = host.querySelector('[aria-label="스트레스 실행 요약"]');
+  assert.match(summary.textContent, /생성 테스트 3개/);
+  assert.match(summary.textContent, /최대 실행시간2000ms/);
+  assert.match(summary.textContent, /최대 메모리2.0 MiB/);
+  assert.match(panels[1].textContent, /최대 실행시간7ms/);
+  assert.match(panels[2].textContent, /TLE/);
+  await act(() =>
+    host
+      .querySelector('[aria-label="wrong.py · tests · 테스트 #2 · WA"]')
+      .click(),
+  );
+  await flush();
+  const modal = host.querySelector('dialog');
+  assert.match(modal.textContent, /wrong.py · tests · 테스트 #2/);
+  assert.match(modal.textContent, /CPU 6ms/);
+  assert.match(modal.textContent, /경과 시간 51ms/);
+  assert.match(modal.textContent, /메모리 1.0 MiB/);
+  assert.match(modal.textContent, /시드 45/);
+  assert.equal(
+    modal.querySelector('pre code').textContent,
+    'gen --size 100 45',
+  );
+  assert.deepEqual(
+    [...modal.querySelectorAll('.evidence-grid textarea')].map(
+      (el) => el.value,
+    ),
+    ['1 2\n', '1 2\n', 'Wrong\n'],
+  );
+  for (const [name, sha] of [
+    ['input.in', 'input'],
+    ['expected.out', 'answer'],
+    ['actual.out', 'actual'],
+  ]) {
+    assert.equal(
+      modal.querySelector(`a[download="${name}"]`).getAttribute('href'),
+      `/api/problems/p/blobs/${sha}`,
+    );
+  }
+  assert.deepEqual(requests, []);
+});
+
+test('Stress results paginate independently and retain collapsed panels across live updates', async () => {
+  const row = stressHistory(105, 'running');
+  let poll;
+  const previous = window.setTimeout;
+  window.setTimeout = (callback, delay, ...args) => {
+    if (delay === 1800) {
+      poll = callback;
+      return 999999;
+    }
+    return previous.call(window, callback, delay, ...args);
+  };
+  try {
+    await mount('stress?job=stress-history');
+    const panels = host.querySelectorAll(
+      '.stress-test-results .solution-result',
+    );
+    assert.equal(panels[0].querySelectorAll('.case-chip').length, 100);
+    await act(() =>
+      [...panels[1].querySelectorAll('button')]
+        .find((el) => el.textContent === '다음')
+        .click(),
+    );
+    assert.equal(panels[1].querySelectorAll('.case-chip').length, 5);
+    assert.match(panels[1].querySelector('.case-chip').textContent, /#101/);
+    assert.equal(panels[0].querySelectorAll('.case-chip').length, 100);
+    await act(() => panels[0].querySelector('summary').click());
+    assert.equal(panels[0].open, false);
+    row.result.stress_results[1].cases.push({
+      ...row.result.stress_results[1].cases[0],
+      index: 106,
+      seed: 999,
+      verdict: 'MLE',
+    });
+    await act(async () => poll());
+    await flush();
+    const updated = host.querySelectorAll(
+      '.stress-test-results .solution-result',
+    );
+    assert.equal(updated[0].open, false);
+    assert.equal(updated[1].querySelectorAll('.case-chip').length, 6);
+    assert.match(updated[1].textContent, /MLE/);
+    assert.equal(
+      host.querySelectorAll('.stress-test-results .case-chip').length,
+      107,
+    );
+  } finally {
+    window.setTimeout = previous;
+  }
+});
+
+test('Stress distinguishes an unknown measurement from a measured zero and retains the known execution subset', async () => {
+  const row = stressHistory(1, 'cancelled');
+  row.result.stress_results[0].max_cpu_ms = 0;
+  row.result.stress_results[1] = {
+    ...row.result.stress_results[1],
+    cases: [],
+    max_cpu_ms: null,
+    max_memory_kb: null,
+  };
+  await mount('stress?job=stress-history');
+  const panels = host.querySelectorAll('.stress-test-results .solution-result');
+  assert.match(panels[0].textContent, /최대 실행시간0ms/);
+  assert.match(panels[1].textContent, /최대 실행시간미제공/);
+  assert.match(
+    panels[1].textContent,
+    /이 풀이의 저장된 테스트 실행 결과가 없습니다/,
+  );
+  assert.equal(panels[1].querySelectorAll('.case-chip').length, 0);
+  assert.equal(panels[2].querySelectorAll('.case-chip').length, 1);
+});
+
+test('Legacy stress records explain unavailable full history without fabricating maxima or cases', async () => {
+  jobs = [job('legacy-stress', 'stress', '이전 반례 기록')];
+  await mount('stress?job=legacy-stress');
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /이전 스트레스 기록은 반례만 보관/,
+  );
+  assert.equal(host.querySelector('.stress-resource-summary'), null);
+  assert.equal(
+    host.querySelectorAll('.stress-test-results .case-chip').length,
+    0,
+  );
+});
