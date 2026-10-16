@@ -6,7 +6,6 @@ import {
   jobLabels,
   post,
   statusLabels,
-  tags,
   time,
   bytes,
 } from '../../lib/api';
@@ -25,10 +24,9 @@ import StressRunConditions, {
 import InvocationControls from './InvocationControls';
 import ExecutionLimitsInfo from './ExecutionLimitsInfo';
 import TestVerdictMatrix from './TestVerdictMatrix';
-import VerificationProgress, {
-  SolutionRunProgress,
-  SolutionRunStatus,
-} from './VerificationProgress';
+import VerificationProgress from './VerificationProgress';
+import SolutionResultPanel from './SolutionResultPanel';
+import SolutionJudgeSummary from './SolutionJudgeSummary';
 import { useAuth } from '../../lib/authContext';
 import type { ExecutionEnvironment, InvocationScope } from '../../lib/types';
 import {
@@ -40,17 +38,6 @@ import {
   Notice,
   SectionHeading,
 } from '../../components/ui';
-const judgeLabels: Record<string, string> = {
-  accepted: '정답',
-  wrong_answer: '오답',
-  compile_error: '컴파일 오류',
-  runtime_error: '실행 오류',
-  time_limit_exceeded: '시간 초과',
-  memory_limit_exceeded: '메모리 초과',
-  output_limit_exceeded: '출력 초과',
-  system_error: '시스템 오류',
-  cancelled: '취소',
-};
 export default function Executions({
   stress = false,
   packages = false,
@@ -734,21 +721,11 @@ export default function Executions({
                 )}
               <TestVerdictMatrix job={job} />
               {job.result.solutions?.map((solution) => (
-                <div className="solution-result" key={solution.name}>
-                  <div className="solution-result-heading">
-                    <strong>{solution.name}</strong>
-                    <Badge tone="accent">
-                      {solution.tag} · {tags[solution.tag as keyof typeof tags]}
-                    </Badge>
-                    <SolutionRunStatus
-                      solution={solution}
-                      jobStatus={job.status}
-                    />
-                  </div>
-                  <SolutionRunProgress
-                    solution={solution}
-                    jobStatus={job.status}
-                  />
+                <SolutionResultPanel
+                  key={`${job.id}/${solution.name}`}
+                  solution={solution}
+                  jobStatus={job.status}
+                >
                   {solution.expectations?.length ? (
                     <div className="table-scroll">
                       <table className="data-table">
@@ -799,62 +776,7 @@ export default function Executions({
                       않았습니다.
                     </p>
                   )}
-                  {solution.judge_runs?.length ? (
-                    <div className="section-stack">
-                      <p className="muted">
-                        실제 ZOJ 채점 기록입니다. 아래 시간·메모리는 각 요청에서
-                        채점기가 반환한 최댓값이며, 개별 테스트의 값으로 대신
-                        표시하지 않습니다.
-                      </p>
-                      {solution.judge_runs.map((record) => (
-                        <details className="card" key={record.id}>
-                          <summary>
-                            {record.testset} · {record.testcase_count}개 테스트
-                            · {record.node_name ?? '채점기 정보 없음'} ·{' '}
-                            {record.agent_version ?? '버전 정보 없음'}
-                          </summary>
-                          <div className="inline-tags">
-                            <Badge>
-                              {judgeLabels[record.status] ?? record.status}
-                            </Badge>
-                            <span>
-                              최대 실행 시간{' '}
-                              {record.runtime_ms == null
-                                ? '전달되지 않음'
-                                : `${record.runtime_ms}ms`}
-                            </span>
-                            <span>
-                              최대 메모리{' '}
-                              {record.memory_kb == null
-                                ? '전달되지 않음'
-                                : bytes(record.memory_kb * 1024)}
-                            </span>
-                            {record.failed_testcase_order != null && (
-                              <span>실패 #{record.failed_testcase_order}</span>
-                            )}
-                          </div>
-                          {(record.compile_message || record.judge_message) && (
-                            <CodeEditor
-                              value={
-                                record.compile_message ||
-                                record.judge_message ||
-                                ''
-                              }
-                              readOnly
-                              label="채점기 원본 기록"
-                              rows={5}
-                            />
-                          )}
-                        </details>
-                      ))}
-                      {solution.complete === false && (
-                        <Notice tone="info">
-                          이 기록은 전체 테스트의 판정이 확인되지 않았습니다.
-                          컴파일·실행 오류와 실제 실행 범위를 확인하세요.
-                        </Notice>
-                      )}
-                    </div>
-                  ) : null}
+                  <SolutionJudgeSummary solution={solution} />
                   {solution.groups?.length ? (
                     <div className="inline-tags">
                       {solution.groups.map((g) => (
@@ -897,7 +819,7 @@ export default function Executions({
                   {solution.skipped && (
                     <p className="muted">NR 태그로 실행하지 않았습니다.</p>
                   )}
-                </div>
+                </SolutionResultPanel>
               ))}
               {job.result.unit_tests?.length ? (
                 <table className="data-table">

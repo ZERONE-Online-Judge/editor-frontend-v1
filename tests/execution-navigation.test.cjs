@@ -454,6 +454,11 @@ test('Polling adds later solution outcomes without waiting for the first solutio
   try {
     await mount('invocations?job=live-verification');
     assert.equal(typeof poll, 'function');
+    const panels = host.querySelectorAll('details.solution-result');
+    assert.equal(panels.length, 4);
+    await act(() => panels[0].querySelector('summary').click());
+    assert.equal(panels[0].open, false);
+    assert.equal(panels[1].open, true);
     row.result.solutions[2].cases.push({
       ...row.result.solutions[1].cases[0],
       verdict: 'TLE',
@@ -472,9 +477,74 @@ test('Polling adds later solution outcomes without waiting for the first solutio
       /TLE/,
     );
     assert.equal(host.querySelectorAll('.solution-result').length, 4);
+    assert.equal(
+      host.querySelectorAll('details.solution-result')[0].open,
+      false,
+    );
+    assert.equal(
+      host.querySelectorAll('details.solution-result')[1].open,
+      true,
+    );
+    await act(() => panels[0].querySelector('summary').click());
+    assert.equal(panels[0].open, true);
   } finally {
     window.setTimeout = previous;
   }
+});
+
+test('judge agent summaries show only maximum time and memory without nested disclosure cards', async () => {
+  const row = liveVerification('completed');
+  row.result.solutions[0].judge_runs = [
+    {
+      id: 'judge-one',
+      testset: 'tests',
+      status: 'wrong_answer',
+      node_name: 'zoj-judge-agent-04',
+      agent_version: '0.2.23',
+      testcase_count: 120,
+      runtime_ms: 66,
+      memory_kb: 5440,
+      failed_testcase_order: 13,
+      compile_message: null,
+      judge_message: 'Raw verdict text',
+    },
+    {
+      id: 'judge-two',
+      testset: 'extra',
+      status: 'system_error',
+      node_name: null,
+      agent_version: null,
+      testcase_count: 3,
+      runtime_ms: null,
+      memory_kb: null,
+      failed_testcase_order: null,
+      compile_message: 'Compiler diagnostic',
+      judge_message: null,
+    },
+  ];
+  await mount('invocations?job=live-verification');
+  const summary = host.querySelector('.solution-judge-summary');
+  assert.equal(summary.querySelectorAll('details').length, 0);
+  assert.match(
+    summary.querySelector('.solution-judge-agent').textContent,
+    /zoj-judge-agent-04.*v0.2.23.*120개 테스트/,
+  );
+  const records = summary.querySelectorAll('.solution-judge-run');
+  assert.deepEqual(
+    [...records[0].querySelectorAll('dt')].map((el) => el.textContent),
+    ['최대 실행 시간', '최대 메모리'],
+  );
+  assert.match(records[0].textContent, /66ms/);
+  assert.equal(records[0].querySelector('.badge'), null);
+  assert.doesNotMatch(summary.textContent, /실패 #13|Raw verdict text/);
+  assert.deepEqual(
+    [...records[1].querySelectorAll('dd')].map((el) => el.textContent),
+    ['미제공', '미제공'],
+  );
+  assert.match(
+    records[1].querySelector('.solution-judge-message').textContent,
+    /Compiler diagnostic/,
+  );
 });
 
 test('Cancelled verification preserves the real percentage and labels pending solutions as interrupted', async () => {

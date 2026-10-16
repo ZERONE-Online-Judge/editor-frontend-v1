@@ -2058,17 +2058,102 @@ svg {
 }
 .solution-result-heading {
   padding: 12px 14px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   gap: 7px;
   align-items: center;
-  flex-wrap: wrap;
+  list-style: none;
   background: #fafbff;
   border-bottom: 1px solid var(--zoj-border);
 }
+.solution-result-heading::-webkit-details-marker {
+  display: none;
+}
+.solution-result-heading:focus-visible {
+  outline-offset: -3px;
+}
+.solution-result:not([open]) > .solution-result-heading {
+  border-bottom: 0;
+}
 .solution-result-heading strong {
+  min-width: 0;
   font-size: 12px;
-  margin-right: auto;
   font-family: monospace;
+  overflow-wrap: anywhere;
+}
+.solution-result-toggle {
+  display: flex;
+  color: var(--zoj-muted);
+  transform: rotate(-90deg);
+}
+.solution-result[open] > .solution-result-heading .solution-result-toggle {
+  transform: none;
+}
+.solution-result-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.solution-result-body {
+  min-width: 0;
+}
+.solution-judge-summary {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+}
+.solution-judge-note {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--zoj-muted);
+}
+.solution-judge-run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f7f8fd;
+}
+.solution-judge-agent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 8px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--zoj-muted);
+  overflow-wrap: anywhere;
+}
+.solution-judge-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 11px;
+}
+.solution-judge-metrics > div {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.solution-judge-metrics dt {
+  color: var(--zoj-muted);
+}
+.solution-judge-metrics dd {
+  margin: 0;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.solution-judge-message {
+  grid-column: 1 / -1;
+  margin: 0;
+  max-height: 140px;
+  overflow: auto;
+  padding: 8px;
+  font-size: 11px;
+  line-height: 1.6;
 }
 .case-grid {
   padding: 14px;
@@ -2888,11 +2973,16 @@ svg {
   }
   .solution-result-heading {
     padding: 12px;
+    grid-template-columns: 16px minmax(0, 1fr);
   }
   .solution-result-heading strong {
-    width: 100%;
     font-size: 11px;
-    margin-bottom: 2px;
+  }
+  .solution-result-badges {
+    grid-column: 2;
+  }
+  .solution-judge-run {
+    grid-template-columns: minmax(0, 1fr);
   }
   .result-action {
     flex-direction: column;
