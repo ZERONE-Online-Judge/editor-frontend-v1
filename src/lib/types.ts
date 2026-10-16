@@ -546,6 +546,8 @@ export type Job = {
     iterations?: number;
     package?: {
       format?: 'editor' | 'zoj';
+      testset?: string;
+      testsets?: string[];
       filename: string;
       size: number;
       verified: boolean;

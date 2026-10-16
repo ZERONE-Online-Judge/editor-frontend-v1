@@ -51,6 +51,7 @@ loaded.require = (id) => {
     id === './StressRunConditions' ||
     id === '../../lib/stressOptions' ||
     id === './InvocationControls' ||
+    id === './TestsetSelector' ||
     id === './ExecutionLimitsInfo' ||
     id === './TestVerdictMatrix' ||
     id === './VerificationProgress' ||

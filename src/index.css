@@ -3993,3 +3993,56 @@ svg {
     grid-row: 1;
   }
 }
+
+.testset-selector,
+.invocation-controls .testset-selector {
+  min-width: 0;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 10px;
+}
+.testset-selector legend {
+  padding: 0 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.testset-selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-bottom: 10px;
+}
+.testset-selection-actions > small {
+  margin-right: auto;
+}
+.testset-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  gap: 8px;
+  max-height: 240px;
+  overflow: auto;
+}
+.testset-choices > .checkbox {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 8px;
+}
+.testset-choices > .checkbox:has(input:checked) {
+  background: #f0f1ff;
+  border-color: #9990ff;
+}
+.testset-choices span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.testset-choices strong,
+.testset-choices small {
+  display: block;
+}
+.testset-choices small {
+  font-size: 11px;
+  font-weight: 400;
+}

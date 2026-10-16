@@ -315,6 +315,18 @@ async function click(label) {
   await flush();
 }
 
+async function selectSets(label, names) {
+  const fieldset = [...host.querySelectorAll('.testset-selector')].find(
+    (el) => el.querySelector('legend').textContent === label,
+  );
+  assert.ok(fieldset, label);
+  for (const input of fieldset.querySelectorAll('input[type="checkbox"]')) {
+    const name = input.getAttribute('aria-label').slice(label.length + 2);
+    if (input.checked !== names.includes(name)) await act(() => input.click());
+  }
+  await flush();
+}
+
 test('Linux packages explicitly use the Editor replay runtime', async () => {
   await mount('packages');
   await setControl('패키지 형식', 'linux');
@@ -797,13 +809,7 @@ test('explicit verification starts once with the chosen testset and environment'
   await mount('verification');
   assert.ok(host.querySelector('.verification-launcher'));
   assert.equal(host.querySelector('.execution-launcher'), null);
-  const select = [...host.querySelectorAll('.invocation-controls label')]
-    .find((el) => el.textContent.startsWith('검증 테스트 세트'))
-    .querySelector('select');
-  await act(() => {
-    select.value = 'extra';
-    select.dispatchEvent(new window.Event('change', { bubbles: true }));
-  });
+  await selectSets('검증 테스트 세트', ['extra']);
   await click('전체 풀이 검증 시작');
   assert.equal(requests.length, 1);
   assert.deepEqual(requests[0].body.options, {
@@ -813,6 +819,7 @@ test('explicit verification starts once with the chosen testset and environment'
     test_indices: [],
     solutions: [],
     testset: 'extra',
+    testsets: ['extra'],
     verify: true,
     force_prepare: false,
     execution_backend: 'zoj',
@@ -842,10 +849,13 @@ test('all testsets is opt-in and clears single-set ranges before verification', 
     [...host.querySelectorAll('.invocation-controls label')]
       .find((el) => el.textContent.startsWith(label))
       .querySelector('select,input');
-  assert.equal(field('검증 테스트 세트').value, 'tests');
+  assert.equal(
+    host.querySelector('input[aria-label="검증 테스트 세트: tests"]').checked,
+    true,
+  );
   await setControl('테스트 범위', 'range');
   await setControl('테스트 번호·범위', '1-3');
-  await setControl('검증 테스트 세트', '');
+  await selectSets('검증 테스트 세트', ['tests', 'extra']);
   assert.equal(field('테스트 범위').disabled, true);
   assert.equal(field('테스트 범위').value, 'all');
   assert.match(
@@ -855,7 +865,7 @@ test('all testsets is opt-in and clears single-set ranges before verification', 
   assert.deepEqual(requests, []);
   await click('전체 풀이 검증 시작');
   const options = requests[0].body.options;
-  assert.equal(options.all_testsets, true);
+  assert.deepEqual(options.testsets, ['tests', 'extra']);
   assert.equal(options.testset, 'tests');
   assert.deepEqual(options.test_indices, []);
   assert.equal(requests[0].body.reuse, false);
@@ -863,8 +873,8 @@ test('all testsets is opt-in and clears single-set ranges before verification', 
 
 test('switching back to one set restores individual test selection', async () => {
   await mount('verification');
-  await setControl('검증 테스트 세트', '');
-  await setControl('검증 테스트 세트', 'extra');
+  await selectSets('검증 테스트 세트', ['tests', 'extra']);
+  await selectSets('검증 테스트 세트', ['extra']);
   const range = [...host.querySelectorAll('.invocation-controls label')]
     .find((el) => el.textContent.startsWith('테스트 범위'))
     .querySelector('select');
@@ -878,7 +888,7 @@ test('reviewer temporary code uses all sets on the committed revision', async ()
   state.problem.role = 'READ';
   state.problem.reviewer = true;
   await mount('verification');
-  await setControl('검증 테스트 세트', '');
+  await selectSets('검증 테스트 세트', ['tests', 'extra']);
   await act(() => {
     const code = host.querySelector('textarea[aria-label="임시 검수 코드"]');
     Object.getOwnPropertyDescriptor(
@@ -890,7 +900,7 @@ test('reviewer temporary code uses all sets on the committed revision', async ()
   await click('임시 코드 검증 시작');
   assert.equal(requests.length, 1);
   assert.equal(requests[0].body.options.snapshot, 'committed');
-  assert.equal(requests[0].body.options.all_testsets, true);
+  assert.deepEqual(requests[0].body.options.testsets, ['tests', 'extra']);
   assert.deepEqual(requests[0].body.options.test_indices, []);
   assert.equal(
     requests[0].body.options.temporary_solutions[0].content,
@@ -2028,4 +2038,40 @@ test('Legacy stress records explain unavailable full history without fabricating
     host.querySelectorAll('.stress-test-results .case-chip').length,
     0,
   );
+});
+
+test('verification accepts an arbitrary subset and blocks an empty selection', async () => {
+  state.document.testsets.unused = global.structuredClone(
+    state.document.testsets.tests,
+  );
+  await mount('verification');
+  await selectSets('검증 테스트 세트', []);
+  const start = [...host.querySelectorAll('button')].find(
+    (el) => el.textContent.trim() === '전체 풀이 검증 시작',
+  );
+  assert.ok(start.disabled);
+  await act(() => start.click());
+  assert.deepEqual(requests, []);
+  await selectSets('검증 테스트 세트', ['tests', 'extra']);
+  await click('전체 풀이 검증 시작');
+  assert.deepEqual(requests[0].body.options.testsets, ['tests', 'extra']);
+  assert.equal(requests[0].body.options.all_testsets, undefined);
+});
+
+test('ZOJ package checkboxes send only selected sets and require at least one set', async () => {
+  state.document.testsets.unused = global.structuredClone(
+    state.document.testsets.tests,
+  );
+  await mount('packages');
+  await selectSets('ZOJ에서 사용할 테스트 세트', []);
+  const start = [...host.querySelectorAll('button')].find(
+    (el) => el.textContent.trim() === '검증 후 패키지 생성',
+  );
+  assert.ok(start.disabled);
+  await act(() => start.click());
+  assert.deepEqual(requests, []);
+  await selectSets('ZOJ에서 사용할 테스트 세트', ['tests', 'extra']);
+  await click('검증 후 패키지 생성');
+  assert.deepEqual(requests[0].body.options.testsets, ['tests', 'extra']);
+  assert.equal(requests[0].body.options.export_format, 'zoj');
 });

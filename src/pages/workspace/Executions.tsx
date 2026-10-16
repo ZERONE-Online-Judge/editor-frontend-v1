@@ -27,6 +27,7 @@ import StressRunConditions, {
   StressHistorySummary,
 } from './StressRunConditions';
 import InvocationControls from './InvocationControls';
+import TestsetSelector from './TestsetSelector';
 import ExecutionLimitsInfo from './ExecutionLimitsInfo';
 import TestVerdictMatrix from './TestVerdictMatrix';
 import VerificationProgress from './VerificationProgress';
@@ -105,8 +106,11 @@ export default function Executions({
       return next;
     });
   }
-  const [setName, setSetName] = useState(
-    Object.keys(doc.testsets)[0] || 'tests',
+  const [chosenPackageSets, setPackageSets] = useState<string[]>(
+    Object.keys(doc.testsets).slice(0, 1),
+  );
+  const packageSets = Object.keys(doc.testsets).filter((name) =>
+    chosenPackageSets.includes(name),
   );
   const [busy, setBusy] = useState(false);
   const [exportFormat, setExportFormat] = useState('zoj');
@@ -335,10 +339,15 @@ export default function Executions({
           packages && (
             <button
               className="button primary"
-              disabled={!editable || busy}
+              disabled={
+                !editable ||
+                busy ||
+                (exportFormat === 'zoj' && !packageSets.length)
+              }
               onClick={() =>
                 void start('package', {
-                  testset: setName,
+                  testset: packageSets[0] || Object.keys(doc.testsets)[0],
+                  ...(exportFormat === 'zoj' ? { testsets: packageSets } : {}),
                   verify: true,
                   export_format: exportFormat,
                   statement_language: statementLanguage,
@@ -426,23 +435,19 @@ export default function Executions({
                       )}
                     </select>
                   </label>
-                  <label>
-                    ZOJ에서 사용할 테스트 세트
-                    <select
-                      value={setName}
-                      onChange={(e) => setSetName(e.target.value)}
-                    >
-                      {Object.keys(doc.testsets).map((name) => (
-                        <option key={name}>{name}</option>
-                      ))}
-                    </select>
-                  </label>
+                  <TestsetSelector
+                    label="ZOJ에서 사용할 테스트 세트"
+                    testsets={doc.testsets}
+                    value={packageSets}
+                    onChange={setPackageSets}
+                    disabled={!editable || busy}
+                  />
                 </>
               )}
             </div>
             <p className="muted">
               {exportFormat === 'zoj'
-                ? '선택한 언어를 ZOJ의 기본 지문으로 지정하고, 작성한 다른 번역 지문도 함께 내보냅니다. 참가자는 지문 화면에서 언어를 선택할 수 있습니다. 예제·전체 입력과 정답·검증 코드·checker·validator와 원본 Editor 자료를 함께 보관합니다. 그룹·부분 점수 등 지원하지 않는 채점 방식은 생성 전에 안내합니다.'
+                ? '선택한 세트만 검증하고, 해당 입력·정답을 하나의 활성 채점 데이터로 합칩니다. 선택한 세트의 예제와 모든 번역 지문, 검증 코드·checker·validator 및 원본 Editor 자료를 함께 보관합니다. 그룹·부분 점수 등 지원하지 않는 채점 방식은 생성 전에 안내합니다.'
                 : exportFormat === 'linux'
                   ? '전체 생성 테스트·정답·소스·검증 환경과 고정된 실행 코드를 담습니다. Python과 준비된 Docker 이미지로 API 키·서비스 DB 없이 오프라인 재실행할 수 있습니다. Editor 실행 정책을 재현하며, ZOJ 대회 채점기의 언어별 보정과 다른 하드웨어에서의 시간 일치를 보장하는 패키지는 아닙니다.'
                   : 'Editor에서 다시 열 수 있는 작업 자료와 problem.xml, 생성된 테스트, 모든 지문 언어를 포함합니다.'}
@@ -590,14 +595,18 @@ export default function Executions({
                   요청 범위:{' '}
                   {scope.all_testsets
                     ? `전체 세트 (${scope.testsets?.join(', ') || scope.testset})`
-                    : scope.testset}{' '}
+                    : scope.testsets && scope.testsets.length > 1
+                      ? `선택 세트 (${scope.testsets.join(', ')})`
+                      : scope.testset}{' '}
                   · 풀이 {scope.solutions.length}개 · 테스트 {scope.test_count}
                   개
                   {scope.test_indices.length
                     ? ` (#${scope.test_indices.join(', #')})`
-                    : scope.all_testsets
-                      ? ' (모든 세트 전체)'
-                      : ' (세트 전체)'}
+                    : scope.testsets && scope.testsets.length > 1
+                      ? ' (선택 세트의 전체 테스트)'
+                      : scope.all_testsets
+                        ? ' (모든 세트 전체)'
+                        : ' (세트 전체)'}
                 </p>
               )}
               {typeof job.options.note === 'string' && job.options.note && (

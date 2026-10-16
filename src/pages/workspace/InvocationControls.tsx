@@ -8,6 +8,7 @@ import type {
   SolutionTag,
 } from '../../lib/types';
 import { CodeEditor, Icon, Notice } from '../../components/ui';
+import TestsetSelector from './TestsetSelector';
 
 export default function InvocationControls({
   problemId,
@@ -61,13 +62,14 @@ export default function InvocationControls({
       : committed?.id === problemId && committed.revision === revision
         ? committed.document
         : null;
-  const [chosenSet, setTestset] = useState(
-    Object.keys(doc.testsets)[0] || 'tests',
+  const [chosenSets, setTestsets] = useState<string[]>(
+    Object.keys(doc.testsets).slice(0, 1),
   );
-  const [allTestsets, setAllTestsets] = useState(false);
-  const testset = source?.testsets[chosenSet]
-    ? chosenSet
-    : Object.keys(source?.testsets || {})[0] || '';
+  const selectedSets = Object.keys(source?.testsets || {}).filter((name) =>
+    chosenSets.includes(name),
+  );
+  const testset = selectedSets[0] || '';
+  const multipleSets = selectedSets.length > 1;
   const [solutionMode, setSolutionMode] = useState('all');
   const [solutions, setSolutions] = useState<string[]>([]);
   const [testMode, setTestMode] = useState('all');
@@ -91,13 +93,13 @@ export default function InvocationControls({
   );
   let selectedIndices: number[] = [];
   let scopeError = '';
-  if (!allTestsets && testMode === 'range') {
+  if (!multipleSets && testMode === 'range') {
     try {
       selectedIndices = parseTestIndices(range, limits?.tests_per_set || 0);
     } catch (e) {
       scopeError = (e as Error).message;
     }
-  } else if (!allTestsets && testMode === 'selected') {
+  } else if (!multipleSets && testMode === 'selected') {
     selectedIndices = indices.filter((index) =>
       tests.some((test) => test.index === index),
     );
@@ -110,8 +112,8 @@ export default function InvocationControls({
     name,
     note,
     snapshot,
-    testset: allTestsets ? Object.keys(source?.testsets || {})[0] : testset,
-    ...(allTestsets ? { all_testsets: true } : {}),
+    testset,
+    testsets: selectedSets,
     test_indices: selectedIndices,
     verify: true,
     force_prepare: forcePrepare,
@@ -145,26 +147,17 @@ export default function InvocationControls({
             <option value="committed">커밋된 리비전 r{revision}</option>
           </select>
         </label>
-        <label>
-          검증 테스트 세트
-          <select
-            value={allTestsets ? '' : testset}
-            onChange={(e) => {
-              setAllTestsets(e.target.value === '');
-              if (e.target.value) setTestset(e.target.value);
-              setIndices([]);
-              setRange('');
-              setTestMode('all');
-            }}
-          >
-            {Object.keys(source?.testsets || {}).map((key) => (
-              <option key={key}>{key}</option>
-            ))}
-            <option value="">
-              전체 세트 · {Object.keys(source?.testsets || {}).length}개
-            </option>
-          </select>
-        </label>
+        <TestsetSelector
+          label="검증 테스트 세트"
+          testsets={source?.testsets || {}}
+          value={selectedSets}
+          onChange={(names) => {
+            setTestsets(names);
+            setIndices([]);
+            setRange('');
+            setTestMode('all');
+          }}
+        />
         <label>
           대상 풀이
           <select
@@ -215,7 +208,7 @@ export default function InvocationControls({
           테스트 범위
           <select
             value={testMode}
-            disabled={allTestsets}
+            disabled={multipleSets}
             onChange={(e) => setTestMode(e.target.value)}
           >
             <option value="all">전체 테스트</option>
@@ -223,11 +216,10 @@ export default function InvocationControls({
             <option value="selected">선택한 등록 테스트</option>
           </select>
         </label>
-        {allTestsets && (
+        {multipleSets && (
           <p className="muted small span-2">
-            포함할 세트: {Object.keys(source?.testsets || {}).join(', ')}.
-            세트·그룹별 기대 판정을 각각 확인합니다. 번호 범위는 한 세트를
-            선택했을 때 지정할 수 있습니다.
+            포함할 세트: {selectedSets.join(', ')}. 세트·그룹별 기대 판정을 각각
+            확인합니다. 번호 범위는 한 세트를 선택했을 때 지정할 수 있습니다.
           </p>
         )}
         {testMode === 'range' && (
