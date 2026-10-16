@@ -818,12 +818,11 @@ export default function Executions({
                         </thead>
                         <tbody>
                           {solution.expectations.map((scope) => (
-                            <tr key={`${scope.testset}/${scope.group}`}>
+                            <tr
+                              key={`${scope.origin}/${scope.testset}/${scope.group}`}
+                            >
                               <td>
-                                {scope.testset}
-                                {scope.group
-                                  ? ` / ${scope.group}`
-                                  : ' · 기본 범위'}
+                                <ExpectationScopeLabel scope={scope} />
                               </td>
                               <td>{scope.tag}</td>
                               <td>
@@ -1159,6 +1158,23 @@ export default function Executions({
     </div>
   );
 }
+export function ExpectationScopeLabel({
+  scope,
+}: {
+  scope: NonNullable<
+    NonNullable<Job['result']['solutions']>[number]['expectations']
+  >[number];
+}) {
+  if (scope.origin === 'default') {
+    return scope.testsets && scope.testsets.length > 1
+      ? `전체 기본 범위 · ${scope.testsets.join(', ')}`
+      : `${scope.testset} · 기본 범위`;
+  }
+  return scope.group
+    ? `${scope.testset} / ${scope.group} · 그룹 지정`
+    : `${scope.testset} · 세트 지정`;
+}
+
 export function CodeEvidence({
   problemId,
   input,

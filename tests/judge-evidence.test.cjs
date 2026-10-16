@@ -84,7 +84,33 @@ loaded._compile(
   }).outputText,
   file,
 );
-const { CodeEvidence } = loaded.exports;
+const { CodeEvidence, ExpectationScopeLabel } = loaded.exports;
+test('Combined default expectations identify all contributing testsets', () => {
+  const { renderToStaticMarkup } = require('react-dom/server');
+  const label = (scope) =>
+    renderToStaticMarkup(React.createElement(ExpectationScopeLabel, { scope }));
+  assert.equal(
+    label({
+      origin: 'default',
+      testset: '전체',
+      testsets: ['tests', 'tle'],
+      group: '',
+    }),
+    '전체 기본 범위 · tests, tle',
+  );
+  assert.equal(
+    label({ origin: 'testset', testset: 'tests', group: '' }),
+    'tests · 세트 지정',
+  );
+  assert.equal(
+    label({ origin: 'group', testset: 'tests', group: 'small' }),
+    'tests / small · 그룹 지정',
+  );
+  assert.equal(
+    label({ origin: 'default', testset: 'tests', group: '' }),
+    'tests · 기본 범위',
+  );
+});
 async function render(props) {
   calls = [];
   const host = document.createElement('div');

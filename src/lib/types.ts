@@ -437,6 +437,7 @@ export type Job = {
       expectations_complete?: boolean;
       expectations?: {
         testset: string;
+        testsets?: string[];
         group: string;
         tag: string;
         tested: number;
