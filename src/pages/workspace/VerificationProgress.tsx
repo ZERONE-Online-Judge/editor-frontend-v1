@@ -76,12 +76,21 @@ export function SolutionRunProgress({
   if (solution.total_tests == null || solution.skipped) return null;
   const current = solution.completed_tests ?? 0;
   const total = solution.total_tests;
+  const percent =
+    total > 0
+      ? Math.max(0, Math.min(100, Math.floor((current / total) * 100)))
+      : 0;
   return (
     <div className="solution-run-progress">
-      <span className="muted small">
-        {solutionRunLabel(solution, jobStatus) || '검증 종료'} · 판정 확인{' '}
-        {current} / {total}개
-      </span>
+      <div className="solution-run-progress-heading">
+        <span className="muted small">
+          {solutionRunLabel(solution, jobStatus) || '검증 종료'} · 판정 확인{' '}
+          {current} / {total}개
+        </span>
+        {total > 0 && (
+          <strong className="solution-run-percent">{percent}%</strong>
+        )}
+      </div>
       {total > 0 && (
         <progress
           aria-label={`${solution.name} 테스트 진행률`}

@@ -1961,15 +1961,48 @@ svg {
 }
 .verification-progress progress,
 .solution-run-progress progress {
+  -webkit-appearance: none;
+  appearance: none;
   display: block;
   width: 100%;
   height: 8px;
-  accent-color: var(--zoj-accent);
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: #e9edf8;
+  color: var(--zoj-accent);
+}
+.verification-progress progress::-webkit-progress-bar,
+.solution-run-progress progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: #e9edf8;
+}
+.verification-progress progress::-webkit-progress-value,
+.solution-run-progress progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: var(--zoj-accent);
+}
+.verification-progress progress::-moz-progress-bar,
+.solution-run-progress progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: var(--zoj-accent);
 }
 .solution-run-progress {
   display: grid;
   gap: 8px;
-  margin-block: 12px;
+  padding: 14px;
+}
+.solution-run-progress-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.solution-run-percent {
+  flex-shrink: 0;
+  color: var(--zoj-accent);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 .spinner {
   height: 18px;
@@ -2033,6 +2066,9 @@ svg {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
   gap: 7px;
+}
+.case-grid:empty {
+  display: none;
 }
 .case-chip {
   display: grid;
