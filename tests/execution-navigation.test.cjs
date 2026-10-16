@@ -817,6 +817,113 @@ test('verification can explicitly bypass preparation reuse without reusing a jud
   assert.equal(requests[0].body.reuse, false);
 });
 
+test('all testsets is opt-in and clears single-set ranges before verification', async () => {
+  await mount('verification');
+  const field = (label) =>
+    [...host.querySelectorAll('.invocation-controls label')]
+      .find((el) => el.textContent.startsWith(label))
+      .querySelector('select,input');
+  assert.equal(field('검증 테스트 세트').value, 'tests');
+  await setControl('테스트 범위', 'range');
+  await setControl('테스트 번호·범위', '1-3');
+  await setControl('검증 테스트 세트', '');
+  assert.equal(field('테스트 범위').disabled, true);
+  assert.equal(field('테스트 범위').value, 'all');
+  assert.match(
+    host.querySelector('.invocation-controls').textContent,
+    /포함할 세트: tests, extra/,
+  );
+  assert.deepEqual(requests, []);
+  await click('전체 풀이 검증 시작');
+  const options = requests[0].body.options;
+  assert.equal(options.all_testsets, true);
+  assert.equal(options.testset, 'tests');
+  assert.deepEqual(options.test_indices, []);
+  assert.equal(requests[0].body.reuse, false);
+});
+
+test('switching back to one set restores individual test selection', async () => {
+  await mount('verification');
+  await setControl('검증 테스트 세트', '');
+  await setControl('검증 테스트 세트', 'extra');
+  const range = [...host.querySelectorAll('.invocation-controls label')]
+    .find((el) => el.textContent.startsWith('테스트 범위'))
+    .querySelector('select');
+  assert.equal(range.disabled, false);
+  await click('전체 풀이 검증 시작');
+  assert.equal(requests[0].body.options.testset, 'extra');
+  assert.equal(requests[0].body.options.all_testsets, undefined);
+});
+
+test('reviewer temporary code uses all sets on the committed revision', async () => {
+  state.problem.role = 'READ';
+  state.problem.reviewer = true;
+  await mount('verification');
+  await setControl('검증 테스트 세트', '');
+  await act(() => {
+    const code = host.querySelector('textarea[aria-label="임시 검수 코드"]');
+    Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype,
+      'value',
+    ).set.call(code, 'print(42)');
+    code.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  await click('임시 코드 검증 시작');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.options.snapshot, 'committed');
+  assert.equal(requests[0].body.options.all_testsets, true);
+  assert.deepEqual(requests[0].body.options.test_indices, []);
+  assert.equal(
+    requests[0].body.options.temporary_solutions[0].content,
+    'print(42)',
+  );
+});
+
+test('stored all-set verification displays its scope and per-set progress', async () => {
+  const row = liveVerification();
+  row.result.scope = {
+    all_testsets: true,
+    testset: 'tests',
+    testsets: ['tests', 'samples', 'empty'],
+    testset_counts: { tests: 2, samples: 2, empty: 0 },
+    solutions: ['main.py', 'wrong.py'],
+    test_indices: [],
+    test_count: 4,
+  };
+  row.result.verification_progress.testsets = {
+    tests: { current: 1, total: 4, percent: 25 },
+    samples: { current: 2, total: 4, percent: 50 },
+    empty: { current: 0, total: 0, percent: 0 },
+  };
+  row.result.solutions[0].cases[1].testset = 'samples';
+  row.result.solutions[0].cases[1].index = 1;
+  await mount('verification?job=live-verification');
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /전체 세트 \(tests, samples, empty\).*테스트 4개/,
+  );
+  const sets = [...host.querySelectorAll('.verification-testsets li')];
+  assert.equal(sets.length, 3);
+  assert.match(sets[0].textContent, /tests1 \/ 4 · 25%/);
+  assert.match(sets[1].textContent, /samples2 \/ 4 · 50%/);
+  assert.match(sets[2].textContent, /empty실행 대상 없음/);
+  const solution = host.querySelector('.solution-result');
+  assert.deepEqual(
+    [...solution.querySelectorAll('.solution-testset-cases h4')].map(
+      (el) => el.textContent,
+    ),
+    ['tests', 'samples'],
+  );
+  const chips = [...solution.querySelectorAll('.case-chip')];
+  assert.equal(chips.length, 2);
+  assert.match(chips[0].title, /tests · #1/);
+  assert.match(chips[1].title, /samples · #1/);
+  await act(() => chips[1].click());
+  await flush();
+  assert.match(host.querySelector('dialog').textContent, /samples · 테스트 #1/);
+  assert.deepEqual(requests, []);
+});
+
 test('preparation counts are separate from measured judging progress and collapse by default', async () => {
   const row = liveVerification();
   row.result.preparation_cache = {

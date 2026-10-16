@@ -584,11 +584,17 @@ export default function Executions({
               </p>
               {scope && (
                 <p className="muted small">
-                  요청 범위: {scope.testset} · 풀이 {scope.solutions.length}개 ·
-                  테스트 {scope.test_count}개
+                  요청 범위:{' '}
+                  {scope.all_testsets
+                    ? `전체 세트 (${scope.testsets?.join(', ') || scope.testset})`
+                    : scope.testset}{' '}
+                  · 풀이 {scope.solutions.length}개 · 테스트 {scope.test_count}
+                  개
                   {scope.test_indices.length
                     ? ` (#${scope.test_indices.join(', #')})`
-                    : ' (세트 전체)'}
+                    : scope.all_testsets
+                      ? ' (모든 세트 전체)'
+                      : ' (세트 전체)'}
                 </p>
               )}
               {typeof job.options.note === 'string' && job.options.note && (
@@ -855,27 +861,46 @@ export default function Executions({
                       ))}
                     </div>
                   ) : null}
-                  <div className="case-grid">
-                    {solution.cases.map((result) => (
-                      <button
-                        key={`${result.testset}-${result.index}`}
-                        className={`case-chip ${result.verdict === 'AC' ? 'accepted' : result.verdict === 'JUDGE_ERROR' ? 'error' : 'rejected'}`}
-                        title={`${result.testset} · ${result.index ? `#${result.index}` : '컴파일·실행 환경'} · CPU ${result.cpu_ms == null ? '개별 값 미제공' : `${result.cpu_ms}ms`} · 메모리 ${result.memory_kb == null ? '개별 값 미제공' : `${result.memory_kb}KiB`}`}
-                        onClick={() => setCaseResult(result)}
-                      >
-                        <span>
-                          {result.index ? `#${result.index}` : '환경'}
-                        </span>
-                        <strong>{result.verdict}</strong>
-                        <small>
-                          {result.cpu_ms === null
-                            ? solution.judge_runs?.length
-                              ? '개별 시간 미제공'
-                              : '계측 불가'
-                            : `${result.cpu_ms}ms`}
-                        </small>
-                      </button>
-                    ))}
+                  <div className="solution-testsets">
+                    {[...new Set(solution.cases.map((row) => row.testset))].map(
+                      (setName) => (
+                        <section
+                          key={setName}
+                          className="solution-testset-cases"
+                          aria-label={`${setName} 테스트 결과`}
+                        >
+                          {(scope?.all_testsets ||
+                            new Set(solution.cases.map((row) => row.testset))
+                              .size > 1) && (
+                            <h4 className="muted small">{setName}</h4>
+                          )}
+                          <div className="case-grid">
+                            {solution.cases
+                              .filter((row) => row.testset === setName)
+                              .map((result) => (
+                                <button
+                                  key={`${result.testset}-${result.index}`}
+                                  className={`case-chip ${result.verdict === 'AC' ? 'accepted' : result.verdict === 'JUDGE_ERROR' ? 'error' : 'rejected'}`}
+                                  title={`${result.testset} · ${result.index ? `#${result.index}` : '컴파일·실행 환경'} · CPU ${result.cpu_ms == null ? '개별 값 미제공' : `${result.cpu_ms}ms`} · 메모리 ${result.memory_kb == null ? '개별 값 미제공' : `${result.memory_kb}KiB`}`}
+                                  onClick={() => setCaseResult(result)}
+                                >
+                                  <span>
+                                    {result.index ? `#${result.index}` : '환경'}
+                                  </span>
+                                  <strong>{result.verdict}</strong>
+                                  <small>
+                                    {result.cpu_ms === null
+                                      ? solution.judge_runs?.length
+                                        ? '개별 시간 미제공'
+                                        : '계측 불가'
+                                      : `${result.cpu_ms}ms`}
+                                  </small>
+                                </button>
+                              ))}
+                          </div>
+                        </section>
+                      ),
+                    )}
                   </div>
                   {solution.skipped && (
                     <p className="muted">NR 태그로 실행하지 않았습니다.</p>

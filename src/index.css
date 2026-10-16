@@ -1979,6 +1979,30 @@ svg {
   font-size: 22px;
   font-variant-numeric: tabular-nums;
 }
+.verification-testsets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+}
+.verification-testsets li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  max-width: 100%;
+  padding: 6px 9px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 8px;
+  background: white;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.verification-testsets span {
+  color: var(--zoj-muted);
+}
 .verification-progress progress,
 .solution-run-progress progress {
   -webkit-appearance: none;
@@ -2174,6 +2198,10 @@ svg {
 }
 .case-grid:empty {
   display: none;
+}
+.solution-testset-cases h4 {
+  padding: 10px 14px 0;
+  overflow-wrap: anywhere;
 }
 .case-chip {
   display: grid;

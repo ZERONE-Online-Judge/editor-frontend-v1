@@ -127,6 +127,20 @@ export default function VerificationProgress({ job }: { job: Job }) {
           실행 대상 풀이 × 테스트 중 실제 판정이 저장된 비율입니다. WA·TLE·MLE도
           확인한 결과로 집계하며, 실행 제외(NR)는 분모에서 뺍니다.
         </p>
+        {progress.testsets && Object.keys(progress.testsets).length > 1 && (
+          <ul className="verification-testsets" aria-label="세트별 검증 진행률">
+            {Object.entries(progress.testsets).map(([name, scoped]) => (
+              <li key={name}>
+                <strong>{name}</strong>
+                <span>
+                  {scoped.total > 0
+                    ? `${scoped.current.toLocaleString()} / ${scoped.total.toLocaleString()} · ${scoped.percent}%`
+                    : '실행 대상 없음'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
       <PreparationSummary job={job} />
     </>

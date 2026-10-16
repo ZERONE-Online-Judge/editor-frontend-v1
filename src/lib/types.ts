@@ -275,6 +275,9 @@ export type Counterexample = {
 export type StressPattern = { name: string; command: string };
 export type InvocationScope = {
   testset: string;
+  all_testsets?: boolean;
+  testsets?: string[];
+  testset_counts?: Record<string, number>;
   solutions: string[];
   test_indices: number[];
   test_count: number;
@@ -346,6 +349,10 @@ export type Job = {
       percent: number;
       completed_solutions?: number;
       total_solutions?: number;
+      testsets?: Record<
+        string,
+        { current: number; total: number; percent: number }
+      >;
     };
     stress_configuration?: StressConfiguration;
     scope?: InvocationScope;

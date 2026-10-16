@@ -64,6 +64,7 @@ export default function InvocationControls({
   const [chosenSet, setTestset] = useState(
     Object.keys(doc.testsets)[0] || 'tests',
   );
+  const [allTestsets, setAllTestsets] = useState(false);
   const testset = source?.testsets[chosenSet]
     ? chosenSet
     : Object.keys(source?.testsets || {})[0] || '';
@@ -90,13 +91,13 @@ export default function InvocationControls({
   );
   let selectedIndices: number[] = [];
   let scopeError = '';
-  if (testMode === 'range') {
+  if (!allTestsets && testMode === 'range') {
     try {
       selectedIndices = parseTestIndices(range, limits?.tests_per_set || 0);
     } catch (e) {
       scopeError = (e as Error).message;
     }
-  } else if (testMode === 'selected') {
+  } else if (!allTestsets && testMode === 'selected') {
     selectedIndices = indices.filter((index) =>
       tests.some((test) => test.index === index),
     );
@@ -109,7 +110,8 @@ export default function InvocationControls({
     name,
     note,
     snapshot,
-    testset,
+    testset: allTestsets ? Object.keys(source?.testsets || {})[0] : testset,
+    ...(allTestsets ? { all_testsets: true } : {}),
     test_indices: selectedIndices,
     verify: true,
     force_prepare: forcePrepare,
@@ -146,15 +148,21 @@ export default function InvocationControls({
         <label>
           검증 테스트 세트
           <select
-            value={testset}
+            value={allTestsets ? '' : testset}
             onChange={(e) => {
-              setTestset(e.target.value);
+              setAllTestsets(e.target.value === '');
+              if (e.target.value) setTestset(e.target.value);
               setIndices([]);
+              setRange('');
+              setTestMode('all');
             }}
           >
             {Object.keys(source?.testsets || {}).map((key) => (
               <option key={key}>{key}</option>
             ))}
+            <option value="">
+              전체 세트 · {Object.keys(source?.testsets || {}).length}개
+            </option>
           </select>
         </label>
         <label>
@@ -207,6 +215,7 @@ export default function InvocationControls({
           테스트 범위
           <select
             value={testMode}
+            disabled={allTestsets}
             onChange={(e) => setTestMode(e.target.value)}
           >
             <option value="all">전체 테스트</option>
@@ -214,6 +223,13 @@ export default function InvocationControls({
             <option value="selected">선택한 등록 테스트</option>
           </select>
         </label>
+        {allTestsets && (
+          <p className="muted small span-2">
+            포함할 세트: {Object.keys(source?.testsets || {}).join(', ')}.
+            세트·그룹별 기대 판정을 각각 확인합니다. 번호 범위는 한 세트를
+            선택했을 때 지정할 수 있습니다.
+          </p>
+        )}
         {testMode === 'range' && (
           <label>
             테스트 번호·범위
