@@ -1951,6 +1951,15 @@ svg {
   border-radius: 12px;
   background: #f8f9ff;
 }
+.preparation-summary[open],
+.invocation-preparation-options[open] {
+  display: grid;
+  gap: 12px;
+}
+.preparation-summary summary,
+.invocation-preparation-options summary {
+  font-weight: 600;
+}
 .verification-progress .section-heading {
   margin: 0;
 }

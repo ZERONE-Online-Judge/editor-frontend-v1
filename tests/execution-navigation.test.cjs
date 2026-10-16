@@ -633,6 +633,7 @@ test('explicit verification starts once with the chosen testset and environment'
     solutions: [],
     testset: 'extra',
     verify: true,
+    force_prepare: false,
     execution_backend: 'zoj',
   });
   assert.match(host.querySelector('#location').textContent, /job=new-verify/);
@@ -641,6 +642,43 @@ test('explicit verification starts once with the chosen testset and environment'
     /방금 요청한 verify 결과/,
   );
 });
+test('verification can explicitly bypass preparation reuse without reusing a judge result', async () => {
+  await mount('invocations?job=old');
+  const options = host.querySelector('.invocation-preparation-options');
+  assert.equal(options.open, false);
+  const checkbox = options.querySelector('input[type="checkbox"]');
+  assert.equal(checkbox.checked, false);
+  await act(() => checkbox.click());
+  await click('전체 풀이 검증 시작');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.options.force_prepare, true);
+  assert.equal(requests[0].body.reuse, false);
+});
+
+test('preparation counts are separate from measured judging progress and collapse by default', async () => {
+  const row = liveVerification();
+  row.result.preparation_cache = {
+    enabled: true,
+    reused: {
+      input: 120,
+      validator: 120,
+      answer: 120,
+      checker: 120,
+      sample: 0,
+    },
+    executed: { input: 0, validator: 0, answer: 0, checker: 0, sample: 0 },
+  };
+  await mount('invocations?job=live-verification');
+  const summary = host.querySelector('.preparation-summary');
+  assert.equal(summary.open, false);
+  assert.match(
+    summary.querySelector('summary').textContent,
+    /480개 단계 재사용 · 0개 단계 실행/,
+  );
+  assert.match(summary.textContent, /판정·시간·메모리를 재사용하지 않습니다/);
+  assert.equal(host.querySelector('[aria-label="전체 풀이 검증"]').value, 37);
+});
+
 test('selected verification submits exact solution names and a normalized test range', async () => {
   state.document.solutions['wrong.py'] = {
     ...state.document.solutions['main.py'],

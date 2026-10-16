@@ -74,6 +74,7 @@ export default function InvocationControls({
   const [indices, setIndices] = useState<number[]>([]);
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
+  const [forcePrepare, setForcePrepare] = useState(false);
   const [reviewName, setReviewName] = useState('review.py');
   const [reviewLanguage, setReviewLanguage] = useState<Language>('python3');
   const [reviewTag, setReviewTag] = useState<SolutionTag>('OK');
@@ -111,6 +112,7 @@ export default function InvocationControls({
     testset,
     test_indices: selectedIndices,
     verify: true,
+    force_prepare: forcePrepare,
   };
   return (
     <div className="section-stack invocation-controls">
@@ -271,6 +273,27 @@ export default function InvocationControls({
             )}
           </div>
         )}
+        <details className="span-2 invocation-preparation-options">
+          <summary>테스트 준비 옵션</summary>
+          <p className="muted small">
+            변경되지 않은 입력·정답과 검사 결과는 자동으로 재사용합니다. 풀이의
+            판정·시간·메모리는 매번 실제 채점으로 확인합니다.
+          </p>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={forcePrepare}
+              onChange={(e) => setForcePrepare(e.target.checked)}
+            />
+            준비 결과를 재사용하지 않고 다시 실행
+          </label>
+          {snapshot === 'committed' && (
+            <p className="muted small">
+              커밋된 리비전은 저장된 입력·정답을 유지하고 검사를 다시
+              실행합니다.
+            </p>
+          )}
+        </details>
         <label className="span-2">
           실행 메모
           <textarea

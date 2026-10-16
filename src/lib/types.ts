@@ -328,6 +328,17 @@ export type Job = {
   started_at: number | null;
   finished_at: number | null;
   result: {
+    preparation_cache?: {
+      enabled: boolean;
+      reused: Record<
+        'input' | 'validator' | 'answer' | 'checker' | 'sample',
+        number
+      >;
+      executed: Record<
+        'input' | 'validator' | 'answer' | 'checker' | 'sample',
+        number
+      >;
+    };
     verification_progress?: {
       phase: 'preparing' | 'judging' | 'complete';
       current: number;
