@@ -90,7 +90,6 @@ export default function Executions({
       ? defaultSelection.id
       : visible[0]?.id) ||
     '';
-  const [autoApply, setAutoApply] = useState(false);
   const [loadedJob, setJob] = useState<Job | null>(null);
   const job = loadedJob?.id === selected ? loadedJob : null;
   const [jobError, setJobError] = useState<{
@@ -1086,73 +1085,6 @@ export default function Executions({
           )}
         </section>
       </section>
-      {!packages && !stress && !verification && (
-        <details className="card execution-launcher">
-          <summary>
-            <Icon name="plus" />
-            <div>
-              <strong>새 작업 시작</strong>
-              <span>선택한 테스트 세트의 입력·정답 생성을 요청합니다.</span>
-            </div>
-            <Icon name="down" size={16} />
-          </summary>
-          <div className="execution-launcher-content">
-            <p className="muted">
-              작업 기록과 결과는 위에서 확인합니다. 아래 버튼은 새 실행을
-              요청합니다.
-            </p>
-            <div className="execution-launcher-grid">
-              <section
-                className="execution-launcher-option"
-                aria-label="새 입력·정답 생성"
-              >
-                <h3>입력·정답 생성</h3>
-                <p>
-                  선택한 테스트 세트의 생성기를 실행하고 Validator와 Main 풀이로
-                  입력·정답을 준비합니다.
-                </p>
-                <label>
-                  생성할 테스트 세트
-                  <select
-                    value={setName}
-                    onChange={(e) => setSetName(e.target.value)}
-                  >
-                    {Object.keys(doc.testsets).map((name) => (
-                      <option key={name}>{name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="checkbox generation-auto-apply">
-                  <input
-                    type="checkbox"
-                    checked={autoApply}
-                    disabled={!editable || busy}
-                    onChange={(e) => setAutoApply(e.target.checked)}
-                  />
-                  성공하면 내 작업 사본에 자동 반영
-                </label>
-                <p className="muted small">
-                  실행 이후 저장된 자료가 바뀌면 자동 반영하지 않습니다. 반영된
-                  자료는 커밋하기 전까지 나에게만 보입니다.
-                </p>
-                <button
-                  className="button"
-                  disabled={!editable || busy}
-                  onClick={() =>
-                    void start('prepare', {
-                      testset: setName,
-                      auto_apply: autoApply,
-                    })
-                  }
-                >
-                  <Icon name="tests" />
-                  입력·정답 생성 시작
-                </button>
-              </section>
-            </div>
-          </div>
-        </details>
-      )}
       {caseResult && (
         <Modal
           wide

@@ -328,6 +328,7 @@ test('Linux packages explicitly use the Editor replay runtime', async () => {
 test('execution results and full verification have separate history and launch controls', async () => {
   await mount('invocations');
   assert.equal(host.querySelector('.invocation-controls'), null);
+  assert.equal(host.querySelector('.execution-launcher'), null);
   assert.match(
     host.querySelector('.execution-list').textContent,
     /이전 입력·정답 결과/,
@@ -709,11 +710,8 @@ for (const [tab, button, kind] of [
       );
       assert.equal(requests.length, 1);
       assert.equal(requests[0].body.kind, kind);
-      assert.equal(host.querySelector('.execution-launcher').open, false);
-      const sections = [
-        ...host.querySelectorAll('.execution-history,.execution-launcher'),
-      ];
-      assert.ok(sections[0].classList.contains('execution-history'));
+      assert.equal(host.querySelector('.execution-launcher'), null);
+      assert.ok(host.querySelector('.execution-history'));
     },
   );
 }
@@ -1009,16 +1007,14 @@ test('execution limits reflect the server response rather than fixed UI defaults
   assert.match(panel.textContent, /작업당 동시 2개/);
   assert.match(panel.textContent, /스트레스 시드 병렬 처리작업당 최대 5개/);
 });
-test('read-only users can view records while new execution buttons stay disabled', async () => {
+test('read-only users can view execution records without a launch form', async () => {
   state.problem.role = 'READ';
   await mount('invocations?job=old');
   assert.match(
     host.querySelector('.execution-detail').textContent,
     /이전 입력·정답 결과/,
   );
-  const buttons = [...host.querySelectorAll('.execution-launcher button')];
-  assert.equal(buttons.length, 1);
-  assert.ok(buttons.every((el) => el.disabled));
+  assert.equal(host.querySelector('.execution-launcher'), null);
   assert.deepEqual(requests, []);
 });
 test('a read-only reviewer can verify the committed revision without a working-copy save', async () => {
