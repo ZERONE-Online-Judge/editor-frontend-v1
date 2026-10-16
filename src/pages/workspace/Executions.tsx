@@ -201,7 +201,7 @@ export default function Executions({
           `/problems/${data.problem.id}/jobs/${encodeURIComponent(selected)}`,
         );
         if (active) {
-          if ((value.kind === 'verify') !== verification) {
+          if (!matchesExecutionView(value.kind, mode)) {
             const destination = executionResultPath(
               data.problem.id,
               value.kind,
@@ -236,7 +236,7 @@ export default function Executions({
       active = false;
       if (timer) window.clearTimeout(timer);
     };
-  }, [selected, data.problem.id, notify, verification, navigate, search]);
+  }, [selected, data.problem.id, notify, mode, navigate, search]);
   async function start(
     kind: Job['kind'],
     options: Record<string, unknown> = {},

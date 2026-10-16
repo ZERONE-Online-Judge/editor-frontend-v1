@@ -325,7 +325,7 @@ test('Linux packages explicitly use the Editor replay runtime', async () => {
   assert.equal(requests[0].body.options.execution_backend, 'editor');
 });
 
-test('execution results and full verification have separate history and launch controls', async () => {
+test('execution results include verification history while launch controls remain in the verification tab', async () => {
   await mount('invocations');
   assert.equal(host.querySelector('.invocation-controls'), null);
   assert.equal(host.querySelector('.execution-launcher'), null);
@@ -333,9 +333,17 @@ test('execution results and full verification have separate history and launch c
     host.querySelector('.execution-list').textContent,
     /이전 입력·정답 결과/,
   );
-  assert.doesNotMatch(
+  assert.match(
     host.querySelector('.execution-list').textContent,
     /다른 최신 검증 결과/,
+  );
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /다른 최신 검증 결과/,
+  );
+  assert.equal(
+    host.querySelector('#location').textContent,
+    '/problems/p/invocations',
   );
   const link = host.querySelector(
     '.problem-sidebar a[href="/problems/p/verification"]',
@@ -356,17 +364,17 @@ test('execution results and full verification have separate history and launch c
   assert.deepEqual(requests, []);
 });
 
-test('old verification result links move to the new tab and preserve saved jobs and query options', async () => {
+test('verification result links stay in execution results and preserve saved jobs and query options', async () => {
   await mount('invocations?job=latest&view=team');
   assert.match(
     host.querySelector('#location').textContent,
-    /verification\?job=latest&view=team/,
+    /invocations\?job=latest&view=team/,
   );
   assert.match(
     host.querySelector('.execution-detail').textContent,
     /다른 최신 검증 결과/,
   );
-  assert.ok(host.querySelector('.verification-launcher'));
+  assert.equal(host.querySelector('.verification-launcher'), null);
   assert.deepEqual(requests, []);
 });
 
@@ -534,6 +542,20 @@ test('All four solutions and confirmed partial results appear while the full ver
     host.querySelector('.evidence-grid').textContent,
     /전체 128 B.*보관/,
   );
+});
+
+test('execution results show live verification progress and individual solution results without changing tabs', async () => {
+  liveVerification();
+  await mount('invocations?job=live-verification');
+  assert.equal(host.querySelectorAll('.solution-result').length, 4);
+  assert.equal(host.querySelectorAll('.case-chip').length, 3);
+  assert.equal(host.querySelector('[aria-label="전체 풀이 검증"]').value, 37);
+  assert.equal(host.querySelector('.verification-launcher'), null);
+  assert.equal(
+    host.querySelector('#location').textContent,
+    '/problems/p/invocations?job=live-verification',
+  );
+  assert.deepEqual(requests, []);
 });
 
 test('Polling adds later solution outcomes without waiting for the first solution or reopening the page', async () => {
@@ -716,7 +738,6 @@ for (const [tab, button, kind] of [
   );
 }
 test('changing job URLs preserves query options, hides old actions during loading, and supports browser back', async () => {
-  jobs[0].kind = 'prepare';
   await mount('invocations?job=old&view=team');
   assert.match(
     host.querySelector('.execution-detail').textContent,

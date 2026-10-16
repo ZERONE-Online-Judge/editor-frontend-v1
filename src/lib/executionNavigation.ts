@@ -3,7 +3,7 @@ import type { JobKind } from './types';
 export type ExecutionView = 'all' | 'verify' | 'stress' | 'package';
 
 export function matchesExecutionView(kind: JobKind, view: ExecutionView) {
-  return view === 'all' ? kind !== 'verify' : kind === view;
+  return view === 'all' || kind === view;
 }
 
 export function executionResultPath(
