@@ -812,35 +812,70 @@ svg {
   padding: 0;
   margin: 0;
 }
-.test-verdict-matrix .table-scroll {
+.test-verdict-matrix .table-scroll,
+.agent-execution-log .table-scroll {
   max-width: 100%;
   min-width: 0;
   max-height: min(420px, 55dvh);
   border: 1px solid var(--zoj-border);
   border-radius: 8px;
 }
-.test-verdict-matrix .data-table :is(th, td) {
+.test-verdict-matrix .data-table :is(th, td),
+.agent-execution-log .data-table :is(th, td) {
   padding: 7px 9px;
   font-size: 11px;
   line-height: 1.45;
   white-space: nowrap;
 }
-.test-verdict-matrix .data-table thead th {
+.test-verdict-matrix .data-table thead th,
+.agent-execution-log .data-table thead th {
   position: sticky;
   top: 0;
   z-index: 2;
   background: #f5f6fc;
 }
-.test-verdict-matrix .data-table tr > :first-child {
+.test-verdict-matrix .data-table tr > :first-child,
+.agent-execution-log .data-table tr > :first-child {
   position: sticky;
   left: 0;
   z-index: 1;
   background: #fff;
   border-right: 1px solid var(--zoj-border);
 }
-.test-verdict-matrix .data-table thead tr > :first-child {
+.test-verdict-matrix .data-table thead tr > :first-child,
+.agent-execution-log .data-table thead tr > :first-child {
   z-index: 3;
   background: #f5f6fc;
+}
+.agent-execution-log {
+  display: block;
+  max-width: 100%;
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.agent-execution-log > summary {
+  font-size: 12px;
+  font-weight: 600;
+}
+.agent-execution-log > p {
+  margin-block: 8px;
+  font-size: 11px;
+}
+.agent-execution-log .table-scroll {
+  max-height: min(300px, 45dvh);
+  overscroll-behavior: contain;
+}
+.agent-execution-log .data-table :is(th, td):nth-child(n + 4) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.agent-execution-node {
+  display: block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .matrix-solution-name,
 .matrix-test-label {

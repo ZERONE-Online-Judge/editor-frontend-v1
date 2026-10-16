@@ -624,7 +624,7 @@ export default function Executions({
                 </p>
               ) : null}
               {job.result.execution_runs?.length ? (
-                <details className="notice neutral">
+                <details className="notice neutral agent-execution-log">
                   <summary>
                     에이전트 실행 기록 · {job.result.execution_runs.length}회
                   </summary>
@@ -632,7 +632,12 @@ export default function Executions({
                     컴파일·생성·검증·PDF 실행을 담당한 실제 노드와 실행 자원을
                     확인합니다.
                   </p>
-                  <div className="table-scroll">
+                  <div
+                    className="table-scroll"
+                    role="region"
+                    aria-label="에이전트 실행 기록 표"
+                    tabIndex={0}
+                  >
                     <table className="data-table">
                       <thead>
                         <tr>
@@ -646,7 +651,14 @@ export default function Executions({
                       <tbody>
                         {job.result.execution_runs.map((run) => (
                           <tr key={run.task_id}>
-                            <td>{run.node_name || '채점 노드'}</td>
+                            <td>
+                              <span
+                                className="agent-execution-node"
+                                title={run.node_name || '채점 노드'}
+                              >
+                                {run.node_name || '채점 노드'}
+                              </span>
+                            </td>
                             <td>
                               {run.runtime === 'renderer'
                                 ? 'PDF 렌더링'
