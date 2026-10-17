@@ -68,6 +68,8 @@ export const languages = {
   c17: 'C17',
   c99: 'C99 · ZOJ 채점기',
   python3: 'Python 3',
+  pypy3: 'PyPy 3.9 · ICPC',
+  kotlin: 'Kotlin 1.9.24 · ICPC',
   java17: 'Java 17',
   java8: 'Java 8 · ZOJ 채점기',
   text: '텍스트',
@@ -117,6 +119,7 @@ export function bytes(value: number) {
       : `${value} B`;
 }
 export function inferLanguage(name: string): SourceFile['language'] {
+  if (name.endsWith('.kt')) return 'kotlin';
   return name.endsWith('.py')
     ? 'python3'
     : name.endsWith('.java')

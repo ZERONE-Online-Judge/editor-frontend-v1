@@ -327,7 +327,7 @@ export default function Executions({
         {executionBackend === null
           ? '서버에서 기본 검증 환경을 확인하고 있습니다.'
           : executionBackend === 'zoj'
-            ? '풀이를 기존 ZOJ 채점 큐에 보내 판정과 시간·메모리를 기록합니다. C++17·C99·Python 3.13·Java 8을 지원하고, 대회와 같은 언어별 보정을 적용합니다. 입력 생성·Validator·Checker·PDF 실행도 Editor 작업이 허용된 채점 에이전트에서 처리합니다.'
+            ? '풀이를 기존 ZOJ 채점 큐에 보내 판정과 시간·메모리를 기록합니다. C++17·C99·Python 3.13·Java 8·PyPy·Kotlin을 지원하고, 대회와 같은 언어별 보정을 적용합니다. 입력 생성·Validator·Checker·PDF 실행도 Editor 작업이 허용된 채점 에이전트에서 처리합니다.'
             : 'Editor 실행이 허용된 채점 VM의 제작용 격리 환경에서 실행합니다. 대화형·그룹 점수 등 제작 기능을 검증합니다. ZOJ 대회의 언어별 시간·메모리 보정은 ‘ZOJ 실제 채점기’ 선택에서 적용됩니다.'}
       </p>
     </section>

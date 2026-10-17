@@ -857,9 +857,15 @@ function FileEditor({
           </fieldset>
         )}
         {!solutions &&
-          (['cpp17', 'cpp20', 'c17', 'c99', 'java17', 'java8'].includes(
-            language,
-          ) ||
+          ([
+            'cpp17',
+            'cpp20',
+            'c17',
+            'c99',
+            'java17',
+            'java8',
+            'kotlin',
+          ].includes(language) ||
             (kind === 'resource' && /\.(a|o)$/i.test(name))) && (
             <label className="checkbox">
               <input
