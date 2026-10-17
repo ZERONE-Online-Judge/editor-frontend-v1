@@ -11,6 +11,7 @@ import {
   SectionHeading,
 } from '../../components/ui';
 import Markdown from '../../components/Markdown';
+import { statementAssets } from '../../lib/statementAssets';
 import './Review.css';
 
 const printSections = [
@@ -191,7 +192,7 @@ export default function Review() {
             statement[key as keyof typeof statement] ? (
               <section key={key} data-print-included={printChoices[key]}>
                 {title && <h2>{title}</h2>}
-                <Markdown>
+                <Markdown assets={statementAssets(data.problem.id, doc.files)}>
                   {String(statement[key as keyof typeof statement])}
                 </Markdown>
               </section>
@@ -242,7 +243,9 @@ export default function Review() {
           {statement.notes && (
             <section data-print-included={printChoices.notes}>
               <h2>노트</h2>
-              <Markdown>{statement.notes}</Markdown>
+              <Markdown assets={statementAssets(data.problem.id, doc.files)}>
+                {statement.notes}
+              </Markdown>
             </section>
           )}
         </article>
@@ -257,7 +260,9 @@ export default function Review() {
           <h2>
             해설<span className="review-screen-only"> · 검수용</span>
           </h2>
-          <Markdown>{statement.tutorial}</Markdown>
+          <Markdown assets={statementAssets(data.problem.id, doc.files)}>
+            {statement.tutorial}
+          </Markdown>
         </article>
       )}
       <footer

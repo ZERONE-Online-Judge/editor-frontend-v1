@@ -8,6 +8,7 @@ import {
 } from '../../lib/sharedStatements';
 import { CodeEditor, Badge } from '../../components/ui';
 import Markdown from '../../components/Markdown';
+import { statementAssets } from '../../lib/statementAssets';
 
 export default function SharedStatements({ language }: { language: string }) {
   const { document: doc, data, mutate, editable, notify } = useWorkspace();
@@ -88,7 +89,7 @@ export default function SharedStatements({ language }: { language: string }) {
               }
             />
             <div className="card statement-preview">
-              <Markdown>
+              <Markdown assets={statementAssets(data.problem.id, doc.files)}>
                 {doc[key] ||
                   '공통 내용을 작성하면 모든 언어의 미리보기와 내보내기에 반영됩니다.'}
               </Markdown>

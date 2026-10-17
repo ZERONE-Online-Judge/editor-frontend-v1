@@ -1,0 +1,134 @@
+.zoj-statement :is(h1, h2, h3, h4, h5) {
+  font-weight: 700;
+  line-height: 1.5;
+  margin: 1.5rem 0 0.75rem;
+}
+.zoj-statement h1 {
+  font-size: 1.75em;
+}
+.zoj-statement h2 {
+  font-size: 1.35em;
+}
+.zoj-statement h3 {
+  font-size: 1.15em;
+}
+.zoj-statement :is(h4, h5) {
+  font-size: 1em;
+}
+.zoj-statement li > p {
+  margin: 0.35rem 0;
+}
+.zoj-statement li > :is(ul, ol) {
+  margin-block: 0.5rem;
+}
+.zoj-statement .zoj-tex-center {
+  text-align: center;
+}
+.zoj-statement .zoj-tex-flushleft {
+  text-align: left;
+}
+.zoj-statement .zoj-tex-flushright {
+  text-align: right;
+}
+.zoj-statement .zoj-tex-center img {
+  display: inline-block;
+}
+.zoj-statement .zoj-tex-smallcaps {
+  font-variant: small-caps;
+}
+.zoj-statement .zoj-tex-roman {
+  font-family: Georgia, 'Times New Roman', serif;
+}
+.zoj-statement .zoj-tex-sans {
+  font-family: Arial, sans-serif;
+}
+.zoj-statement .zoj-tex-caption {
+  margin: 0.5rem 0 1rem;
+  font-size: 0.85em;
+}
+.zoj-statement .zoj-tex-size-tiny {
+  font-size: 0.7em;
+}
+.zoj-statement .zoj-tex-size-scriptsize {
+  font-size: 0.75em;
+}
+.zoj-statement .zoj-tex-size-footnotesize {
+  font-size: 0.8em;
+}
+.zoj-statement .zoj-tex-size-small {
+  font-size: 0.85em;
+}
+.zoj-statement .zoj-tex-size-normalsize {
+  font-size: 1em;
+}
+.zoj-statement .zoj-tex-size-large {
+  font-size: 1.15em;
+}
+.zoj-statement .zoj-tex-size-Large {
+  font-size: 1.3em;
+}
+.zoj-statement .zoj-tex-size-LARGE {
+  font-size: 1.45em;
+}
+.zoj-statement .zoj-tex-size-huge {
+  font-size: 1.6em;
+}
+.zoj-statement .zoj-tex-size-Huge {
+  font-size: 1.8em;
+}
+.zoj-statement u {
+  text-underline-offset: 0.15em;
+}
+.zoj-statement .zoj-tex-table {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+.zoj-statement .zoj-tex-table table {
+  width: max-content;
+  min-width: 0;
+  border-collapse: collapse;
+  margin: 0 auto;
+}
+.zoj-statement .zoj-tex-table td {
+  padding: 0.5rem 0.75rem;
+  border: none;
+  vertical-align: middle;
+}
+.zoj-statement td[align='left'] {
+  text-align: left;
+}
+.zoj-statement .zoj-tex-table-ruled td {
+  border: 1px solid #dbe0ed;
+}
+.zoj-statement .zoj-tex-table td p {
+  margin: 0.25rem 0;
+}
+.zoj-statement td[align='center'] {
+  text-align: center;
+}
+.zoj-statement td[align='right'] {
+  text-align: right;
+}
+.zoj-statement pre code {
+  color: inherit;
+  background: none;
+  padding: 0;
+  white-space: pre;
+}
+.zoj-statement pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.zoj-statement .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.zoj-statement dl dt {
+  margin-top: 0.75rem;
+  font-weight: 700;
+}
+.zoj-statement dl dd {
+  margin-left: 1.5rem;
+}

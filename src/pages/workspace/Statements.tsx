@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useWorkspace } from '../../lib/workspace';
 import { Icon, SectionHeading, CodeEditor } from '../../components/ui';
 import Markdown from '../../components/Markdown';
+import { statementAssets } from '../../lib/statementAssets';
 import type { Statement } from '../../lib/types';
 import SharedStatements from './SharedStatements';
 const fields: { key: keyof Statement; title: string; rows: number }[] = [
@@ -167,7 +168,9 @@ export default function Statements() {
                 {preview && (
                   <div className="card statement-preview">
                     <span className="eyebrow">미리보기</span>
-                    <Markdown>
+                    <Markdown
+                      assets={statementAssets(data.problem.id, doc.files)}
+                    >
                       {String(statement[field.key]) ||
                         '내용을 입력하면 여기에서 확인할 수 있습니다.'}
                     </Markdown>
