@@ -32,7 +32,16 @@ export type Statement = {
   show_in_review: boolean;
 };
 export type Language =
-  'cpp17' | 'cpp20' | 'c17' | 'c99' | 'python3' | 'java17' | 'java8' | 'text';
+  | 'cpp17'
+  | 'cpp20'
+  | 'c17'
+  | 'c99'
+  | 'python3'
+  | 'pypy3'
+  | 'kotlin'
+  | 'java17'
+  | 'java8'
+  | 'text';
 export type SourceFile = {
   resource_policy?: ResourcePolicy | null;
   attach_to_build?: boolean | null;

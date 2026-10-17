@@ -359,6 +359,8 @@ export default function InvocationControls({
               >
                 {[
                   'python3',
+                  'pypy3',
+                  'kotlin',
                   'cpp17',
                   'cpp20',
                   'c99',
