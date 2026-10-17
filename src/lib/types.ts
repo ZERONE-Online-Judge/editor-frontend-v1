@@ -622,9 +622,3 @@ export type Revision = {
   created_at: number;
   hash: string;
 };
-export type Contest = {
-  id: string;
-  title: string;
-  problem_ids: string[];
-  created_at: number;
-};

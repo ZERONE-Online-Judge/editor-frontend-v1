@@ -1229,6 +1229,15 @@ svg {
   width: 32%;
   white-space: normal;
 }
+.problems-table .problem-actions-cell {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+.problems-table .problem-actions-cell .actions {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
 .revision-cell {
   display: flex;
   gap: 6px;
@@ -1562,6 +1571,18 @@ svg {
 }
 .editor-modal.wide {
   width: 980px;
+}
+.editor-modal.permission-member-editor[open] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.permission-member-editor > .modal-body {
+  min-height: 0;
+}
+.permission-member-editor > .modal-heading,
+.permission-member-editor > .modal-footer {
+  flex-shrink: 0;
 }
 .editor-modal::backdrop {
   background: #171a3440;
@@ -2441,49 +2462,6 @@ svg {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
-.contest-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px;
-}
-.contest-icon {
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
-  background: #eceaff;
-  color: #8b80b9;
-  margin-bottom: 20px;
-}
-.contest-grid h2 {
-  font-size: 20px;
-}
-.contest-grid .muted {
-  margin-top: 8px;
-  font-size: 12px;
-}
-.contest-problems {
-  display: grid;
-  gap: 0;
-  margin-top: 20px;
-}
-.contest-problems a {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-top: 1px solid #edf0f7;
-  padding: 13px 0;
-  min-width: 0;
-}
-.contest-problems strong {
-  font-size: 12px;
-  flex: 1;
-}
-.contest-problems a > span:not(.badge) {
-  font-size: 10px;
-  color: #94a3b8;
-}
 .help-page {
   max-width: 1080px;
 }
@@ -3052,9 +3030,6 @@ svg {
   }
   .problem-preview .markdown {
     font-size: 12px;
-  }
-  .contest-grid {
-    grid-template-columns: 1fr;
   }
   .help-columns {
     grid-template-columns: 1fr;

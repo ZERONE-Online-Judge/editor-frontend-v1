@@ -9,6 +9,12 @@ const dom = new JSDOM('<body></body>', { pretendToBeVisual: true });
 global.window = dom.window;
 global.document = dom.window.document;
 global.IS_REACT_ACT_ENVIRONMENT = true;
+dom.window.HTMLDialogElement.prototype.showModal = function () {
+  this.setAttribute('open', '');
+};
+dom.window.HTMLDialogElement.prototype.close = function () {
+  this.removeAttribute('open');
+};
 const React = require('react');
 const { act, createElement: h } = React;
 const { createRoot } = require('react-dom/client');
@@ -53,12 +59,7 @@ const components = load('components/SharedFolders.tsx', {
   },
   '../lib/authContext': { useAuth: () => ({ user: account }) },
   '../lib/sharedFolders': helpers,
-  './ui': {
-    Modal: ({ title, children, footer }) =>
-      h('section', null, h('h2', null, title), children, footer),
-    Notice: ({ children }) => h('aside', null, children),
-    Badge: ({ children }) => h('span', null, children),
-  },
+  './ui': load('components/ui.tsx'),
 });
 async function mount(Component, props = {}) {
   requests = [];
@@ -163,7 +164,9 @@ test('Admins can change a member role but the owner is protected and removal is 
   assert.equal(v.host.querySelector('select'), null);
   assert.equal(buttons(v, '권한 수정').length, 1);
   await click(v, '권한 수정');
-  const editor = v.host.querySelector('.permission-member-editor');
+  const editor = v.host.querySelector('dialog.permission-member-editor[open]');
+  assert.ok(editor);
+  assert.equal(v.host.querySelectorAll('dialog[open]').length, 2);
   await act(async () =>
     [...editor.querySelectorAll('button')]
       .find((b) => b.textContent === '번역')
@@ -178,6 +181,7 @@ test('Admins can change a member role but the owner is protected and removal is 
       body: { permissions: ['translate', 'render', 'issues'] },
     },
   );
+  assert.equal(v.host.querySelectorAll('dialog[open]').length, 1);
   await click(v, '내보내기');
   assert.equal(requests.filter((r) => r.method === 'DELETE').length, 0);
   await click(v, '취소');
@@ -190,6 +194,154 @@ test('Admins can change a member role but the owner is protected and removal is 
   );
   assert.equal(changed, 2);
   await v.close();
+});
+test('Pending invite permissions open above members and save without accepting or reinviting', async () => {
+  let granted = ['issues'];
+  reply = async (method, path, body) => {
+    if (method === 'PUT') {
+      granted = body.permissions;
+      return { ok: true };
+    }
+    return {
+      ...members,
+      members: [members.members[0]],
+      invitations: [
+        {
+          id: 'pending',
+          email: 'new@example.com',
+          role: 'CUSTOM',
+          permissions: granted,
+          expires_at: 1,
+        },
+      ],
+    };
+  };
+  const v = await mount(components.SharedFolderMembers, {
+    folder,
+    onClose() {},
+    onChanged() {},
+    onLeft() {},
+  });
+  await click(v, '권한 수정');
+  const editor = v.host.querySelector('dialog.permission-member-editor[open]');
+  assert.ok(editor);
+  assert.equal(editor.parentElement, v.host);
+  assert.equal(v.host.querySelectorAll('dialog[open]').length, 2);
+  assert.match(editor.textContent, /new@example.com · 초대 권한 수정/);
+  assert.match(editor.textContent, /초대 만료일은 유지/);
+  await act(async () =>
+    [...editor.querySelectorAll('button')]
+      .find((b) => b.textContent === '검수')
+      .click(),
+  );
+  await click(v, '권한 저장');
+  assert.deepEqual(
+    requests.filter((r) => r.method !== 'GET'),
+    [
+      {
+        method: 'PUT',
+        path: '/shared-folders/root/invitations/pending',
+        body: { permissions: ['execute', 'render', 'issues'] },
+      },
+    ],
+  );
+  assert.equal(v.host.querySelectorAll('dialog[open]').length, 1);
+  assert.match(v.host.textContent, /상대방이 수락할 때 적용/);
+  await v.close();
+});
+test('Cancel preserves a pending invitation and failed saves keep the modal and selection open', async () => {
+  reply = async (method) => {
+    if (method === 'PUT') throw new Error('이미 수락된 초대입니다.');
+    return {
+      ...members,
+      members: [members.members[0]],
+      invitations: [
+        {
+          id: 'pending',
+          email: 'new@example.com',
+          role: 'CUSTOM',
+          permissions: ['issues'],
+          expires_at: 1,
+        },
+      ],
+    };
+  };
+  const v = await mount(components.SharedFolderMembers, {
+    folder,
+    onClose() {},
+    onChanged() {},
+    onLeft() {},
+  });
+  await click(v, '권한 수정');
+  await click(v, '취소');
+  assert.equal(requests.filter((r) => r.method !== 'GET').length, 0);
+  await click(v, '권한 수정');
+  const editor = v.host.querySelector('dialog.permission-member-editor[open]');
+  await act(async () =>
+    [...editor.querySelectorAll('button')]
+      .find((b) => b.textContent === '읽기')
+      .click(),
+  );
+  await click(v, '권한 저장');
+  assert.equal(v.host.querySelectorAll('dialog[open]').length, 2);
+  assert.match(editor.querySelector('[role=alert]').textContent, /이미 수락/);
+  assert.deepEqual(
+    requests.find((r) => r.method === 'PUT').body.permissions,
+    [],
+  );
+  assert.equal(
+    [...editor.querySelectorAll('input[type=checkbox]')].some(
+      (input) => input.checked,
+    ),
+    false,
+  );
+  await v.close();
+});
+test('A limited manager cannot edit pending grants above their own scope or other administrator invitations', async () => {
+  account = { id: 'manager' };
+  reply = async () => ({
+    ...members,
+    role: 'CUSTOM',
+    permissions: ['manage_access', 'issues'],
+    members: [members.members[0]],
+    invitations: [
+      {
+        id: 'strong',
+        email: 'strong@example.com',
+        permissions: ['publish'],
+        role: 'CUSTOM',
+        expires_at: 1,
+      },
+      {
+        id: 'admin',
+        email: 'admin@example.com',
+        permissions: ['manage_access'],
+        role: 'CUSTOM',
+        expires_at: 1,
+      },
+      {
+        id: 'peer',
+        email: 'peer@example.com',
+        permissions: ['issues'],
+        role: 'CUSTOM',
+        expires_at: 1,
+      },
+    ],
+  });
+  const v = await mount(components.SharedFolderMembers, {
+    folder,
+    onClose() {},
+    onChanged() {},
+    onLeft() {},
+  });
+  assert.equal(buttons(v, '권한 수정').length, 1);
+  await click(v, '권한 수정');
+  assert.match(
+    v.host.querySelector('dialog.permission-member-editor h2').textContent,
+    /peer@example.com/,
+  );
+  await v.close();
+  account = { id: 'owner' };
 });
 test('Inviting uses the chosen role and explains inbox acceptance without claiming email delivery', async () => {
   reply = async () => members;

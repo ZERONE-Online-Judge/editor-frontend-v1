@@ -24,17 +24,21 @@ type Member = {
   display_name: string;
   handle: string;
 };
+type PendingInvitation = {
+  id: string;
+  email: string;
+  role: FolderRole;
+  permissions?: Permission[];
+  expires_at: number;
+};
+type PermissionTarget =
+  | { kind: 'member'; member: Member }
+  | { kind: 'invitation'; invitation: PendingInvitation };
 type Members = {
   role: FolderRole;
   permissions?: Permission[];
   members: Member[];
-  invitations: {
-    id: string;
-    email: string;
-    role: FolderRole;
-    permissions?: Permission[];
-    expires_at: number;
-  }[];
+  invitations: PendingInvitation[];
 };
 export function FolderInvitations({
   onAccepted,
@@ -193,7 +197,7 @@ export function SharedFolderMembers({
   const [email, setEmail] = useState('');
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [memberPermissions, setMemberPermissions] = useState<Permission[]>([]);
-  const [editing, setEditing] = useState<Member | null>(null);
+  const [editing, setEditing] = useState<PermissionTarget | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -220,6 +224,38 @@ export function SharedFolderMembers({
     data?.permissions ||
     (data?.role === 'OWNER' || data?.role === 'ADMIN' ? allPermissions : []);
   const admin = actorPermissions.includes('manage_access');
+  const canChangeInvitation = (invite: PendingInvitation) =>
+    admin &&
+    (data?.role === 'OWNER' ||
+      !invite.permissions?.includes('manage_access')) &&
+    (invite.permissions || []).every((p) => actorPermissions.includes(p));
+  function editPermissions(target: PermissionTarget, selected: Permission[]) {
+    setError('');
+    setMessage('');
+    setMemberPermissions([...selected]);
+    setEditing(target);
+  }
+  function closeEditor() {
+    if (!busy) {
+      setEditing(null);
+      setError('');
+    }
+  }
+  async function savePermissions() {
+    if (!editing || busy) return;
+    const invitation = editing.kind === 'invitation';
+    const path =
+      editing.kind === 'member'
+        ? `members/${editing.member.user_id}`
+        : `invitations/${editing.invitation.id}`;
+    const saved = await act(
+      () => put(`${base}/${path}`, { permissions: memberPermissions }),
+      invitation
+        ? '초대 권한을 변경했습니다. 상대방이 수락할 때 적용됩니다.'
+        : '권한을 변경했습니다. 즉시 적용됩니다.',
+    );
+    if (saved) setEditing(null);
+  }
   async function act(
     action: () => Promise<unknown>,
     success: string,
@@ -237,178 +273,271 @@ export function SharedFolderMembers({
       await load();
       setMessage(success);
       onChanged();
+      return true;
     } catch (e) {
       setError((e as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
   }
   return (
-    <Modal title="공유 폴더 · 구성원" onClose={onClose} wide>
-      <div className="shared-scope">
-        <strong>{folder.name}</strong>
-        <p>
-          권한은 이 공유 폴더 전체와 모든 하위 폴더·문제에 적용됩니다. 하위
-          폴더별 권한은 따로 설정하지 않습니다.
-        </p>
-        <p>
-          탈퇴·내보내기는 폴더를 통한 접근을 해제합니다. 문제 소유권과 문제별
-          직접 공유는 유지됩니다.
-        </p>
-      </div>
-      {error && <Notice tone="error">{error}</Notice>}
-      {message && <Notice tone="success">{message}</Notice>}
-      {!data ? (
-        <p role="status">구성원을 불러오고 있습니다.</p>
-      ) : (
-        <>
-          {admin && (
-            <section className="shared-invite-form">
-              <h3>이메일로 초대</h3>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void act(
-                    () =>
-                      post(`${base}/invitations`, { email, permissions }).then(
-                        () => setEmail(''),
-                      ),
-                    '초대를 등록했습니다. 상대방이 로그인 후 받은 초대에서 수락할 수 있습니다.',
-                  );
-                }}
-              >
-                <fieldset disabled={busy}>
-                  <label>
-                    ZOJ 로그인 이메일
-                    <input
-                      required
-                      type="email"
-                      value={email}
-                      maxLength={254}
-                      placeholder="name@example.com"
-                      onChange={(e) => setEmail(e.target.value)}
+    <>
+      <Modal
+        title="공유 폴더 · 구성원"
+        onClose={() => {
+          if (!busy) onClose();
+        }}
+        wide
+      >
+        <div className="shared-scope">
+          <strong>{folder.name}</strong>
+          <p>
+            권한은 이 공유 폴더 전체와 모든 하위 폴더·문제에 적용됩니다. 하위
+            폴더별 권한은 따로 설정하지 않습니다.
+          </p>
+          <p>
+            탈퇴·내보내기는 폴더를 통한 접근을 해제합니다. 문제 소유권과 문제별
+            직접 공유는 유지됩니다.
+          </p>
+        </div>
+        {error && <Notice tone="error">{error}</Notice>}
+        {message && <Notice tone="success">{message}</Notice>}
+        {!data ? (
+          <p role="status">구성원을 불러오고 있습니다.</p>
+        ) : (
+          <>
+            {admin && (
+              <section className="shared-invite-form">
+                <h3>이메일로 초대</h3>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void act(
+                      () =>
+                        post(`${base}/invitations`, {
+                          email,
+                          permissions,
+                        }).then(() => setEmail('')),
+                      '초대를 등록했습니다. 상대방이 로그인 후 받은 초대에서 수락할 수 있습니다.',
+                    );
+                  }}
+                >
+                  <fieldset disabled={busy}>
+                    <label>
+                      ZOJ 로그인 이메일
+                      <input
+                        required
+                        type="email"
+                        value={email}
+                        maxLength={254}
+                        placeholder="name@example.com"
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
+                    </label>
+                    <PermissionChecklist
+                      folder
+                      value={permissions}
+                      onChange={setPermissions}
+                      disabled={busy}
+                      allowed={actorPermissions}
                     />
-                  </label>
-                  <PermissionChecklist
-                    folder
-                    value={permissions}
-                    onChange={setPermissions}
-                    disabled={busy}
-                    allowed={actorPermissions}
-                  />
-                  <button className="button primary" disabled={!email.trim()}>
-                    초대하기
-                  </button>
-                </fieldset>
-                <p className="muted">
-                  초대는 7일간 유효하며 이메일은 발송하지 않습니다.
-                </p>
-              </form>
-            </section>
-          )}
-          <section>
-            <h3>구성원 {data.members.length}명</h3>
-            {data.members.map((member) => (
-              <div className="shared-member-row" key={member.user_id}>
-                <div>
-                  <strong>{member.display_name}</strong>
-                  <small>
-                    @{member.handle}
-                    {user?.id === member.user_id ? ' · 나' : ''}
-                  </small>
-                </div>
-                <div className="actions">
-                  {member.role === 'OWNER' ? (
-                    <Badge>소유자 · 모든 권한</Badge>
-                  ) : admin &&
-                    (data.role === 'OWNER' ||
-                      !member.permissions?.includes('manage_access') ||
-                      user?.id === member.user_id) &&
-                    (member.permissions || []).every((p) =>
-                      actorPermissions.includes(p),
-                    ) ? (
-                    <>
-                      <button
-                        className="button small"
-                        disabled={busy}
-                        onClick={() => {
-                          setEditing(member);
-                          setMemberPermissions(member.permissions || []);
-                        }}
-                      >
-                        권한 수정
-                      </button>
-                      <button
-                        className="text-button danger-text"
-                        disabled={busy}
-                        onClick={() => setConfirm(member)}
-                      >
-                        내보내기
-                      </button>
-                    </>
-                  ) : (
-                    <Badge>{folderRoles[member.role]}</Badge>
-                  )}
-                  <PermissionSummary value={member.permissions || []} />
-                </div>
-              </div>
-            ))}
-          </section>
-          {admin && data.invitations.length > 0 && (
+                    <button className="button primary" disabled={!email.trim()}>
+                      초대하기
+                    </button>
+                  </fieldset>
+                  <p className="muted">
+                    초대는 7일간 유효하며 이메일은 발송하지 않습니다.
+                  </p>
+                </form>
+              </section>
+            )}
             <section>
-              <h3>수락 대기</h3>
-              {data.invitations.map((invite) => (
-                <div className="shared-member-row" key={invite.id}>
+              <h3>구성원 {data.members.length}명</h3>
+              {data.members.map((member) => (
+                <div className="shared-member-row" key={member.user_id}>
                   <div>
-                    <strong>{invite.email}</strong>
-                    <PermissionSummary value={invite.permissions || []} />
+                    <strong>{member.display_name}</strong>
                     <small>
-                      {folderRoles[invite.role]} · {time(invite.expires_at)}까지
+                      @{member.handle}
+                      {user?.id === member.user_id ? ' · 나' : ''}
                     </small>
                   </div>
-                  <button
-                    className="text-button"
-                    disabled={busy}
-                    onClick={() =>
-                      void act(
-                        () =>
-                          api(`${base}/invitations/${invite.id}`, {
-                            method: 'DELETE',
-                          }),
-                        '초대를 취소했습니다.',
-                      )
-                    }
-                  >
-                    초대 취소
-                  </button>
+                  <div className="actions">
+                    {member.role === 'OWNER' ? (
+                      <Badge>소유자 · 모든 권한</Badge>
+                    ) : admin &&
+                      (data.role === 'OWNER' ||
+                        !member.permissions?.includes('manage_access') ||
+                        user?.id === member.user_id) &&
+                      (member.permissions || []).every((p) =>
+                        actorPermissions.includes(p),
+                      ) ? (
+                      <>
+                        <button
+                          className="button small"
+                          disabled={busy}
+                          onClick={() => {
+                            editPermissions(
+                              { kind: 'member', member },
+                              member.permissions || [],
+                            );
+                          }}
+                        >
+                          권한 수정
+                        </button>
+                        <button
+                          className="text-button danger-text"
+                          disabled={busy}
+                          onClick={() => setConfirm(member)}
+                        >
+                          내보내기
+                        </button>
+                      </>
+                    ) : (
+                      <Badge>{folderRoles[member.role]}</Badge>
+                    )}
+                    <PermissionSummary value={member.permissions || []} />
+                  </div>
                 </div>
               ))}
             </section>
-          )}
-          <p className="muted small">
-            문제와 같은 기능별 권한을 사용합니다. 폴더 정리와 새 문제 추가는
-            별도로 선택합니다. 폴더 권한으로 문제별 직접 공유를 추가할 수는
-            없습니다. 문제 삭제·공유 범위를 바꾸는 이동은 문제 소유자만 할 수
-            있습니다.
-          </p>
-          {data.role !== 'OWNER' && (
-            <button
-              className="button"
-              disabled={busy}
-              onClick={() =>
-                setConfirm(
-                  data.members.find((m) => m.user_id === user?.id) || null,
-                )
-              }
-            >
-              공유 폴더 나가기
-            </button>
-          )}
-        </>
-      )}
+            {admin && data.invitations.length > 0 && (
+              <section>
+                <h3>수락 대기</h3>
+                {data.invitations.map((invite) => (
+                  <div className="shared-member-row" key={invite.id}>
+                    <div>
+                      <strong>{invite.email}</strong>
+                      <PermissionSummary value={invite.permissions || []} />
+                      <small>
+                        {folderRoles[invite.role]} · {time(invite.expires_at)}
+                        까지
+                      </small>
+                    </div>
+                    <div className="actions">
+                      {canChangeInvitation(invite) && (
+                        <button
+                          className="button small"
+                          disabled={busy}
+                          onClick={() =>
+                            editPermissions(
+                              { kind: 'invitation', invitation: invite },
+                              invite.permissions || [],
+                            )
+                          }
+                        >
+                          권한 수정
+                        </button>
+                      )}
+                      <button
+                        className="text-button"
+                        disabled={busy}
+                        onClick={() =>
+                          void act(
+                            () =>
+                              api(`${base}/invitations/${invite.id}`, {
+                                method: 'DELETE',
+                              }),
+                            '초대를 취소했습니다.',
+                          )
+                        }
+                      >
+                        초대 취소
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </section>
+            )}
+            <p className="muted small">
+              문제와 같은 기능별 권한을 사용합니다. 폴더 정리와 새 문제 추가는
+              별도로 선택합니다. 폴더 권한으로 문제별 직접 공유를 추가할 수는
+              없습니다. 문제 삭제·공유 범위를 바꾸는 이동은 문제 소유자만 할 수
+              있습니다.
+            </p>
+            {data.role !== 'OWNER' && (
+              <button
+                className="button"
+                disabled={busy}
+                onClick={() =>
+                  setConfirm(
+                    data.members.find((m) => m.user_id === user?.id) || null,
+                  )
+                }
+              >
+                공유 폴더 나가기
+              </button>
+            )}
+          </>
+        )}
+        {confirm && (
+          <div className="shared-remove-confirm" role="alert">
+            <strong>
+              {confirm.user_id === user?.id
+                ? '이 공유 폴더에서 나갈까요?'
+                : `${confirm.display_name}님을 내보낼까요?`}
+            </strong>
+            <p>
+              폴더를 통해 받은 접근과 실행 권한이 해제됩니다. 별도로 공유받은
+              문제 권한은 유지됩니다.
+            </p>
+            <div className="actions">
+              <button
+                className="button"
+                disabled={busy}
+                onClick={() => setConfirm(null)}
+              >
+                취소
+              </button>
+              <button
+                className="button danger"
+                disabled={busy}
+                onClick={() =>
+                  void act(
+                    () =>
+                      api(`${base}/members/${confirm.user_id}`, {
+                        method: 'DELETE',
+                      }).then(() => setConfirm(null)),
+                    '구성원을 내보냈습니다.',
+                    confirm.user_id === user?.id,
+                  )
+                }
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
       {editing && (
-        <section className="card permission-member-editor">
-          <h3>{editing.display_name} · 기능별 권한</h3>
+        <Modal
+          title={`${editing.kind === 'member' ? editing.member.display_name : editing.invitation.email} · ${editing.kind === 'invitation' ? '초대 권한 수정' : '기능별 권한'}`}
+          wide
+          className="permission-member-editor"
+          onClose={closeEditor}
+          footer={
+            <>
+              <button className="button" disabled={busy} onClick={closeEditor}>
+                취소
+              </button>
+              <button
+                className="button primary"
+                disabled={busy}
+                onClick={() => void savePermissions()}
+              >
+                {busy ? '저장 중…' : '권한 저장'}
+              </button>
+            </>
+          }
+        >
+          <p className="muted">
+            {folder.name} ·{' '}
+            {editing.kind === 'invitation'
+              ? '초대를 수락하면 선택한 권한으로 참여합니다. 초대 만료일은 유지됩니다.'
+              : '변경한 권한은 이 폴더와 하위 폴더·문제에 즉시 적용됩니다.'}
+          </p>
+          {error && <Notice tone="error">{error}</Notice>}
           <PermissionChecklist
             folder
             value={memberPermissions}
@@ -416,70 +545,8 @@ export function SharedFolderMembers({
             allowed={actorPermissions}
             disabled={busy}
           />
-          <div className="actions">
-            <button
-              className="button"
-              disabled={busy}
-              onClick={() => setEditing(null)}
-            >
-              취소
-            </button>
-            <button
-              className="button primary"
-              disabled={busy}
-              onClick={() =>
-                void act(
-                  () =>
-                    put(`${base}/members/${editing.user_id}`, {
-                      permissions: memberPermissions,
-                    }).then(() => setEditing(null)),
-                  '권한을 변경했습니다. 즉시 적용됩니다.',
-                )
-              }
-            >
-              권한 저장
-            </button>
-          </div>
-        </section>
+        </Modal>
       )}
-      {confirm && (
-        <div className="shared-remove-confirm" role="alert">
-          <strong>
-            {confirm.user_id === user?.id
-              ? '이 공유 폴더에서 나갈까요?'
-              : `${confirm.display_name}님을 내보낼까요?`}
-          </strong>
-          <p>
-            폴더를 통해 받은 접근과 실행 권한이 해제됩니다. 별도로 공유받은 문제
-            권한은 유지됩니다.
-          </p>
-          <div className="actions">
-            <button
-              className="button"
-              disabled={busy}
-              onClick={() => setConfirm(null)}
-            >
-              취소
-            </button>
-            <button
-              className="button danger"
-              disabled={busy}
-              onClick={() =>
-                void act(
-                  () =>
-                    api(`${base}/members/${confirm.user_id}`, {
-                      method: 'DELETE',
-                    }).then(() => setConfirm(null)),
-                  '구성원을 내보냈습니다.',
-                  confirm.user_id === user?.id,
-                )
-              }
-            >
-              확인
-            </button>
-          </div>
-        </div>
-      )}
-    </Modal>
+    </>
   );
 }

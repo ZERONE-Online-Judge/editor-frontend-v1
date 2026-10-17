@@ -578,7 +578,7 @@ export default function Problems() {
                           )}
                         </td>
                         <td className="subtext">{time(p.updated_at)}</td>
-                        <td className="problem-name-cell">
+                        <td className="problem-actions-cell">
                           {p.deleted ? (
                             <button
                               className="button small"

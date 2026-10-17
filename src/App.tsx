@@ -9,17 +9,10 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom';
-import { api, patch, post, put } from './lib/api';
+import { patch } from './lib/api';
 import { useAuth } from './lib/authContext';
-import type { Contest, Problem, User } from './lib/types';
-import {
-  Badge,
-  Empty,
-  Icon,
-  Modal,
-  Notice,
-  SectionHeading,
-} from './components/ui';
+import type { User } from './lib/types';
+import { Empty, Icon, Modal, Notice, SectionHeading } from './components/ui';
 import Login from './pages/Login';
 import PasswordForm from './components/PasswordForm';
 import PasswordSetupGuidance from './components/PasswordSetupGuidance';
@@ -58,7 +51,6 @@ function Layout() {
         </Link>
         <nav aria-label="주 메뉴">
           <NavLink to="/problems">문제</NavLink>
-          <NavLink to="/contests">대회</NavLink>
           <NavLink to="/help">도움말</NavLink>
         </nav>
         <div className="account-controls">
@@ -244,202 +236,6 @@ function Logout() {
     </div>
   );
 }
-function Contests() {
-  const [rows, setRows] = useState<Contest[]>([]);
-  const [problems, setProblems] = useState<Problem[]>([]);
-  const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [title, setTitle] = useState('');
-  const [ids, setIds] = useState<string[]>([]);
-  const [error, setError] = useState('');
-  useEffect(() => {
-    Promise.all([api<Contest[]>('/contests'), api<Problem[]>('/problems')])
-      .then(([c, p]) => {
-        setRows(c);
-        setProblems(p);
-      })
-      .catch((e) => setError(e.message));
-  }, []);
-  async function create() {
-    try {
-      const result = await (editing
-        ? put<Contest>(`/contests/${editing}`, { title, problem_ids: ids })
-        : post<Contest>('/contests', { title, problem_ids: ids }));
-      setRows((r) => [result, ...r.filter((c) => c.id !== result.id)]);
-      setEditing(null);
-      setAdding(false);
-      setTitle('');
-      setIds([]);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-  return (
-    <div className="page-container">
-      <div className="page-heading">
-        <div>
-          <span className="eyebrow">PROBLEM COLLECTIONS</span>
-          <h1>대회 문제 모음</h1>
-          <p>출제 중인 문제를 대회 단위로 모아 관리합니다.</p>
-        </div>
-        <button
-          className="button primary"
-          onClick={() => {
-            setEditing(null);
-            setTitle('');
-            setIds([]);
-            setAdding(true);
-          }}
-        >
-          <Icon name="plus" />
-          대회 만들기
-        </button>
-      </div>
-      {error && <Notice tone="error">{error}</Notice>}
-      <div className="contest-grid">
-        {rows.map((contest) => (
-          <section className="card" key={contest.id}>
-            <div className="contest-icon">
-              <Icon name="folder" size={24} />
-            </div>
-            <div className="section-heading">
-              <h2>{contest.title}</h2>
-              <button
-                className="text-button"
-                onClick={() => {
-                  setEditing(contest.id);
-                  setTitle(contest.title);
-                  setIds(contest.problem_ids);
-                  setAdding(true);
-                }}
-              >
-                편집
-              </button>
-            </div>
-            <p className="muted">{contest.problem_ids.length}개 문제</p>
-            <div className="contest-problems">
-              {contest.problem_ids.map((id, index) => {
-                const problem = problems.find((p) => p.id === id);
-                return problem ? (
-                  <Link key={id} to={`/problems/${id}/overview`}>
-                    <Badge tone="accent">
-                      {String.fromCharCode(65 + index)}
-                    </Badge>
-                    <strong>{problem.name}</strong>
-                    <span>r{problem.revision}</span>
-                    <Icon name="arrow" size={15} />
-                  </Link>
-                ) : (
-                  <div key={id} className="muted">
-                    접근 권한이 없는 문제
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
-      {!rows.length && (
-        <section className="card">
-          <Empty
-            title="아직 대회 문제 모음이 없습니다."
-            description="여러 문제를 묶어 대회 준비 현황을 관리하세요."
-          />
-        </section>
-      )}
-      {adding && (
-        <Modal
-          title={editing ? '대회 문제 모음 편집' : '대회 문제 모음 만들기'}
-          onClose={() => setAdding(false)}
-          footer={
-            <>
-              <button className="button" onClick={() => setAdding(false)}>
-                취소
-              </button>
-              <button
-                className="button primary"
-                disabled={!title}
-                onClick={() => void create()}
-              >
-                {editing ? '저장' : '만들기'}
-              </button>
-            </>
-          }
-        >
-          <label>
-            대회 이름
-            <input value={title} onChange={(e) => setTitle(e.target.value)} />
-          </label>
-          {ids.length > 0 && (
-            <div className="checkbox-list">
-              {ids.map((id, index) => (
-                <div className="section-heading" key={id}>
-                  <span>
-                    {String.fromCharCode(65 + index)}.{' '}
-                    {problems.find((p) => p.id === id)?.name || id}
-                  </span>
-                  <div className="actions">
-                    <button
-                      className="button small"
-                      disabled={index === 0}
-                      onClick={() =>
-                        setIds((previous) => {
-                          const next = [...previous];
-                          [next[index - 1], next[index]] = [
-                            next[index],
-                            next[index - 1],
-                          ];
-                          return next;
-                        })
-                      }
-                    >
-                      위로
-                    </button>
-                    <button
-                      className="button small"
-                      disabled={index === ids.length - 1}
-                      onClick={() =>
-                        setIds((previous) => {
-                          const next = [...previous];
-                          [next[index + 1], next[index]] = [
-                            next[index],
-                            next[index + 1],
-                          ];
-                          return next;
-                        })
-                      }
-                    >
-                      아래로
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <label>포함할 문제</label>
-          <div className="checkbox-list">
-            {problems.map((p) => (
-              <label className="checkbox" key={p.id}>
-                <input
-                  type="checkbox"
-                  checked={ids.includes(p.id)}
-                  onChange={(e) =>
-                    setIds(
-                      e.target.checked
-                        ? [...ids, p.id]
-                        : ids.filter((id) => id !== p.id),
-                    )
-                  }
-                />
-                {p.name}
-              </label>
-            ))}
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
 function Help() {
   const entries = [
     [
@@ -584,7 +380,7 @@ const router = createBrowserRouter([
           { path: '/problems', element: <Problems /> },
           { path: '/problems/:problemId/:tab', element: <WorkspaceRoute /> },
           { path: '/problems/:problemId', element: <WorkspaceRoute /> },
-          { path: '/contests', element: <Contests /> },
+          { path: '/contests', element: <Navigate to="/problems" replace /> },
         ],
       },
       {
