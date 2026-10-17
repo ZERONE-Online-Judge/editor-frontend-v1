@@ -1,3 +1,4 @@
+import JudgeCompatibilityNotice from './JudgeCompatibilityNotice';
 import { can, canEdit } from '../../lib/permissions';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -8,6 +9,7 @@ import {
 } from '../../lib/executionNavigation';
 import {
   api,
+  ApiError,
   blobText,
   jobLabels,
   post,
@@ -129,6 +131,11 @@ export default function Executions({
   const [executionBackend, setExecutionBackend] = useState<
     'editor' | 'zoj' | null
   >(null);
+  const [startError, setStartError] = useState<{
+    problemId: string;
+    backend: string | null;
+    error: ApiError;
+  } | null>(null);
   const [zojConfigured, setZojConfigured] = useState(false);
   const [environment, setEnvironment] = useState<ExecutionEnvironment | null>(
     null,
@@ -250,6 +257,7 @@ export default function Executions({
     options: Record<string, unknown> = {},
   ) {
     setBusy(true);
+    setStartError(null);
     try {
       const result = await run(kind, {
         ...options,
@@ -261,7 +269,13 @@ export default function Executions({
       setJob(result);
       await fetchRows();
     } catch (e) {
-      notify((e as Error).message, true);
+      if (e instanceof ApiError && e.code === 'judge_incompatible')
+        setStartError({
+          problemId: data.problem.id,
+          backend: executionBackend,
+          error: e,
+        });
+      else notify((e as Error).message, true);
     } finally {
       setBusy(false);
     }
@@ -364,6 +378,17 @@ export default function Executions({
           )
         }
       />
+      {startError?.problemId === data.problem.id &&
+        startError.backend === executionBackend && (
+          <JudgeCompatibilityNotice
+            error={startError.error}
+            problemId={data.problem.id}
+            changeBackend={() => {
+              setExecutionBackend('editor');
+              setStartError(null);
+            }}
+          />
+        )}
       <ExecutionLimitsInfo environment={environment} stress={stress} />
       {packages && verifyPackage && environmentPanel}
       {verification && (

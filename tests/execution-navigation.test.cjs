@@ -157,7 +157,10 @@ async function post(url, body) {
     };
     return { version: state.version };
   }
-  if (requestError) throw new Error(requestError);
+  if (requestError)
+    throw requestError instanceof Error
+      ? requestError
+      : new Error(requestError);
   if (url.endsWith('/counterexamples/apply'))
     return {
       added_count: body.counterexample_ids.length,
@@ -2181,4 +2184,54 @@ test('Package creation can be granted without edits or verification execution', 
     ),
     false,
   );
+});
+
+test('Unsupported solution languages have one summary, per-file settings and an explicit non-running environment switch', async () => {
+  const { ApiError } = source('lib/api.ts');
+  const files = Array.from({ length: 7 }, (_, i) => ({
+    name: `zoac_s3_wrong_${i}.cpp`,
+    language: 'cpp20',
+    label: 'C++20',
+  }));
+  requestError = new ApiError(400, {
+    code: 'judge_incompatible',
+    message: '풀이 7개의 언어 표준이 ZOJ 실제 채점기와 호환되지 않습니다.',
+    issues: [],
+    unsupported_solutions: files,
+    supported_languages: [
+      { language: 'cpp17', label: 'C++17' },
+      { language: 'c99', label: 'C99' },
+      { language: 'python3', label: 'Python 3.13' },
+      { language: 'java8', label: 'Java 8' },
+    ],
+    guidance:
+      '지원 언어로 풀이 설정을 변경하거나 에이전트 격리 실행을 선택하세요. 언어 표준을 자동으로 바꾸지 않습니다.',
+  });
+  await mount('verification');
+  const environment = [...host.querySelectorAll('select')].find((s) =>
+    [...s.options].some((o) => o.value === 'zoj'),
+  );
+  await act(async () => {
+    environment.value = 'zoj';
+    environment.dispatchEvent(new window.Event('change', { bubbles: true }));
+  });
+  await click('전체 풀이 검증 시작');
+  const notice = host.querySelector('.judge-compatibility');
+  assert.ok(notice);
+  assert.match(notice.textContent, /7개/);
+  assert.equal(notice.querySelectorAll('tbody tr').length, 7);
+  assert.equal((notice.textContent.match(/ZOJ 지원 언어:/g) || []).length, 1);
+  assert.equal(
+    notice.querySelector('a').getAttribute('href'),
+    '/problems/p/solutions',
+  );
+  assert.equal(requests.length, 1);
+  await click('에이전트 격리 실행으로 변경');
+  assert.equal(environment.value, 'editor');
+  assert.equal(host.querySelector('.judge-compatibility'), null);
+  assert.equal(requests.length, 1);
+  assert.equal(state.document.solutions['main.py'].language, 'python3');
+  requestError = null;
+  await click('전체 풀이 검증 시작');
+  assert.equal(requests.at(-1).body.options.execution_backend, 'editor');
 });
