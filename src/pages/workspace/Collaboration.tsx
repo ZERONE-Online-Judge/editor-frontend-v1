@@ -1,5 +1,9 @@
+import { can, permissionsOf } from '../../lib/permissions';
+import type { Permission } from '../../lib/permissions';
+import PermissionChecklist, {
+  PermissionSummary,
+} from '../../components/PermissionChecklist';
 import { Link } from 'react-router-dom';
-import { folderRoles } from '../../lib/sharedFolders';
 import { useCallback, useEffect, useState } from 'react';
 import { api, post, put, patch, time } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
@@ -21,13 +25,15 @@ export default function Collaboration({
   return access ? <AccessPanel /> : <IssuesPanel />;
 }
 function AccessPanel() {
-  const { data, editable, notify } = useWorkspace();
-  const canManage = editable && data.problem.can_manage_access !== false;
+  const { data, notify, reload } = useWorkspace();
+  const canManage =
+    can(data.problem, 'manage_access') &&
+    data.problem.can_manage_access !== false;
   const [rows, setRows] = useState<Access[]>([]);
   const [login, setLogin] = useState('');
-  const [role, setRole] = useState('WRITE');
-  const [reviewer, setReviewer] = useState(false);
-  const [translator, setTranslator] = useState(false);
+  const [selected, setSelected] = useState<Permission[]>([]);
+  const [memberPermissions, setMemberPermissions] = useState<Permission[]>([]);
+  const [editingMember, setEditingMember] = useState<Access | null>(null);
   const [busy, setBusy] = useState(false);
   const load = useCallback(
     () =>
@@ -38,158 +44,175 @@ function AccessPanel() {
   );
   useEffect(() => {
     if (canManage) void load();
-  }, [load, canManage]);
+  }, [canManage, load]);
   async function change(
     target: string,
-    type: string,
-    flags = { reviewer: false, translator: false },
+    permissions: Permission[],
+    remove = false,
   ) {
     setBusy(true);
     try {
       await put(`/problems/${data.problem.id}/accesses`, {
         login: target,
-        role: type,
-        ...flags,
+        permissions,
+        ...(remove ? { role: 'NONE' } : {}),
       });
       await load();
+      await reload(true);
       notify('협업 권한을 변경했습니다. 즉시 적용됩니다.');
       setLogin('');
+      setEditingMember(null);
     } catch (e) {
       notify((e as Error).message, true);
     } finally {
       setBusy(false);
     }
   }
+  const actorPermissions = permissionsOf(data.problem);
   return (
     <div className="section-stack">
       <SectionHeading
         title="협업 권한"
-        description="Editor에 로그인한 사용자를 추가합니다. 권한 변경은 커밋 없이 즉시 적용됩니다."
+        description="허용할 기능을 선택하세요. 권한 변경은 커밋 없이 즉시 적용됩니다."
       />
       {data.problem.workspace_id && (
         <Notice>
-          공유 작업 폴더 <strong>{data.problem.workspace_name}</strong>에서{' '}
-          {folderRoles[data.problem.workspace_role || 'VIEWER']} 권한을
-          받았습니다. 폴더를 통한 권한은{' '}
+          공유 작업 폴더 <strong>{data.problem.workspace_name}</strong>에서 받은
+          권한은{' '}
           <Link to={`/problems?folder=${data.problem.workspace_id}`}>
             공유 폴더의 구성원
           </Link>
-          에서 관리합니다. 아래의 문제별 직접 공유는 별도 권한으로 유지됩니다.
+          에서 관리합니다. 문제에 직접 받은 권한과 합쳐 적용되며, 직접 공유를
+          해제해도 폴더 권한은 유지됩니다.
+          <div className="permission-inherited">
+            <strong>폴더에서 받은 권한</strong>
+            <PermissionSummary
+              value={data.problem.inherited_permissions || []}
+            />
+          </div>
         </Notice>
       )}
       {!canManage ? (
         <Notice>
-          개인 문제는 쓰기 권한이 있는 사용자가, 공유 폴더의 문제는 문제
-          소유자가 직접 공유를 관리할 수 있습니다.
+          구성원·권한 관리 권한이 필요합니다. 공유 폴더 문제의 직접 공유는 문제
+          소유자만 관리합니다.
         </Notice>
       ) : (
         <>
           <section className="card">
             <SectionHeading title="협업자 추가" />
-            <fieldset className="form-grid" disabled={busy}>
-              <label>
-                이메일 또는 Editor 아이디
-                <input
-                  value={login}
-                  onChange={(e) => setLogin(e.target.value)}
-                  placeholder="name@example.com 또는 handle"
-                />
-              </label>
-              <label>
-                접근 권한
-                <select value={role} onChange={(e) => setRole(e.target.value)}>
-                  <option value="WRITE">쓰기 · 자료 수정과 커밋</option>
-                  <option value="READ">읽기 · 자료와 결과 열람</option>
-                </select>
-              </label>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={reviewer}
-                  onChange={(e) => setReviewer(e.target.checked)}
-                />
-                검수자 · 이슈 작성과 처리
-              </label>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={translator}
-                  onChange={(e) => setTranslator(e.target.checked)}
-                />
-                번역자 · 지문 수정과 커밋
-              </label>
+            <label>
+              이메일 또는 Editor 아이디
+              <input
+                value={login}
+                disabled={busy}
+                onChange={(e) => setLogin(e.target.value)}
+                placeholder="name@example.com 또는 handle"
+              />
+            </label>
+            <PermissionChecklist
+              value={selected}
+              onChange={setSelected}
+              disabled={busy}
+              allowed={actorPermissions}
+            />
+            <button
+              className="button primary"
+              disabled={busy || !login.trim()}
+              onClick={() => void change(login, selected)}
+            >
+              <Icon name="plus" />
+              권한 추가
+            </button>
+          </section>
+          <section className="card">
+            <SectionHeading title="문제에 직접 공유한 구성원" />
+            {rows.map((member) => (
+              <div className="permission-member" key={member.user_id}>
+                <div>
+                  <strong>{member.display_name}</strong>
+                  <span className="subtext"> @{member.handle}</span>
+                  <PermissionSummary value={permissionsOf(member)} />
+                </div>
+                {member.role === 'OWNER' ? (
+                  <Badge tone="accent">소유자 · 모든 권한</Badge>
+                ) : (
+                  <div className="actions">
+                    <button
+                      className="button small"
+                      disabled={
+                        busy ||
+                        !permissionsOf(member).every((p) =>
+                          actorPermissions.includes(p),
+                        )
+                      }
+                      onClick={() => {
+                        setEditingMember(member);
+                        setMemberPermissions(permissionsOf(member));
+                      }}
+                    >
+                      권한 수정
+                    </button>
+                    <button
+                      className="text-button danger-text"
+                      disabled={
+                        busy ||
+                        !permissionsOf(member).every((p) =>
+                          actorPermissions.includes(p),
+                        )
+                      }
+                      onClick={() => void change(member.handle, [], true)}
+                    >
+                      직접 공유 해제
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </section>
+        </>
+      )}
+      {editingMember && (
+        <Modal
+          title={`${editingMember.display_name} · 기능별 권한`}
+          wide
+          onClose={() => {
+            if (!busy) setEditingMember(null);
+          }}
+          footer={
+            <>
+              <button
+                className="button"
+                disabled={busy}
+                onClick={() => setEditingMember(null)}
+              >
+                취소
+              </button>
               <button
                 className="button primary"
-                disabled={!login}
+                disabled={busy}
                 onClick={() =>
-                  void change(login, role, { reviewer, translator })
+                  void change(editingMember.handle, memberPermissions)
                 }
               >
-                <Icon name="plus" />
-                권한 추가
+                권한 저장
               </button>
-            </fieldset>
-          </section>
-          <section className="card no-padding">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>사용자</th>
-                  <th>접근 권한</th>
-                  <th>역할</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((member) => (
-                  <tr key={member.user_id}>
-                    <td>
-                      <strong>{member.display_name}</strong>
-                      <div className="subtext">@{member.handle}</div>
-                    </td>
-                    <td>
-                      <Badge
-                        tone={member.role === 'OWNER' ? 'accent' : 'neutral'}
-                      >
-                        {member.role}
-                      </Badge>
-                    </td>
-                    <td>
-                      <div className="inline-tags">
-                        {member.reviewer && <Badge>검수자</Badge>}
-                        {member.translator && <Badge>번역자</Badge>}
-                      </div>
-                    </td>
-                    <td>
-                      {member.role !== 'OWNER' && (
-                        <button
-                          className="text-button danger-text"
-                          disabled={busy}
-                          onClick={() => void change(member.handle, 'NONE')}
-                        >
-                          접근 해제
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-          <div className="workspace-guide">
-            <Icon name="users" />
-            <p>
-              각 협업자는 개인 작업 사본을 가집니다. 커밋된 변경은 업데이트로
-              가져오며, 같은 항목을 수정하면 충돌을 확인합니다.
-            </p>
-          </div>
-        </>
+            </>
+          }
+        >
+          <PermissionChecklist
+            value={memberPermissions}
+            onChange={setMemberPermissions}
+            allowed={actorPermissions}
+            disabled={busy}
+          />
+        </Modal>
       )}
     </div>
   );
 }
 function IssuesPanel() {
-  const { data, editable, notify } = useWorkspace();
+  const { data, notify } = useWorkspace();
   const [rows, setRows] = useState<Issue[]>([]);
   const [adding, setAdding] = useState(false);
   const [selected, setSelected] = useState<Issue | null>(null);
@@ -198,7 +221,7 @@ function IssuesPanel() {
   const [kind, setKind] = useState('BUG');
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
-  const canEdit = editable || data.problem.reviewer || data.problem.translator;
+  const canEdit = can(data.problem, 'issues');
   const load = useCallback(async () => {
     const values = await api<Issue[]>(`/problems/${data.problem.id}/issues`);
     setRows(values);

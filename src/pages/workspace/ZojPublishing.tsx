@@ -119,8 +119,8 @@ export default function ZojPublishing({
       </div>
       {!editable ? (
         <p className="muted">
-          쓰기 권한이 있는 협업자가 자신의 ZOJ 문제 등록 권한으로 전송할 수
-          있습니다.
+          협업 권한에서 ‘ZOJ로 문제 전송’을 허용받아야 합니다. ZOJ에서도 본인의
+          대회 문제 등록 권한을 확인합니다.
         </p>
       ) : !ready ? (
         <p className="muted">

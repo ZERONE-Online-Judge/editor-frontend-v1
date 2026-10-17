@@ -1,6 +1,7 @@
 import type { Folder, FolderRole, Problem } from './types';
 export const folderRoles: Record<FolderRole, string> = {
   OWNER: '소유자',
+  CUSTOM: '기능별 권한',
   ADMIN: '관리자',
   EDITOR: '편집자',
   REVIEWER: '검수자',
@@ -8,6 +9,7 @@ export const folderRoles: Record<FolderRole, string> = {
   VIEWER: '읽기',
 };
 export const folderRoleHelp: Record<Exclude<FolderRole, 'OWNER'>, string> = {
+  CUSTOM: '선택한 기능만 허용',
   ADMIN: '구성원 초대·권한 관리, 하위 폴더와 문제 편집',
   EDITOR: '문제 자료 수정·실행·커밋, 하위 폴더 정리',
   REVIEWER: '커밋된 자료로 검증 실행, 임시 검수 코드 실행, 이슈 작성',
@@ -40,6 +42,8 @@ export function canOrganizeProblem(problem: Problem, handle?: string) {
   return (
     !problem.workspace_id ||
     problem.owner === handle ||
-    ['OWNER', 'ADMIN', 'EDITOR'].includes(problem.workspace_role || '')
+    (problem.workspace_permissions
+      ? problem.workspace_permissions.includes('manage_folders')
+      : ['OWNER', 'ADMIN', 'EDITOR'].includes(problem.workspace_role || ''))
   );
 }

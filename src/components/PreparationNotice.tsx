@@ -1,3 +1,4 @@
+import { can } from '../lib/permissions';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, post } from '../lib/api';
@@ -12,7 +13,8 @@ export default function PreparationNotice({
     rows: NonNullable<WorkspaceData['pending_preparations']>,
   ) => void;
 }) {
-  const { data, dirty, editable, save, reload, notify } = useWorkspace();
+  const { data, dirty, save, reload, notify } = useWorkspace();
+  const editable = can(data.problem, 'edit_tests');
   const [state, setState] = useState({
     version: data.version,
     pending_preparations: data.pending_preparations || [],

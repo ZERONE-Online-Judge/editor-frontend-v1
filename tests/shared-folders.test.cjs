@@ -34,11 +34,17 @@ function load(name, mocks = {}) {
   return m.exports;
 }
 const helpers = load('lib/sharedFolders.ts');
+const permissions = load('lib/permissions.ts');
+const checklist = load('components/PermissionChecklist.tsx', {
+  '../lib/permissions': permissions,
+});
 const call = async (method, path, body) => {
   requests.push({ method, path, body });
   return reply(method, path, body);
 };
 const components = load('components/SharedFolders.tsx', {
+  './PermissionChecklist': checklist,
+  '../lib/permissions': permissions,
   '../lib/api': {
     api: (p, o = {}) => call(o.method || 'GET', p),
     post: (p, b) => call('POST', p, b),
@@ -154,19 +160,22 @@ test('Admins can change a member role but the owner is protected and removal is 
     },
     onLeft() {},
   });
-  const role = v.host.querySelector('select[aria-label="동료 권한"]');
-  assert.ok(role);
-  assert.equal(v.host.querySelector('select[aria-label="작성자 권한"]'), null);
-  await act(async () => {
-    role.value = 'TRANSLATOR';
-    role.dispatchEvent(new window.Event('change', { bubbles: true }));
-  });
+  assert.equal(v.host.querySelector('select'), null);
+  assert.equal(buttons(v, '권한 수정').length, 1);
+  await click(v, '권한 수정');
+  const editor = v.host.querySelector('.permission-member-editor');
+  await act(async () =>
+    [...editor.querySelectorAll('button')]
+      .find((b) => b.textContent === '번역')
+      .click(),
+  );
+  await click(v, '권한 저장');
   assert.deepEqual(
     requests.find((r) => r.method === 'PUT'),
     {
       method: 'PUT',
       path: '/shared-folders/root/members/peer',
-      body: { role: 'TRANSLATOR' },
+      body: { permissions: ['translate', 'render', 'issues'] },
     },
   );
   await click(v, '내보내기');
@@ -199,11 +208,11 @@ test('Inviting uses the chosen role and explains inbox acceptance without claimi
     setter.call(input, 'new@example.com');
     input.dispatchEvent(new window.Event('input', { bubbles: true }));
   });
-  const select = v.host.querySelector('select:not([aria-label])');
-  await act(async () => {
-    select.value = 'REVIEWER';
-    select.dispatchEvent(new window.Event('change', { bubbles: true }));
-  });
+  await act(async () =>
+    [...v.host.querySelectorAll('.shared-invite-form button')]
+      .find((b) => b.textContent === '검수')
+      .click(),
+  );
   await act(async () =>
     v.host
       .querySelector('form')
@@ -216,7 +225,10 @@ test('Inviting uses the chosen role and explains inbox acceptance without claimi
     {
       method: 'POST',
       path: '/shared-folders/root/invitations',
-      body: { email: 'new@example.com', role: 'REVIEWER' },
+      body: {
+        email: 'new@example.com',
+        permissions: ['execute', 'render', 'issues'],
+      },
     },
   );
   assert.match(v.host.textContent, /이메일은 발송하지 않습니다/);
@@ -273,4 +285,46 @@ test('Shared read and review members cannot reorganize other authors problems', 
     ),
     true,
   );
+});
+
+test('Explicit read-only permissions override an old ADMIN label', async () => {
+  reply = async () => ({ ...members, role: 'ADMIN', permissions: [] });
+  const v = await mount(components.SharedFolderMembers, {
+    folder,
+    onClose() {},
+    onChanged() {},
+    onLeft() {},
+  });
+  assert.equal(v.host.querySelector('input[type=email]'), null);
+  assert.equal(buttons(v, '권한 수정').length, 0);
+  await v.close();
+});
+test('Custom membership administrators see the same checklist and cannot grant unavailable features', async () => {
+  reply = async () => ({
+    ...members,
+    role: 'CUSTOM',
+    permissions: ['manage_access', 'issues'],
+    members: [
+      members.members[0],
+      { ...members.members[1], role: 'CUSTOM', permissions: ['issues'] },
+    ],
+  });
+  const v = await mount(components.SharedFolderMembers, {
+    folder,
+    onClose() {},
+    onChanged() {},
+    onLeft() {},
+  });
+  const scopes = [
+    ...v.host.querySelectorAll('.shared-invite-form input[type=checkbox]'),
+  ];
+  assert.equal(scopes.length, 16);
+  assert.equal(scopes.filter((x) => !x.disabled).length, 2);
+  await act(async () => buttons(v, '검수')[0].click());
+  const checked = scopes
+    .filter((x) => x.checked)
+    .map((x) => x.closest('label').textContent);
+  assert.equal(checked.length, 1);
+  assert.match(checked[0], /이슈/);
+  await v.close();
 });

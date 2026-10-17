@@ -1,3 +1,4 @@
+import { permissionsOf } from '../lib/permissions';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError, bytes, patch, post, put, time } from '../lib/api';
@@ -92,6 +93,7 @@ export default function Problems() {
   }, [filter]);
   const path = folderPath(folders, folderId);
   const current = folders.find((f) => f.id === folderId);
+  const creatable = current?.can_create !== false && (!folderId || !!current);
   const writable = canEditFolder(current) && (!folderId || !!current);
   const sharedRoot = current?.workspace_id
     ? folders.find((f) => f.id === current.workspace_id)
@@ -217,7 +219,7 @@ export default function Problems() {
         <div className="actions">
           <button
             className="button"
-            disabled={!writable}
+            disabled={!creatable}
             onClick={() => setImporting(true)}
           >
             <Icon name="upload" />
@@ -225,7 +227,7 @@ export default function Problems() {
           </button>
           <button
             className="button primary"
-            disabled={!writable}
+            disabled={!creatable}
             onClick={() => setCreate(true)}
           >
             <Icon name="plus" />새 문제
@@ -560,13 +562,9 @@ export default function Problems() {
                           >
                             {p.role === 'OWNER'
                               ? '소유자'
-                              : p.role === 'WRITE'
-                                ? '편집 가능'
-                                : p.reviewer
-                                  ? '검수자'
-                                  : p.translator
-                                    ? '번역자'
-                                    : '읽기 전용'}
+                              : permissionsOf(p).length
+                                ? '기능별 권한'
+                                : '읽기 전용'}
                           </Badge>
                         </td>
                         <td>
@@ -630,14 +628,14 @@ export default function Problems() {
                       : '이 폴더에 아직 문제가 없습니다.'
                 }
                 description={
-                  writable
+                  creatable
                     ? '새 문제를 만들거나 다른 폴더의 문제를 옮겨 보세요.'
-                    : '이 폴더의 자료를 열람할 수 있습니다. 문제 추가는 편집자 이상 권한이 필요합니다.'
+                    : '이 폴더의 자료를 열람할 수 있습니다. 문제 추가 권한은 폴더 구성원 설정에서 변경합니다.'
                 }
                 action={
                   filter !== 'deleted' &&
                   !query &&
-                  writable && (
+                  creatable && (
                     <button
                       className="button primary"
                       onClick={() => setCreate(true)}

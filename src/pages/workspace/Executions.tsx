@@ -1,3 +1,4 @@
+import { can, canEdit } from '../../lib/permissions';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -58,7 +59,6 @@ export default function Executions({
   const {
     data,
     document: doc,
-    editable,
     run,
     notify,
     reload,
@@ -66,7 +66,10 @@ export default function Executions({
     dirty,
   } = useWorkspace();
   const { user } = useAuth();
-  const canInvoke = editable || data.problem.reviewer;
+  const canInvoke = can(data.problem, 'execute');
+  const canPackage = can(data.problem, 'package');
+  const canApply = can(data.problem, 'edit_tests');
+  const draft = canEdit(data.problem);
   const [rows, setRows] = useState<Job[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -341,7 +344,7 @@ export default function Executions({
             <button
               className="button primary"
               disabled={
-                !editable ||
+                !canPackage ||
                 busy ||
                 (exportFormat === 'zoj' && !packageSets.length)
               }
@@ -369,7 +372,7 @@ export default function Executions({
           aria-label="전체 검증 실행"
         >
           {environmentPanel}
-          {!editable && data.problem.reviewer && (
+          {!draft && canInvoke && (
             <Notice>
               검수 실행은 커밋된 리비전 r{data.problem.revision}의 입력·기대
               출력과 판정 태그를 사용합니다. 결과와 임시 코드는 검증 기록에
@@ -382,7 +385,7 @@ export default function Executions({
             revision={data.problem.revision}
             limits={environment?.limits}
             allowed={canInvoke}
-            writer={editable}
+            writer={draft}
             busy={busy || executionBackend === null}
             start={(options) => void start('verify', options)}
           />
@@ -404,7 +407,7 @@ export default function Executions({
                 type="checkbox"
                 aria-label="패키지 생성 전 검증"
                 checked={verifyPackage}
-                disabled={!editable || busy}
+                disabled={!canPackage || busy}
                 onChange={(event) => setVerifyPackage(event.target.checked)}
               />
               패키지 생성 전 풀이·구성요소 검증 실행
@@ -458,7 +461,7 @@ export default function Executions({
                     testsets={doc.testsets}
                     value={packageSets}
                     onChange={setPackageSets}
-                    disabled={!editable || busy}
+                    disabled={!canPackage || busy}
                   />
                 </>
               )}
@@ -482,7 +485,7 @@ export default function Executions({
           </div>
           <ZojPublishing
             problemId={data.problem.id}
-            editable={editable}
+            editable={can(data.problem, 'publish')}
             job={job}
             stale={stale || dirty}
           />
@@ -740,22 +743,30 @@ export default function Executions({
                   <strong>
                     {job.result.summary || '실행 자리를 기다리고 있습니다.'}
                   </strong>
-                  {(editable ||
-                    (data.problem.reviewer &&
-                      job.requested_by === user?.id)) && (
-                    <button
-                      className="text-button"
-                      onClick={() =>
-                        void post(
-                          `/problems/${data.problem.id}/jobs/${job.id}/cancel`,
-                        )
-                          .then(fetchRows)
-                          .catch((e) => notify(e.message, true))
-                      }
-                    >
-                      작업 취소
-                    </button>
-                  )}
+                  {(draft || job.requested_by === user?.id) &&
+                    can(
+                      data.problem,
+                      job.kind === 'package'
+                        ? 'package'
+                        : job.kind === 'prepare'
+                          ? 'prepare'
+                          : job.kind === 'render'
+                            ? 'render'
+                            : 'execute',
+                    ) && (
+                      <button
+                        className="text-button"
+                        onClick={() =>
+                          void post(
+                            `/problems/${data.problem.id}/jobs/${job.id}/cancel`,
+                          )
+                            .then(fetchRows)
+                            .catch((e) => notify(e.message, true))
+                        }
+                      >
+                        작업 취소
+                      </button>
+                    )}
                 </div>
               )}
               {job.result.error && (
@@ -810,7 +821,7 @@ export default function Executions({
                   {!job.application && (
                     <button
                       className="button primary"
-                      disabled={!editable || stale || dirty}
+                      disabled={!canApply || stale || dirty}
                       onClick={() => void apply()}
                     >
                       작업 사본에 반영
@@ -1016,7 +1027,7 @@ export default function Executions({
                       : undefined
                   }
                   allowed={
-                    editable &&
+                    canApply &&
                     !dirty &&
                     (!stale ||
                       job.application?.document_hash === data.document_hash)
@@ -1117,7 +1128,7 @@ export default function Executions({
               <InvocationComments
                 problemId={data.problem.id}
                 jobId={job.id}
-                allowed={canInvoke}
+                allowed={can(data.problem, 'issues')}
               />
             </>
           ) : jobError?.id === selected ? (

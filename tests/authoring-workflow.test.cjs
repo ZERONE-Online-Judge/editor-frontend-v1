@@ -352,7 +352,7 @@ function workspace() {
   let doc = fixture();
   context = {
     data: {
-      problem: { id: 'fixture', note: '', modified: false },
+      problem: { id: 'fixture', role: 'WRITE', note: '', modified: false },
       cautions: [],
       version: 0,
     },
@@ -449,6 +449,7 @@ test('Validator selection omits unrelated and generator sources', async () => {
 test('Read-only users can select code for download while editing stays disabled', async () => {
   workspace();
   context.editable = false;
+  context.data.problem.role = 'READ';
   const { host, close } = await mount(
     source('pages/workspace/Files.tsx').default,
   );
@@ -473,6 +474,7 @@ test('Read-only users can select tests and download available files without chan
   doc.testsets.tests.groups_enabled = false;
   doc.testsets.tests.groups = {};
   context.editable = false;
+  context.data.problem.role = 'READ';
   const { host, close } = await mount(
     source('pages/workspace/Tests.tsx').default,
   );

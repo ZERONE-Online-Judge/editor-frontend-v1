@@ -1,3 +1,4 @@
+import { can } from '../../lib/permissions';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { upload } from '../../lib/api';
@@ -124,7 +125,7 @@ export default function ComponentTests({
             <div className="actions">
               <button
                 className="button"
-                disabled={(!editable && !data.problem.reviewer) || !doc[kind]}
+                disabled={!can(data.problem, 'execute') || !doc[kind]}
                 onClick={() =>
                   void run(
                     kind === 'checker' ? 'checker-tests' : 'validator-tests',

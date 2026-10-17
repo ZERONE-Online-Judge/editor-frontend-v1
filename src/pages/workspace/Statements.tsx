@@ -1,3 +1,4 @@
+import { can } from '../../lib/permissions';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useWorkspace } from '../../lib/workspace';
@@ -32,7 +33,7 @@ export default function Statements() {
   const statement = doc.statements[language];
   const canEdit =
     editable ||
-    (data.problem.translator && language !== doc.translation_source);
+    (can(data.problem, 'translate') && language !== doc.translation_source);
   return (
     <div className="section-stack">
       <SectionHeading
@@ -46,12 +47,7 @@ export default function Statements() {
             </button>
             <button
               className="button"
-              disabled={
-                (!editable &&
-                  !data.problem.translator &&
-                  !data.problem.reviewer) ||
-                busy
-              }
+              disabled={!can(data.problem, 'render') || busy}
               onClick={() =>
                 void run('render').catch((e) => notify(e.message, true))
               }

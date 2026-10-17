@@ -1,3 +1,4 @@
+import type { Permission } from './permissions';
 export type User = {
   id: string;
   account_id?: string | null;
@@ -115,12 +116,22 @@ export type ProblemDocument = {
   materials: Record<string, Material>;
 };
 export type FolderRole =
-  'OWNER' | 'ADMIN' | 'EDITOR' | 'REVIEWER' | 'TRANSLATOR' | 'VIEWER';
+  | 'OWNER'
+  | 'ADMIN'
+  | 'EDITOR'
+  | 'REVIEWER'
+  | 'TRANSLATOR'
+  | 'VIEWER'
+  | 'CUSTOM';
 export type Problem = {
   workspace_id?: string | null;
   workspace_name?: string | null;
   workspace_role?: FolderRole | null;
   can_manage_access?: boolean;
+  permissions?: Permission[];
+  direct_permissions?: Permission[];
+  inherited_permissions?: Permission[];
+  workspace_permissions?: Permission[];
   folder_id: string | null;
   id: string;
   slug: string;
@@ -148,6 +159,8 @@ export type Caution = {
 export type Folder = {
   workspace_id?: string | null;
   workspace_role?: FolderRole | null;
+  permissions?: Permission[];
+  can_create?: boolean;
   can_edit?: boolean;
   can_manage?: boolean;
   id: string;
@@ -576,6 +589,7 @@ export type Publication = {
   result: { problem_id: string; title: string; revision: number; url: string };
 };
 export type Access = {
+  permissions?: Permission[];
   user_id: string;
   handle: string;
   display_name: string;

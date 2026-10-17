@@ -2143,3 +2143,42 @@ for (const [role, allowed] of [
     }
   });
 }
+
+for (const [permissions, allowed] of [
+  [[], false],
+  [['execute'], true],
+]) {
+  test(`Feature grants override WRITE role for verification: ${allowed}`, async () => {
+    state.problem.role = 'WRITE';
+    state.problem.permissions = permissions;
+    await mount('verification');
+    const run = [...host.querySelectorAll('button')].find((b) =>
+      b.textContent.includes('풀이 검증 시작'),
+    );
+    assert.ok(run);
+    assert.equal(run.disabled, !allowed);
+    assert.equal(
+      [...host.querySelectorAll('button')].some(
+        (b) => b.textContent === '작업 사본 저장',
+      ),
+      false,
+    );
+  });
+}
+
+test('Package creation can be granted without edits or verification execution', async () => {
+  state.problem.role = 'READ';
+  state.problem.permissions = ['package'];
+  await mount('packages');
+  const run = [...host.querySelectorAll('button')].find(
+    (b) => b.textContent === '검증 후 패키지 생성',
+  );
+  assert.ok(run);
+  assert.equal(run.disabled, false);
+  assert.equal(
+    [...host.querySelectorAll('button')].some(
+      (b) => b.textContent === '작업 사본 저장',
+    ),
+    false,
+  );
+});

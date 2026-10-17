@@ -1,3 +1,4 @@
+import { can, canEdit, permissionsOf, tabEditable } from '../lib/permissions';
 import {
   useCallback,
   useEffect,
@@ -82,7 +83,7 @@ export default function ProblemWorkspace() {
     revisionHead?.revision ?? 0,
   );
   const displayedRevision =
-    data?.problem.role === 'READ' && !data.problem.translator
+    data && !canEdit(data.problem)
       ? data.problem.revision
       : (data?.base_revision ?? 0);
   const hasNewRevision = sharedRevision > displayedRevision;
@@ -254,7 +255,11 @@ export default function ProblemWorkspace() {
     async (kind: JobKind, options: Record<string, unknown> = {}) => {
       const committed =
         options.snapshot === 'committed' ||
-        (data?.problem.role === 'READ' && data.problem.reviewer);
+        (data &&
+          (!canEdit(data.problem) ||
+            (kind === 'render' &&
+              !can(data.problem, 'edit_statements') &&
+              !can(data.problem, 'translate'))));
       const version = committed ? data!.version : await save();
       const result = await post<Job>(`/problems/${problemId}/jobs`, {
         kind,
@@ -327,7 +332,7 @@ export default function ProblemWorkspace() {
             document: doc,
             dirty,
             busy,
-            editable: data.problem.role !== 'READ',
+            editable: tabEditable(data.problem, tab),
             mutate,
             save,
             reload,
@@ -335,7 +340,7 @@ export default function ProblemWorkspace() {
             notify,
           }
         : null,
-    [data, doc, dirty, busy, mutate, save, reload, run, notify],
+    [data, doc, dirty, busy, mutate, save, reload, run, notify, tab],
   );
   async function workingAction(
     action: string,
@@ -343,11 +348,7 @@ export default function ProblemWorkspace() {
   ) {
     setBusy(true);
     try {
-      if (
-        action === 'update' &&
-        data?.problem.role === 'READ' &&
-        !data.problem.translator
-      ) {
+      if (action === 'update' && data && !canEdit(data.problem)) {
         await reload();
         notify('최신 공유 리비전을 불러왔습니다.');
         return;
@@ -418,11 +419,9 @@ export default function ProblemWorkspace() {
               <Badge tone="accent">
                 {data.problem.role === 'OWNER'
                   ? '소유자'
-                  : data.problem.role === 'WRITE'
-                    ? '편집자'
-                    : data.problem.translator
-                      ? '번역자'
-                      : '읽기 전용'}
+                  : permissionsOf(data.problem).length
+                    ? '기능별 권한'
+                    : '읽기 전용'}
               </Badge>
             </div>
             <div className="working-state">
@@ -430,10 +429,8 @@ export default function ProblemWorkspace() {
               <span>공유 r{sharedRevision}</span>
               <span className="separator">·</span>
               <span>
-                {data.problem.role === 'READ' && !data.problem.translator
-                  ? '현재 보는 리비전'
-                  : '내 작업 사본'}{' '}
-                r{displayedRevision}
+                {!canEdit(data.problem) ? '현재 보는 리비전' : '내 작업 사본'} r
+                {displayedRevision}
               </span>
               <span
                 className={`working-dot ${dirty ? 'warning' : data.problem.modified ? 'accent' : 'success'}`}
@@ -459,7 +456,7 @@ export default function ProblemWorkspace() {
               <Icon name="download" />
               업데이트
             </button>
-            {(data.problem.role !== 'READ' || data.problem.translator) && (
+            {canEdit(data.problem) && (
               <>
                 <button
                   className="button"

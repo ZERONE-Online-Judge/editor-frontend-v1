@@ -1,3 +1,4 @@
+import { can } from '../../lib/permissions';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { blobText, upload } from '../../lib/api';
@@ -91,11 +92,11 @@ export default function Tests() {
           <>
             <button
               className="button primary"
-              disabled={!editable || busy}
+              disabled={!can(data.problem, 'prepare') || busy}
               onClick={() =>
                 void run('prepare', {
                   testset: selected,
-                  auto_apply: autoApply,
+                  auto_apply: autoApply && editable,
                 }).catch((e) => notify(e.message, true))
               }
             >
@@ -105,12 +106,12 @@ export default function Tests() {
             {Object.keys(doc.testsets).length > 1 && (
               <button
                 className="button"
-                disabled={!editable || busy}
+                disabled={!can(data.problem, 'prepare') || busy}
                 onClick={() =>
                   void run('prepare', {
                     testset: selected,
                     all_testsets: true,
-                    auto_apply: autoApply,
+                    auto_apply: autoApply && editable,
                   }).catch((e) => notify(e.message, true))
                 }
               >

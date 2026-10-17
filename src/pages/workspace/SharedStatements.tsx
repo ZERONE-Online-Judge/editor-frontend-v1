@@ -1,3 +1,4 @@
+import { can } from '../../lib/permissions';
 import { useEffect, useState } from 'react';
 import { useWorkspace } from '../../lib/workspace';
 import {
@@ -146,7 +147,7 @@ export default function SharedStatements({ language }: { language: string }) {
         disabled={
           !current ||
           language === doc.translation_source ||
-          (!editable && !data.problem.translator)
+          (!editable && !can(data.problem, 'translate'))
         }
         onClick={() => {
           if (current)

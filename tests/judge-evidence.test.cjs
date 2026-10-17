@@ -42,6 +42,7 @@ loaded.require = (id) => {
       },
     };
   if (
+    id === '../../lib/permissions' ||
     id === '../../lib/workspace' ||
     id === '../../lib/executionNavigation' ||
     id === '../../lib/authContext' ||

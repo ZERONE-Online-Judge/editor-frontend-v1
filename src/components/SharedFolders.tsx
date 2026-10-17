@@ -1,7 +1,10 @@
+import PermissionChecklist, { PermissionSummary } from './PermissionChecklist';
+import { allPermissions } from '../lib/permissions';
+import type { Permission } from '../lib/permissions';
 import { useCallback, useEffect, useState } from 'react';
 import { api, post, put, time } from '../lib/api';
 import { useAuth } from '../lib/authContext';
-import { folderRoles, folderRoleHelp } from '../lib/sharedFolders';
+import { folderRoles } from '../lib/sharedFolders';
 import type { Folder, FolderRole } from '../lib/types';
 import { Modal, Notice, Badge } from './ui';
 
@@ -10,34 +13,29 @@ type Invite = {
   workspace_id: string;
   folder_name: string;
   role: FolderRole;
+  permissions?: Permission[];
   inviter: string;
   expires_at: number;
 };
 type Member = {
   user_id: string;
   role: FolderRole;
+  permissions?: Permission[];
   display_name: string;
   handle: string;
 };
 type Members = {
   role: FolderRole;
+  permissions?: Permission[];
   members: Member[];
   invitations: {
     id: string;
     email: string;
     role: FolderRole;
+    permissions?: Permission[];
     expires_at: number;
   }[];
 };
-const choices = Object.keys(folderRoleHelp) as Exclude<FolderRole, 'OWNER'>[];
-function RoleOptions() {
-  return choices.map((role) => (
-    <option value={role} key={role}>
-      {folderRoles[role]}
-    </option>
-  ));
-}
-
 export function FolderInvitations({
   onAccepted,
   refreshTick = 0,
@@ -98,6 +96,7 @@ export function FolderInvitations({
               {time(invite.expires_at)}까지
             </p>
           </div>
+          <PermissionSummary value={invite.permissions || []} />
           <div className="actions">
             <button
               className="button"
@@ -192,7 +191,9 @@ export function SharedFolderMembers({
   const { user } = useAuth();
   const [data, setData] = useState<Members | null>(null);
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<Exclude<FolderRole, 'OWNER'>>('VIEWER');
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [memberPermissions, setMemberPermissions] = useState<Permission[]>([]);
+  const [editing, setEditing] = useState<Member | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -215,7 +216,10 @@ export function SharedFolderMembers({
       active = false;
     };
   }, [base]);
-  const admin = data?.role === 'OWNER' || data?.role === 'ADMIN';
+  const actorPermissions =
+    data?.permissions ||
+    (data?.role === 'OWNER' || data?.role === 'ADMIN' ? allPermissions : []);
+  const admin = actorPermissions.includes('manage_access');
   async function act(
     action: () => Promise<unknown>,
     success: string,
@@ -266,8 +270,8 @@ export function SharedFolderMembers({
                   e.preventDefault();
                   void act(
                     () =>
-                      post(`${base}/invitations`, { email, role }).then(() =>
-                        setEmail(''),
+                      post(`${base}/invitations`, { email, permissions }).then(
+                        () => setEmail(''),
                       ),
                     '초대를 등록했습니다. 상대방이 로그인 후 받은 초대에서 수락할 수 있습니다.',
                   );
@@ -285,22 +289,19 @@ export function SharedFolderMembers({
                       onChange={(e) => setEmail(e.target.value)}
                     />
                   </label>
-                  <label>
-                    초대 권한
-                    <select
-                      value={role}
-                      onChange={(e) => setRole(e.target.value as typeof role)}
-                    >
-                      <RoleOptions />
-                    </select>
-                  </label>
+                  <PermissionChecklist
+                    folder
+                    value={permissions}
+                    onChange={setPermissions}
+                    disabled={busy}
+                    allowed={actorPermissions}
+                  />
                   <button className="button primary" disabled={!email.trim()}>
                     초대하기
                   </button>
                 </fieldset>
                 <p className="muted">
-                  {folderRoleHelp[role]} · 초대는 7일간 유효하며 이메일은
-                  발송하지 않습니다.
+                  초대는 7일간 유효하며 이메일은 발송하지 않습니다.
                 </p>
               </form>
             </section>
@@ -317,28 +318,26 @@ export function SharedFolderMembers({
                   </small>
                 </div>
                 <div className="actions">
-                  {admin &&
-                  member.role !== 'OWNER' &&
-                  (data.role === 'OWNER' ||
-                    member.role !== 'ADMIN' ||
-                    user?.id === member.user_id) ? (
+                  {member.role === 'OWNER' ? (
+                    <Badge>소유자 · 모든 권한</Badge>
+                  ) : admin &&
+                    (data.role === 'OWNER' ||
+                      !member.permissions?.includes('manage_access') ||
+                      user?.id === member.user_id) &&
+                    (member.permissions || []).every((p) =>
+                      actorPermissions.includes(p),
+                    ) ? (
                     <>
-                      <select
-                        aria-label={`${member.display_name} 권한`}
-                        value={member.role}
+                      <button
+                        className="button small"
                         disabled={busy}
-                        onChange={(e) =>
-                          void act(
-                            () =>
-                              put(`${base}/members/${member.user_id}`, {
-                                role: e.target.value,
-                              }),
-                            '권한을 변경했습니다. 다음 요청부터 적용됩니다.',
-                          )
-                        }
+                        onClick={() => {
+                          setEditing(member);
+                          setMemberPermissions(member.permissions || []);
+                        }}
                       >
-                        <RoleOptions />
-                      </select>
+                        권한 수정
+                      </button>
                       <button
                         className="text-button danger-text"
                         disabled={busy}
@@ -350,6 +349,7 @@ export function SharedFolderMembers({
                   ) : (
                     <Badge>{folderRoles[member.role]}</Badge>
                   )}
+                  <PermissionSummary value={member.permissions || []} />
                 </div>
               </div>
             ))}
@@ -361,6 +361,7 @@ export function SharedFolderMembers({
                 <div className="shared-member-row" key={invite.id}>
                   <div>
                     <strong>{invite.email}</strong>
+                    <PermissionSummary value={invite.permissions || []} />
                     <small>
                       {folderRoles[invite.role]} · {time(invite.expires_at)}까지
                     </small>
@@ -384,19 +385,12 @@ export function SharedFolderMembers({
               ))}
             </section>
           )}
-          <details className="shared-role-guide">
-            <summary>권한별 가능한 작업</summary>
-            {choices.map((r) => (
-              <p key={r}>
-                <strong>{folderRoles[r]}</strong> · {folderRoleHelp[r]}
-              </p>
-            ))}
-            <p>
-              ZOJ 전송은 쓰기 권한이 있는 협업자가 자신의 대회 등록 권한으로 할
-              수 있습니다. 문제 삭제는 원래 문제 소유자만 할 수 있습니다. 다른
-              공유 폴더로 문제를 옮기는 작업도 문제 소유자가 확인해야 합니다.
-            </p>
-          </details>
+          <p className="muted small">
+            문제와 같은 기능별 권한을 사용합니다. 폴더 정리와 새 문제 추가는
+            별도로 선택합니다. 폴더 권한으로 문제별 직접 공유를 추가할 수는
+            없습니다. 문제 삭제·공유 범위를 바꾸는 이동은 문제 소유자만 할 수
+            있습니다.
+          </p>
           {data.role !== 'OWNER' && (
             <button
               className="button"
@@ -411,6 +405,42 @@ export function SharedFolderMembers({
             </button>
           )}
         </>
+      )}
+      {editing && (
+        <section className="card permission-member-editor">
+          <h3>{editing.display_name} · 기능별 권한</h3>
+          <PermissionChecklist
+            folder
+            value={memberPermissions}
+            onChange={setMemberPermissions}
+            allowed={actorPermissions}
+            disabled={busy}
+          />
+          <div className="actions">
+            <button
+              className="button"
+              disabled={busy}
+              onClick={() => setEditing(null)}
+            >
+              취소
+            </button>
+            <button
+              className="button primary"
+              disabled={busy}
+              onClick={() =>
+                void act(
+                  () =>
+                    put(`${base}/members/${editing.user_id}`, {
+                      permissions: memberPermissions,
+                    }).then(() => setEditing(null)),
+                  '권한을 변경했습니다. 즉시 적용됩니다.',
+                )
+              }
+            >
+              권한 저장
+            </button>
+          </div>
+        </section>
       )}
       {confirm && (
         <div className="shared-remove-confirm" role="alert">

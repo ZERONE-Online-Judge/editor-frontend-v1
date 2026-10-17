@@ -1,3 +1,4 @@
+import { can } from '../../lib/permissions';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -37,7 +38,11 @@ import {
   SectionHeading,
 } from '../../components/ui';
 export default function Files({ solutions = false }: { solutions?: boolean }) {
-  const { data, document: doc, mutate, editable, notify } = useWorkspace();
+  const { data, document: doc, mutate, notify } = useWorkspace();
+  const editable = can(
+    data.problem,
+    solutions ? 'edit_solutions' : 'edit_files',
+  );
   const [editing, setEditing] = useState<SourceFile | null | false>(false);
   const [editingSolution, setEditingSolution] = useState(false);
   const [removing, setRemoving] = useState<SourceFile | null>(null);
@@ -325,7 +330,12 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
                           <select
                             aria-label={`${file.name} 기대 판정`}
                             value={(file as Solution).tag}
-                            disabled={!editable}
+                            disabled={
+                              !can(
+                                data.problem,
+                                isSolution ? 'edit_solutions' : 'edit_files',
+                              )
+                            }
                             onChange={(e) =>
                               mutate((d) => {
                                 if (e.target.value === 'MA')
@@ -497,7 +507,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
   );
 }
 function ReuseSolution({ onClose }: { onClose: () => void }) {
-  const { document: doc, mutate, notify } = useWorkspace();
+  const { data, document: doc, mutate, notify } = useWorkspace();
   const candidates = Object.values(doc.files).filter(
     (f) => f.kind === 'source' && f.language !== 'text',
   );
@@ -519,7 +529,11 @@ function ReuseSolution({ onClose }: { onClose: () => void }) {
           </button>
           <button
             className="button primary"
-            disabled={Boolean(issue)}
+            disabled={
+              Boolean(issue) ||
+              !can(data.problem, 'edit_files') ||
+              !can(data.problem, 'edit_solutions')
+            }
             onClick={() => {
               mutate((d) => reuseAsSolution(d, name, tag));
               notify(
@@ -590,7 +604,12 @@ function FileEditor({
   solutions: boolean;
   onClose: () => void;
 }) {
-  const { data, document: doc, mutate, editable } = useWorkspace();
+  const { data, document: doc, mutate } = useWorkspace();
+  const editable = can(
+    data.problem,
+    solutions ? 'edit_solutions' : 'edit_files',
+  );
+
   const [name, setName] = useState(asset?.name || '');
   const [language, setLanguage] = useState<Language>(
     asset?.language || 'cpp17',
