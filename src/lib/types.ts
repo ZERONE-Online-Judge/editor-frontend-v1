@@ -379,7 +379,7 @@ export type Job = {
     scope?: InvocationScope;
     auto_apply?: { status: 'applied' | 'blocked'; message?: string };
     runtime?: {
-      backend?: 'editor' | 'zoj' | 'agent';
+      backend?: 'editor' | 'zoj' | 'agent' | 'archive';
       runtime_revision?: string;
     };
     execution_runs?: {

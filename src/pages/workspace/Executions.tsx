@@ -114,6 +114,7 @@ export default function Executions({
   );
   const [busy, setBusy] = useState(false);
   const [exportFormat, setExportFormat] = useState('zoj');
+  const [verifyPackage, setVerifyPackage] = useState(true);
   const [statementLanguage, setStatementLanguage] = useState(
     Object.keys(doc.statements).includes('korean')
       ? 'korean'
@@ -328,7 +329,7 @@ export default function Executions({
         }
         description={
           packages
-            ? '커밋된 리비전을 검증하고 배포 가능한 문제 패키지를 생성합니다.'
+            ? '커밋된 리비전을 패키지로 내보냅니다. 검증 실행 여부를 선택할 수 있습니다.'
             : stress
               ? '생성기와 기준 풀이를 사용해 비교할 풀이의 유효한 반례를 찾습니다.'
               : verification
@@ -348,20 +349,20 @@ export default function Executions({
                 void start('package', {
                   testset: packageSets[0] || Object.keys(doc.testsets)[0],
                   ...(exportFormat === 'zoj' ? { testsets: packageSets } : {}),
-                  verify: true,
+                  verify: verifyPackage,
                   export_format: exportFormat,
                   statement_language: statementLanguage,
                 })
               }
             >
               <Icon name="play" />
-              검증 후 패키지 생성
+              {verifyPackage ? '검증 후 패키지 생성' : '검증 없이 패키지 생성'}
             </button>
           )
         }
       />
       <ExecutionLimitsInfo environment={environment} stress={stress} />
-      {packages && environmentPanel}
+      {packages && verifyPackage && environmentPanel}
       {verification && (
         <section
           className="card verification-launcher"
@@ -398,6 +399,23 @@ export default function Executions({
       ) : packages ? (
         <>
           <section className="card compact">
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                aria-label="패키지 생성 전 검증"
+                checked={verifyPackage}
+                disabled={!editable || busy}
+                onChange={(event) => setVerifyPackage(event.target.checked)}
+              />
+              패키지 생성 전 풀이·구성요소 검증 실행
+            </label>
+            {!verifyPackage && (
+              <Notice>
+                저장된 자료만 내보내며 생성기·Validator·Main·풀이를 실행하지
+                않습니다. ZOJ·Linux 형식은 입력·정답이 모두 저장되어 있어야
+                합니다. 작성 중인 자료는 Editor 형식으로 보관할 수 있습니다.
+              </Notice>
+            )}
             <div className="form-grid">
               <label>
                 패키지 형식
@@ -447,7 +465,7 @@ export default function Executions({
             </div>
             <p className="muted">
               {exportFormat === 'zoj'
-                ? '선택한 세트만 검증하고, 해당 입력·정답을 하나의 활성 채점 데이터로 합칩니다. 선택한 세트의 예제와 모든 번역 지문, 검증 코드·checker·validator 및 원본 Editor 자료를 함께 보관합니다. 그룹·부분 점수 등 지원하지 않는 채점 방식은 생성 전에 안내합니다.'
+                ? '선택한 세트의 입력·정답을 하나의 활성 채점 데이터로 합칩니다. 선택한 세트의 예제와 모든 번역 지문, 검증 코드·checker·validator 및 원본 Editor 자료를 함께 보관합니다. 그룹·부분 점수 등 지원하지 않는 채점 방식은 생성 전에 안내합니다.'
                 : exportFormat === 'linux'
                   ? '전체 생성 테스트·정답·소스·검증 환경과 고정된 실행 코드를 담습니다. Python과 준비된 Docker 이미지로 API 키·서비스 DB 없이 오프라인 재실행할 수 있습니다. Editor 실행 정책을 재현하며, ZOJ 대회 채점기의 언어별 보정과 다른 하드웨어에서의 시간 일치를 보장하는 패키지는 아닙니다.'
                   : 'Editor에서 다시 열 수 있는 작업 자료와 problem.xml, 생성된 테스트, 모든 지문 언어를 포함합니다.'}
@@ -456,13 +474,15 @@ export default function Executions({
           <div className="workspace-guide">
             <Icon name="branch" />
             <p>
-              내 작업 사본을 먼저 커밋하세요. 모든 입력을 검증하고 풀이
-              태그·checker·validator 자체 테스트를 확인한 뒤 ZIP을 만듭니다.
+              내 작업 사본을 먼저 커밋하세요. 검증을 선택하면 입력·정답을
+              준비하고 풀이 기대 판정과 checker·validator 자체 테스트를
+              확인합니다. 선택을 해제하면 저장된 자료를 미검증 패키지로
+              내보냅니다.
             </p>
           </div>
           <ZojPublishing
             problemId={data.problem.id}
-            owner={data.problem.role === 'OWNER'}
+            editable={editable}
             job={job}
             stale={stale || dirty}
           />
@@ -575,14 +595,18 @@ export default function Executions({
                 </Badge>
               </div>
               <p className="muted small">
-                저장된 검증 환경 ·{' '}
-                {(job.result.runtime?.backend ??
-                  job.options.execution_backend) === 'zoj'
-                  ? 'ZOJ 실제 채점기'
-                  : job.result.runtime?.backend === 'agent' ||
-                      job.options.execution_transport === 'agent'
-                    ? '채점 에이전트 제작용 격리 실행'
-                    : 'Editor 격리 실행 (이전 기록)'}
+                {job.result.runtime?.backend === 'archive'
+                  ? '저장된 자료로 ZIP 생성 · 코드 실행 없음'
+                  : '저장된 검증 환경 · '}
+                {job.result.runtime?.backend === 'archive'
+                  ? ''
+                  : (job.result.runtime?.backend ??
+                        job.options.execution_backend) === 'zoj'
+                    ? 'ZOJ 실제 채점기'
+                    : job.result.runtime?.backend === 'agent' ||
+                        job.options.execution_transport === 'agent'
+                      ? '채점 에이전트 제작용 격리 실행'
+                      : 'Editor 격리 실행 (이전 기록)'}
               </p>
               <p className="muted small">
                 자료 기준:{' '}
@@ -746,19 +770,23 @@ export default function Executions({
               )}
               {job.result.verified !== undefined && (
                 <div
-                  className={`verification-summary ${job.result.verified ? 'passed' : 'mismatch'}`}
+                  className={`verification-summary ${job.kind === 'package' && job.options.verify === false ? '' : job.result.verified ? 'passed' : 'mismatch'}`}
                 >
                   <Icon name={job.result.verified ? 'check' : 'issue'} />
                   <div>
                     <strong>
-                      {job.result.verified
-                        ? '기대 판정과 일치합니다.'
-                        : '기대 판정 또는 자체 테스트 확인이 필요합니다.'}
+                      {job.kind === 'package' && job.options.verify === false
+                        ? '검증 없이 생성한 패키지입니다.'
+                        : job.result.verified
+                          ? '기대 판정과 일치합니다.'
+                          : '기대 판정 또는 자체 테스트 확인이 필요합니다.'}
                     </strong>
                     <p>
-                      {job.result.mismatches?.length
-                        ? job.result.mismatches.join(', ')
-                        : '아래 실제 실행 범위와 판정을 확인하세요.'}
+                      {job.kind === 'package' && job.options.verify === false
+                        ? '저장된 자료를 내보냈습니다. 대회 사용 전 검증을 권장합니다.'
+                        : job.result.mismatches?.length
+                          ? job.result.mismatches.join(', ')
+                          : '아래 실제 실행 범위와 판정을 확인하세요.'}
                     </p>
                   </div>
                 </div>
@@ -1019,8 +1047,9 @@ export default function Executions({
                   <div>
                     <strong>{job.result.package.filename}</strong>
                     <p>
-                      {bytes(job.result.package.size)} · 검증된 리비전 r
-                      {job.revision}
+                      {bytes(job.result.package.size)} ·{' '}
+                      {job.result.package.verified ? '검증된' : '미검증'} 리비전
+                      r{job.revision}
                     </p>
                   </div>
                   <a
@@ -1081,8 +1110,9 @@ export default function Executions({
                 </details>
               ) : null}
               <div className="run-footnote">
-                결과는 실행 당시 자료 해시·검증 환경과 함께 보관됩니다.
-                시간·메모리는 해당 실행 환경에서 반환한 값입니다.
+                {job.result.runtime?.backend === 'archive'
+                  ? '패키지는 커밋된 자료 해시와 함께 보관됩니다. 코드 실행·판정·시간·메모리 측정은 하지 않았습니다.'
+                  : '결과는 실행 당시 자료 해시·검증 환경과 함께 보관됩니다. 시간·메모리는 해당 실행 환경에서 반환한 값입니다.'}
               </div>
               <InvocationComments
                 problemId={data.problem.id}

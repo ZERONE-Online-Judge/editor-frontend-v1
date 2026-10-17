@@ -52,8 +52,7 @@ function source(relative) {
     if (
       /\/workspace\/(Overview|Collaboration|Revisions|Review|Materials)$/.test(
         id,
-      ) ||
-      id === './ZojPublishing'
+      )
     )
       return { __esModule: true, default: () => null };
     if (id.endsWith('/Markdown'))
@@ -94,6 +93,9 @@ function job(id, kind, summary) {
   };
 }
 async function get(url, options = {}) {
+  if (url.endsWith('/zoj-publications')) return [];
+  if (url === '/zoj/contests')
+    return { configured: true, email: 'author@example.com', contests: [] };
   if (url.includes('/revision-status?'))
     return new Promise((resolve, reject) => {
       revisionRequests.push({ url, signal: options.signal, resolve, reject });
@@ -2075,3 +2077,69 @@ test('ZOJ package checkboxes send only selected sets and require at least one se
   assert.deepEqual(requests[0].body.options.testsets, ['tests', 'extra']);
   assert.equal(requests[0].body.options.export_format, 'zoj');
 });
+
+test('package verification can be disabled without changing the selected sets', async () => {
+  await mount('packages');
+  const verify = host.querySelector('[aria-label="패키지 생성 전 검증"]');
+  assert.ok(verify.checked);
+  await act(() => verify.click());
+  await flush();
+  assert.match(
+    host.textContent,
+    /생성기·Validator·Main·풀이를 실행하지 않습니다/,
+  );
+  await selectSets('ZOJ에서 사용할 테스트 세트', ['extra']);
+  await click('검증 없이 패키지 생성');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.options.verify, false);
+  assert.deepEqual(requests[0].body.options.testsets, ['extra']);
+});
+
+for (const [role, allowed] of [
+  ['WRITE', true],
+  ['READ', false],
+]) {
+  test(`${role} access ${allowed ? 'can' : 'cannot'} publish an unverified ZOJ package`, async () => {
+    state.problem.role = role;
+    const artifact = job('archive', 'package', '검증 없이 생성');
+    artifact.options.verify = false;
+    artifact.result = {
+      summary: '저장된 자료',
+      verified: false,
+      package: {
+        format: 'zoj',
+        verified: false,
+        filename: 'problem.zip',
+        size: 100,
+        sha256: 'a'.repeat(64),
+      },
+    };
+    jobs = [artifact];
+    await mount('packages');
+    const publish = [...host.querySelectorAll('button')].find(
+      (el) => el.textContent.trim() === 'ZOJ에 바로 등록',
+    );
+    assert.equal(publish.disabled, !allowed);
+    assert.match(
+      host.querySelector('.verification-summary').textContent,
+      /검증 없이 생성한 패키지/,
+    );
+    assert.doesNotMatch(
+      host.querySelector('.verification-summary').textContent,
+      /기대 판정 또는/,
+    );
+    assert.match(
+      host.querySelector('.package-download').textContent,
+      /미검증 리비전/,
+    );
+    assert.doesNotMatch(
+      host.querySelector('.package-download').textContent,
+      /검증된 리비전/,
+    );
+    if (allowed) {
+      assert.match(host.textContent, /미검증 패키지 · 전송 가능/);
+      await click('ZOJ에 바로 등록');
+      assert.match(host.textContent, /ZOJ에서 대회 운영자 권한을 확인/);
+    }
+  });
+}

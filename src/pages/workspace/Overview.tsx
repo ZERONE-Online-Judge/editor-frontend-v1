@@ -243,8 +243,8 @@ export default function Overview() {
                   : dirty
                     ? '편집 내용을 작업 사본에 저장하고 커밋한 뒤 패키지를 생성하세요.'
                     : data.problem.modified
-                      ? '변경사항을 커밋한 뒤 실제 풀이 검증을 포함해 패키지를 생성하세요.'
-                      : '패키지 화면에서 실제 풀이 검증을 포함해 생성하세요. 내보내기 형식의 호환 조건도 확인합니다.'}
+                      ? '변경사항을 커밋한 뒤 패키지를 생성하세요. 검증 실행 여부를 선택할 수 있습니다.'
+                      : '패키지 화면에서 내보내세요. 검증 실행 여부를 선택하고 형식별 호환 조건을 확인합니다.'}
           </p>
         </div>
         <div className="readiness-list">
@@ -271,7 +271,8 @@ export default function Overview() {
           ) : (
             <div className="readiness-complete">
               <Icon name="check" />
-              필수 자료가 준비되었습니다. 실제 풀이 검증 후 패키지를 생성하세요.
+              필수 자료가 준비되었습니다. 패키지 화면에서 검증 여부를 선택해
+              내보내세요.
             </div>
           )}
         </div>

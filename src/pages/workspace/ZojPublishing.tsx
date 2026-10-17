@@ -6,12 +6,12 @@ import { Badge, Icon, Modal, Notice } from '../../components/ui';
 
 export default function ZojPublishing({
   problemId,
-  owner,
+  editable,
   job,
   stale,
 }: {
   problemId: string;
-  owner: boolean;
+  editable: boolean;
   job: Job | null;
   stale: boolean;
 }) {
@@ -29,7 +29,6 @@ export default function ZojPublishing({
   const ready =
     job?.status === 'completed' &&
     job.result.package?.format === 'zoj' &&
-    job.result.package.verified &&
     !stale;
   const contest = contests.find((c) => c.id === contestId);
   useEffect(() => {
@@ -111,25 +110,30 @@ export default function ZojPublishing({
         </div>
         <button
           className="button primary"
-          disabled={!owner || !ready}
+          disabled={!editable || !ready}
           onClick={() => void show()}
         >
           <Icon name="upload" />
           ZOJ에 바로 등록
         </button>
       </div>
-      {!owner ? (
+      {!editable ? (
         <p className="muted">
-          문제 소유자가 자신의 ZOJ 업로드 권한으로 전송할 수 있습니다.
+          쓰기 권한이 있는 협업자가 자신의 ZOJ 문제 등록 권한으로 전송할 수
+          있습니다.
         </p>
       ) : !ready ? (
         <p className="muted">
-          변경사항을 커밋한 뒤, ZOJ 형식의 검증된 패키지를 생성하고 실행
-          기록에서 선택하세요.
+          변경사항을 커밋한 뒤, ZOJ 형식 패키지를 생성하고 실행 기록에서
+          선택하세요.
         </p>
       ) : (
         <div className="zoj-publish-ready">
-          <Badge tone="success">전송 준비 완료</Badge>
+          <Badge tone={job?.result.package?.verified ? 'success' : 'warning'}>
+            {job?.result.package?.verified
+              ? '검증 완료 · 전송 준비'
+              : '미검증 패키지 · 전송 가능'}
+          </Badge>
           <span>
             리비전 r{job?.revision} · {job?.result.package?.filename}
           </span>
@@ -301,9 +305,11 @@ export default function ZojPublishing({
                     재시도한 전송 요청은 중복 생성하지 않습니다.
                   </p>
                   <Notice>
-                    Editor의 검증 결과는 함께 보관됩니다. 실제 대회 제출은 ZOJ의
-                    언어 환경과 자동 자원 보정으로 채점되므로 ZOJ에서도 검증
-                    코드를 확인하세요.
+                    {job?.result.package?.verified
+                      ? 'Editor 검증을 거친 패키지입니다.'
+                      : '검증을 거치지 않은 패키지입니다. 정답과 테스트의 올바름을 확인하지 않았습니다.'}{' '}
+                    등록 권한은 현재 로그인한 계정으로 다시 확인합니다. 대회
+                    사용 전 ZOJ 채점기로 풀이 검증을 실행하세요.
                   </Notice>
                 </>
               )}
