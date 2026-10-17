@@ -3,6 +3,7 @@ import { api, post, time } from '../../lib/api';
 import { useAuth } from '../../lib/authContext';
 import type { Job, Publication, ZojContest } from '../../lib/types';
 import { Badge, Icon, Modal, Notice } from '../../components/ui';
+import ZojPackageUpdate from './ZojPackageUpdate';
 
 export default function ZojPublishing({
   problemId,
@@ -26,9 +27,11 @@ export default function ZojPublishing({
   const [error, setError] = useState('');
   const [published, setPublished] = useState<Publication | null>(null);
   const [history, setHistory] = useState<Publication[]>([]);
+  const [updateTarget, setUpdateTarget] = useState<Publication | null>(null);
   const ready =
     job?.status === 'completed' &&
     job.result.package?.format === 'zoj' &&
+    job.result.package.verified &&
     !stale;
   const contest = contests.find((c) => c.id === contestId);
   useEffect(() => {
@@ -124,19 +127,21 @@ export default function ZojPublishing({
         </p>
       ) : !ready ? (
         <p className="muted">
-          변경사항을 커밋한 뒤, ZOJ 형식 패키지를 생성하고 실행 기록에서
-          선택하세요.
+          변경사항을 커밋한 뒤, 검증을 완료한 ZOJ 형식 패키지를 생성하고 실행
+          기록에서 선택하세요.
         </p>
       ) : (
         <div className="zoj-publish-ready">
-          <Badge tone={job?.result.package?.verified ? 'success' : 'warning'}>
-            {job?.result.package?.verified
-              ? '검증 완료 · 전송 준비'
-              : '미검증 패키지 · 전송 가능'}
-          </Badge>
+          <Badge tone="success">검증 완료 · 전송 준비</Badge>
           <span>
             리비전 r{job?.revision} · {job?.result.package?.filename}
           </span>
+          {history.length > 0 && (
+            <span>
+              기존 대회 문제는 아래 전송 기록의 ‘새 패키지로 업데이트’에서
+              변경할 수 있습니다.
+            </span>
+          )}
         </div>
       )}
       {history.length > 0 && (
@@ -152,6 +157,13 @@ export default function ZojPublishing({
                   r{row.result.revision} · {time(row.created_at)}
                 </small>
               </div>
+              <button
+                className="button small"
+                disabled={!editable || !ready}
+                onClick={() => setUpdateTarget(row)}
+              >
+                새 패키지로 업데이트
+              </button>
               <a
                 className="button small"
                 href={row.result.url}
@@ -164,6 +176,19 @@ export default function ZojPublishing({
             </div>
           ))}
         </details>
+      )}
+      {updateTarget && job && (
+        <ZojPackageUpdate
+          problemId={problemId}
+          jobId={job.id}
+          target={updateTarget}
+          onClose={() => setUpdateTarget(null)}
+          onUpdated={() => {
+            void api<Publication[]>(`/problems/${problemId}/zoj-publications`)
+              .then(setHistory)
+              .catch(() => {});
+          }}
+        />
       )}
       {open && (
         <Modal

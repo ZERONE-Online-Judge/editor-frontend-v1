@@ -441,7 +441,8 @@ export default function Executions({
               <Notice>
                 저장된 자료만 내보내며 생성기·Validator·Main·풀이를 실행하지
                 않습니다. ZOJ·Linux 형식은 입력·정답이 모두 저장되어 있어야
-                합니다. 작성 중인 자료는 Editor 형식으로 보관할 수 있습니다.
+                합니다. 작성 중인 자료는 Editor 형식으로 보관할 수 있습니다. ZOJ
+                등록·업데이트에는 검증을 완료한 패키지가 필요합니다.
               </Notice>
             )}
             <div className="form-grid">

@@ -597,6 +597,36 @@ export type Publication = {
   created_at: number;
   result: { problem_id: string; title: string; revision: number; url: string };
 };
+export type ZojPackageUpdatePreview = {
+  contest_title: string;
+  division_name: string;
+  target_problem_id: string;
+  problem_code: string;
+  title: string;
+  target_hash: string;
+  archive_sha256: string;
+  contest_running: boolean;
+  current_testcase_count: number;
+  incoming_testcase_count: number;
+  testcase_changes: { added: number; removed: number; changed: number };
+  next_testcase_version: number;
+  submission_count: number;
+  preserved: string;
+  changes: {
+    field: string;
+    label: string;
+    changed: boolean;
+    truncated?: boolean;
+    before: string | number | null;
+    after: string | number | null;
+  }[];
+  files: {
+    filename: string;
+    category: string;
+    change: 'added' | 'removed' | 'changed';
+  }[];
+  changed_file_count: number;
+};
 export type Access = {
   permissions?: Permission[];
   user_id: string;

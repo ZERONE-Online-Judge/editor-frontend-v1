@@ -38,6 +38,7 @@ function source(relative) {
   loaded.paths = Module._nodeModulePaths(path.dirname(file));
   const native = loaded.require.bind(loaded);
   loaded.require = (id) => {
+    if (id.endsWith('.css')) return {};
     if (id === 'react-router-dom')
       return { ...Router, useBlocker: () => ({ state: 'unblocked' }) };
     if (id.endsWith('/api') || id === '../lib/api')
@@ -2098,11 +2099,8 @@ test('package verification can be disabled without changing the selected sets', 
   assert.deepEqual(requests[0].body.options.testsets, ['extra']);
 });
 
-for (const [role, allowed] of [
-  ['WRITE', true],
-  ['READ', false],
-]) {
-  test(`${role} access ${allowed ? 'can' : 'cannot'} publish an unverified ZOJ package`, async () => {
+for (const role of ['WRITE', 'READ']) {
+  test(`${role} access cannot publish an unverified ZOJ package`, async () => {
     state.problem.role = role;
     const artifact = job('archive', 'package', '검증 없이 생성');
     artifact.options.verify = false;
@@ -2122,7 +2120,7 @@ for (const [role, allowed] of [
     const publish = [...host.querySelectorAll('button')].find(
       (el) => el.textContent.trim() === 'ZOJ에 바로 등록',
     );
-    assert.equal(publish.disabled, !allowed);
+    assert.equal(publish.disabled, true);
     assert.match(
       host.querySelector('.verification-summary').textContent,
       /검증 없이 생성한 패키지/,
@@ -2139,11 +2137,7 @@ for (const [role, allowed] of [
       host.querySelector('.package-download').textContent,
       /검증된 리비전/,
     );
-    if (allowed) {
-      assert.match(host.textContent, /미검증 패키지 · 전송 가능/);
-      await click('ZOJ에 바로 등록');
-      assert.match(host.textContent, /ZOJ에서 대회 운영자 권한을 확인/);
-    }
+    assert.doesNotMatch(host.textContent, /미검증 패키지 · 전송 가능/);
   });
 }
 
