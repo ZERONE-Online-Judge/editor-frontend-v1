@@ -44,9 +44,9 @@ jobs:
       group: editor-frontend-production
       cancel-in-progress: false
     steps:
-      - name: Load the shared deploy script from trusted backend main
+      - name: Deploy the tested frontend without restarting workers
         run: |
-          repository=/srv/editor-source/editor_backend_v1
+          repository=/srv/editor-source/editor_frontend_v1
           git -C "$repository" fetch origin main
-          git -C "$repository" show refs/remotes/origin/main:deploy/deploy-main.sh > "$RUNNER_TEMP/editor-deploy.sh"
-          bash "$RUNNER_TEMP/editor-deploy.sh" frontend "$GITHUB_SHA"
+          git -C "$repository" show "$GITHUB_SHA":deploy/deploy-main.sh > "$RUNNER_TEMP/editor-frontend-deploy.sh"
+          bash "$RUNNER_TEMP/editor-frontend-deploy.sh" "$GITHUB_SHA"
