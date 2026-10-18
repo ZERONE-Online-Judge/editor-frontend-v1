@@ -19,7 +19,7 @@ const React = require('react');
 const { act, createElement: h } = React;
 const { createRoot } = require('react-dom/client');
 const Router = require('react-router-dom');
-let requests, failure;
+let requests, failure, archiveLimit;
 const report = {
   format: 'polygon',
   files: 8,
@@ -44,6 +44,12 @@ function source(relative) {
       return {
         api: async (url, options = {}) => {
           requests.push({ url, options });
+          if (url === '/imports/limits')
+            return {
+              archive_bytes: archiveLimit,
+              entry_bytes: 16 * 1024 ** 2,
+              uncompressed_bytes: 16 * 1024 ** 3,
+            };
           if (url.startsWith('/imports?')) {
             if (failure) throw new Error('가져오기 실패: 중복 파일명');
             return { id: 'imported', import_report: report };
@@ -51,7 +57,8 @@ function source(relative) {
           if (url.startsWith('/problems?') || url === '/folders') return [];
           throw new Error('Unexpected request ' + url);
         },
-        bytes: () => '1 KiB',
+        bytes: (value) =>
+          value >= 1024 ** 2 ? `${value / 1024 ** 2}MiB` : '1 KiB',
         time: () => '',
       };
     if (id.endsWith('/SharedFolders'))
@@ -91,7 +98,8 @@ async function click(host, text) {
   assert.ok(button, text);
   await act(async () => button.click());
 }
-async function setup() {
+async function setup(limit = 2 * 1024 ** 3) {
+  archiveLimit = limit;
   requests = [];
   const host = document.createElement('div');
   document.body.append(host);
@@ -107,6 +115,7 @@ async function setup() {
     ),
   );
   await click(host, '패키지 가져오기');
+  assert.match(host.textContent, /ZIP 최대/);
   const modal = host.querySelector('dialog');
   const setter = Object.getOwnPropertyDescriptor(
     window.HTMLInputElement.prototype,
@@ -175,6 +184,34 @@ test('Failed imports keep the original file and form instead of showing a succes
     assert.match(host.textContent, /original.zip/);
     assert.equal(host.querySelector('.package-import-summary'), null);
     assert.equal(host.querySelector('#location').textContent, '/problems');
+  } finally {
+    await close();
+  }
+});
+test('Upload limits come from the server and oversized ZIP files are rejected before POST', async () => {
+  failure = false;
+  const { host, close } = await setup(64 * 1024 ** 2);
+  try {
+    assert.match(host.textContent, /ZIP 최대 64MiB/);
+    const file = new window.File(['fixture'], 'oversized.zip');
+    Object.defineProperty(file, 'size', { value: 65 * 1024 ** 2 });
+    await act(async () => {
+      const input = host.querySelector('input[type=file]');
+      Object.defineProperty(input, 'files', {
+        configurable: true,
+        value: [file],
+      });
+      input.dispatchEvent(new window.Event('change', { bubbles: true }));
+    });
+    const submit = [...host.querySelectorAll('button')].find(
+      (button) => button.textContent.trim() === '문제 등록',
+    );
+    assert.equal(submit.disabled, true);
+    assert.match(host.querySelector('[role=alert]').textContent, /64MiB/);
+    assert.equal(
+      requests.filter((row) => row.url.startsWith('/imports?')).length,
+      0,
+    );
   } finally {
     await close();
   }

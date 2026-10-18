@@ -1036,6 +1036,9 @@ function CreateProblem({
     </Modal>
   );
 }
+function packageSize(value: number) {
+  return value >= 1024 ** 3 ? `${value / 1024 ** 3}GiB` : bytes(value);
+}
 function ImportProblem({
   onClose,
   onCreated,
@@ -1048,14 +1051,39 @@ function ImportProblem({
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [limits, setLimits] = useState<{
+    archive_bytes: number;
+    entry_bytes: number;
+    uncompressed_bytes: number;
+  } | null>(null);
   const [imported, setImported] = useState<{
     id: string;
     import_report?: ImportReport;
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  useEffect(() => {
+    let active = true;
+    api<{
+      archive_bytes: number;
+      entry_bytes: number;
+      uncompressed_bytes: number;
+    }>('/imports/limits')
+      .then((value) => {
+        if (active) setLimits(value);
+      })
+      .catch(() => {
+        if (active)
+          setError(
+            '패키지 업로드 한도를 불러오지 못했습니다. 창을 다시 열어 주세요.',
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   async function submit() {
-    if (!file) return;
+    if (!file || !limits || file.size > limits.archive_bytes) return;
     setBusy(true);
     try {
       const result = await api<{ id: string; import_report?: ImportReport }>(
@@ -1095,7 +1123,14 @@ function ImportProblem({
             </button>
             <button
               className="button primary"
-              disabled={busy || !file || !name || !slug}
+              disabled={
+                busy ||
+                !file ||
+                !name ||
+                !slug ||
+                !limits ||
+                file.size > limits.archive_bytes
+              }
               onClick={() => void submit()}
             >
               {busy ? '가져오는 중…' : '문제 등록'}
@@ -1131,13 +1166,23 @@ function ImportProblem({
           <label className="upload-area">
             <Icon name="upload" size={25} />
             <strong>{file?.name || 'ZIP 파일 선택'}</strong>
-            <small>{file ? bytes(file.size) : '최대 128MiB'}</small>
+            <small>{file ? bytes(file.size) : 'ZIP 파일을 선택하세요.'}</small>
+            <small>
+              {limits
+                ? `ZIP 최대 ${packageSize(limits.archive_bytes)} · 파일당 ${packageSize(limits.entry_bytes)}`
+                : '업로드 한도 확인 중…'}
+            </small>
             <input
               type="file"
               accept=".zip"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
             />
           </label>
+          {file && limits && file.size > limits.archive_bytes && (
+            <Notice tone="error">
+              ZIP 파일은 {packageSize(limits.archive_bytes)} 이하여야 합니다.
+            </Notice>
+          )}
           {error && <Notice tone="error">{error}</Notice>}
         </>
       )}
