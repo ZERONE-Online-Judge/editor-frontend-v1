@@ -1,6 +1,6 @@
 import { can } from '../../lib/permissions';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   blobText,
   bytes,
@@ -44,6 +44,13 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
     solutions ? 'edit_solutions' : 'edit_files',
   );
   const [editing, setEditing] = useState<SourceFile | null | false>(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedName = searchParams.get('file') || '';
+  const requestedFile =
+    !solutions && Object.hasOwn(doc.files, requestedName)
+      ? doc.files[requestedName]
+      : undefined;
+  const activeEditing = editing !== false ? editing : requestedFile || false;
   const [editingSolution, setEditingSolution] = useState(false);
   const [removing, setRemoving] = useState<SourceFile | null>(null);
   const [removingSolution, setRemovingSolution] = useState(false);
@@ -473,11 +480,19 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
           </Link>
         </div>
       )}
-      {editing !== false && (
+      {activeEditing !== false && (
         <FileEditor
-          asset={editing}
-          solutions={editingSolution}
-          onClose={() => setEditing(false)}
+          key={activeEditing?.name || 'new'}
+          asset={activeEditing}
+          solutions={editing !== false ? editingSolution : false}
+          onClose={() => {
+            setEditing(false);
+            if (searchParams.has('file')) {
+              const next = new URLSearchParams(searchParams);
+              next.delete('file');
+              setSearchParams(next, { replace: true });
+            }
+          }}
         />
       )}{' '}
       {removing && (

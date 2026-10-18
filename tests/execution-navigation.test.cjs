@@ -2229,3 +2229,68 @@ test('Unsupported solution languages have one summary, per-file settings and an 
   await click('전체 풀이 검증 시작');
   assert.equal(requests.at(-1).body.options.execution_backend, 'editor');
 });
+
+test('Checker compatibility links open the actual source settings without changing code or starting a job', async () => {
+  const { ApiError } = source('lib/api.ts');
+  const name = 'custom check+#.cpp';
+  state.document.checker = name;
+  state.document.files[name] = {
+    ...state.document.files['validator.cpp'],
+    name,
+    language: 'cpp20',
+    roles: ['checker'],
+  };
+  requestError = new ApiError(400, {
+    code: 'judge_incompatible',
+    message: `Checker ${name}의 C++20 설정으로는 ZOJ 실제 채점을 시작할 수 없습니다.`,
+    issues: [],
+    unsupported_solutions: [],
+    unsupported_checker: {
+      name,
+      language: 'cpp20',
+      label: 'C++20',
+      supported_languages: ['C++17', 'C99', 'Python 3.13'],
+    },
+    supported_languages: [{ language: 'java8', label: 'Java 8' }],
+    guidance:
+      'Checker 파일 언어 설정에서 지원 표준을 선택한 뒤 다시 검증하세요.',
+  });
+  await mount('verification');
+  await setControl('풀이 검증 환경', 'zoj');
+  await click('전체 풀이 검증 시작');
+  const notice = host.querySelector('.judge-compatibility');
+  assert.match(notice.textContent, /현재 언어: C\+\+20/);
+  assert.match(
+    notice.textContent,
+    /Checker 지원 언어: C\+\+17 · C99 · Python 3.13/,
+  );
+  assert.doesNotMatch(notice.textContent, /풀이 언어 설정|Java 8/);
+  const link = notice.querySelector('a');
+  assert.equal(link.textContent.trim(), 'Checker 파일 언어 설정');
+  assert.equal(
+    link.getAttribute('href'),
+    `/problems/p/files?file=${encodeURIComponent(name)}`,
+  );
+  await act(async () => link.click());
+  await flush();
+  const dialog = host.querySelector('dialog');
+  assert.ok(dialog);
+  assert.match(dialog.textContent, /custom check\+#\.cpp/);
+  const language = [...dialog.querySelectorAll('select')].find((s) =>
+    [...s.options].some((o) => o.value === 'cpp17'),
+  );
+  assert.equal(language.value, 'cpp20');
+  assert.match(
+    language.querySelector('option[value="cpp17"]').textContent,
+    /ZOJ 채점기/,
+  );
+  assert.match(
+    language.querySelector('option[value="python3"]').textContent,
+    /Python 3.13 · ZOJ 채점기/,
+  );
+  assert.equal(requests.length, 1);
+  assert.equal(state.document.files[name].language, 'cpp20');
+  await click('닫기');
+  assert.equal(host.querySelector('dialog'), null);
+  assert.equal(requests.length, 1);
+});

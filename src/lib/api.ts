@@ -63,11 +63,11 @@ export async function blobText(
   return r.text();
 }
 export const languages = {
-  cpp17: 'C++17',
+  cpp17: 'C++17 · ZOJ 채점기',
   cpp20: 'C++20',
   c17: 'C17',
   c99: 'C99 · ZOJ 채점기',
-  python3: 'Python 3',
+  python3: 'Python 3.13 · ZOJ 채점기',
   pypy3: 'PyPy 3.9 · ZOJ 채점기',
   kotlin: 'Kotlin 1.9.24 · ZOJ 채점기',
   java17: 'Java 17',
