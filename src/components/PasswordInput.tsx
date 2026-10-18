@@ -56,6 +56,25 @@ export function PasswordInput({
   );
 }
 
+function PasswordStatusIcon({ checked }: { checked: boolean }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {checked ? <path d="m5 12 4 4L19 6" /> : <circle cx="12" cy="12" r="8" />}
+    </svg>
+  );
+}
+
 export function PasswordRequirements({ value }: { value: string }) {
   const requirements = passwordRequirements(value);
   const satisfied = requirements.filter((r) => r.met).length;
@@ -83,7 +102,7 @@ export function PasswordRequirements({ value }: { value: string }) {
             aria-label={`${r.label}: ${r.met ? '충족' : value ? '미충족' : '입력 대기'}`}
           >
             <span className="zoj-password-check" aria-hidden="true">
-              {r.met ? '✓' : '○'}
+              <PasswordStatusIcon checked={r.met} />
             </span>
             <span>
               <strong>{r.label}</strong>
@@ -118,9 +137,8 @@ export function PasswordMatch({
       role="status"
       aria-live="polite"
     >
-      {matches
-        ? '✓ 비밀번호가 일치합니다.'
-        : '새 비밀번호와 일치하지 않습니다.'}
+      {matches && <PasswordStatusIcon checked />}
+      {matches ? '비밀번호가 일치합니다.' : '새 비밀번호와 일치하지 않습니다.'}
     </p>
   );
 }
