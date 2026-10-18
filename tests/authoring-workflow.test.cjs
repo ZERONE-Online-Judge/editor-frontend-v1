@@ -22,7 +22,7 @@ let context,
   uploads = [],
   blobs = [];
 const router = {
-  useSearchParams: () => React.useState(() => new URLSearchParams()),
+  useSearchParams: () => React.useState(() => new window.URLSearchParams()),
   Link: ({ children, to, ...props }) =>
     React.createElement('a', { href: to, ...props }, children),
 };
