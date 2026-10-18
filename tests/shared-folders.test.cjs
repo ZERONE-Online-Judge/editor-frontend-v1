@@ -343,7 +343,7 @@ test('A limited manager cannot edit pending grants above their own scope or othe
   await v.close();
   account = { id: 'owner' };
 });
-test('Inviting uses the chosen role and explains inbox acceptance without claiming email delivery', async () => {
+test('Inviting uses the chosen role and explains email notification and inbox acceptance', async () => {
   reply = async () => members;
   const v = await mount(components.SharedFolderMembers, {
     folder,
@@ -383,7 +383,10 @@ test('Inviting uses the chosen role and explains inbox acceptance without claimi
       },
     },
   );
-  assert.match(v.host.textContent, /이메일은 발송하지 않습니다/);
+  assert.match(v.host.textContent, /초대 안내 이메일을 보냅니다/);
+  assert.match(v.host.textContent, /초대는 7일간 유효/);
+  assert.match(v.host.textContent, /안내 메일 발송을 요청했습니다/);
+  assert.doesNotMatch(v.host.textContent, /이메일은 발송하지 않습니다/);
   assert.match(v.host.textContent, /받은 초대에서 수락/);
   await v.close();
 });

@@ -319,7 +319,7 @@ export function SharedFolderMembers({
                           email,
                           permissions,
                         }).then(() => setEmail('')),
-                      '초대를 등록했습니다. 상대방이 로그인 후 받은 초대에서 수락할 수 있습니다.',
+                      '초대를 등록하고 안내 메일 발송을 요청했습니다. 상대방이 로그인 후 받은 초대에서 수락할 수 있습니다.',
                     );
                   }}
                 >
@@ -347,7 +347,8 @@ export function SharedFolderMembers({
                     </button>
                   </fieldset>
                   <p className="muted">
-                    초대는 7일간 유효하며 이메일은 발송하지 않습니다.
+                    초대 안내 이메일을 보냅니다. 초대는 7일간 유효하며, 상대방이
+                    ZOJ 로그인 후 받은 초대에서 수락할 수 있습니다.
                   </p>
                 </form>
               </section>
