@@ -1,3 +1,11 @@
+export type ImportLanguageChange = {
+  kind: 'solution' | 'checker';
+  name: string;
+  from_language: string;
+  from_label: string;
+  to_language: string | null;
+  to_label: string | null;
+};
 export type ImportReport = {
   format: string;
   files: number;
@@ -6,6 +14,10 @@ export type ImportReport = {
   statement_languages: string[];
   warnings: string[];
   preserved_files: { path: string; name: string }[];
+  zoj_compatibility?: {
+    changes: ImportLanguageChange[];
+    issues: string[];
+  };
 };
 
 export default function PackageImportSummary({

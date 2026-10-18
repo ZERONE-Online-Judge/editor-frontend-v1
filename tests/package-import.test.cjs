@@ -19,7 +19,7 @@ const React = require('react');
 const { act, createElement: h } = React;
 const { createRoot } = require('react-dom/client');
 const Router = require('react-router-dom');
-let requests, failure, archiveLimit;
+let requests, failure, archiveLimit, compatibility, applyFailure;
 const report = {
   format: 'polygon',
   files: 8,
@@ -52,7 +52,24 @@ function source(relative) {
             };
           if (url.startsWith('/imports?')) {
             if (failure) throw new Error('가져오기 실패: 중복 파일명');
-            return { id: 'imported', import_report: report };
+            return {
+              id: 'imported',
+              document_hash: 'a'.repeat(64),
+              import_report: {
+                ...report,
+                ...(compatibility ? { zoj_compatibility: compatibility } : {}),
+              },
+            };
+          }
+          if (url === '/problems/imported/import-language-settings') {
+            if (applyFailure)
+              throw new Error(
+                '문제에 새 변경이 있습니다. 문제를 열어 현재 언어 설정을 확인하세요.',
+              );
+            return {
+              revision: 1,
+              applied: JSON.parse(options.body).changes.length,
+            };
           }
           if (url.startsWith('/problems?') || url === '/folders') return [];
           throw new Error('Unexpected request ' + url);
@@ -98,8 +115,10 @@ async function click(host, text) {
   assert.ok(button, text);
   await act(async () => button.click());
 }
-async function setup(limit = 2 * 1024 ** 3) {
+async function setup(limit = 2 * 1024 ** 3, plan = null) {
   archiveLimit = limit;
+  compatibility = plan;
+  applyFailure = false;
   requests = [];
   const host = document.createElement('div');
   document.body.append(host);
@@ -210,6 +229,150 @@ test('Upload limits come from the server and oversized ZIP files are rejected be
     assert.match(host.querySelector('[role=alert]').textContent, /64MiB/);
     assert.equal(
       requests.filter((row) => row.url.startsWith('/imports?')).length,
+      0,
+    );
+  } finally {
+    await close();
+  }
+});
+
+const languagePlan = {
+  changes: [
+    {
+      kind: 'solution',
+      name: 'wrong.cpp',
+      from_language: 'cpp20',
+      from_label: 'C++20',
+      to_language: 'cpp17',
+      to_label: 'C++17',
+    },
+    {
+      kind: 'checker',
+      name: 'check.c',
+      from_language: 'c17',
+      from_label: 'C17',
+      to_language: 'c99',
+      to_label: 'C99',
+    },
+  ],
+  issues: [],
+};
+
+test('Import asks for explicit per-file confirmation and applies only checked language settings', async () => {
+  failure = false;
+  const { host, close } = await setup(undefined, languagePlan);
+  try {
+    await click(host, '문제 등록');
+    assert.match(
+      host.querySelector('dialog').textContent,
+      /ZOJ 채점기 호환성 맞추기/,
+    );
+    assert.match(host.textContent, /wrong.cpp.*C\+\+20.*C\+\+17/);
+    assert.match(host.textContent, /check.c.*C17.*C99/);
+    assert.match(host.textContent, /원본은 r0/);
+    assert.equal(
+      requests.filter((row) => row.url.endsWith('/import-language-settings'))
+        .length,
+      0,
+    );
+    const checker = host.querySelector('[aria-label="check.c 언어 변경"]');
+    assert.equal(checker.checked, true);
+    await act(async () => checker.click());
+    await click(host, '선택한 1개 적용 후 열기');
+    const request = requests.find((row) =>
+      row.url.endsWith('/import-language-settings'),
+    );
+    assert.equal(request.options.method, 'POST');
+    assert.deepEqual(JSON.parse(request.options.body), {
+      document_hash: 'a'.repeat(64),
+      changes: [{ kind: 'solution', name: 'wrong.cpp', language: 'cpp17' }],
+    });
+    assert.equal(
+      host.querySelector('#location').textContent,
+      '/problems/imported/overview',
+    );
+  } finally {
+    await close();
+  }
+});
+
+test('Imported code can keep its original language without any language update request', async () => {
+  failure = false;
+  const { host, close } = await setup(undefined, languagePlan);
+  try {
+    await click(host, '문제 등록');
+    await click(host, '현재 언어로 열기');
+    assert.equal(
+      requests.filter((row) => row.url.endsWith('/import-language-settings'))
+        .length,
+      0,
+    );
+    assert.equal(
+      host.querySelector('#location').textContent,
+      '/problems/imported/overview',
+    );
+  } finally {
+    await close();
+  }
+});
+
+test('Stale language updates keep the selection and existing import available without uploading again', async () => {
+  failure = false;
+  const { host, close } = await setup(undefined, languagePlan);
+  try {
+    await click(host, '문제 등록');
+    applyFailure = true;
+    await click(host, '선택한 2개 적용 후 열기');
+    assert.match(host.querySelector('[role=alert]').textContent, /새 변경/);
+    assert.equal(
+      host.querySelector('[aria-label="wrong.cpp 언어 변경"]').checked,
+      true,
+    );
+    assert.equal(host.querySelector('#location').textContent, '/problems');
+    assert.equal(
+      requests.filter((row) => row.url.startsWith('/imports?')).length,
+      1,
+    );
+    await click(host, '현재 언어로 열기');
+    assert.equal(
+      host.querySelector('#location').textContent,
+      '/problems/imported/overview',
+    );
+  } finally {
+    await close();
+  }
+});
+
+test('Unconvertible checker languages remain unselected and cannot be blindly changed', async () => {
+  failure = false;
+  const { host, close } = await setup(undefined, {
+    changes: [
+      {
+        kind: 'checker',
+        name: 'check.kt',
+        from_language: 'kotlin',
+        from_label: 'Kotlin',
+        to_language: null,
+        to_label: null,
+      },
+    ],
+    issues: [],
+  });
+  try {
+    await click(host, '문제 등록');
+    assert.equal(
+      host.querySelector('[aria-label="check.kt 언어 변경"]').disabled,
+      true,
+    );
+    const apply = [...host.querySelectorAll('button')].find(
+      (button) => button.textContent.trim() === '선택한 0개 적용 후 열기',
+    );
+    assert.equal(apply.disabled, true);
+    assert.match(host.textContent, /자동 변경 제안 없음/);
+    await click(host, '현재 언어로 열기');
+    assert.equal(
+      requests.filter((row) => row.url.endsWith('/import-language-settings'))
+        .length,
       0,
     );
   } finally {

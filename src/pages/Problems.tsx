@@ -9,6 +9,8 @@ import { Badge, Empty, Icon, Modal, Notice } from '../components/ui';
 import PackageImportSummary, {
   type ImportReport,
 } from '../components/PackageImportSummary';
+import PackageJudgeCompatibility from '../components/PackageJudgeCompatibility';
+import { languageChangeKey } from '../lib/importCompatibility';
 import {
   FolderInvitations,
   NewSharedFolder,
@@ -1058,8 +1060,12 @@ function ImportProblem({
   } | null>(null);
   const [imported, setImported] = useState<{
     id: string;
+    document_hash?: string;
     import_report?: ImportReport;
   } | null>(null);
+  const [languageSelection, setLanguageSelection] = useState<string[]>([]);
+  const compatibility = imported?.import_report?.zoj_compatibility;
+  const needsCompatibility = Boolean(compatibility?.changes.length);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -1085,12 +1091,54 @@ function ImportProblem({
   async function submit() {
     if (!file || !limits || file.size > limits.archive_bytes) return;
     setBusy(true);
+    setError('');
     try {
-      const result = await api<{ id: string; import_report?: ImportReport }>(
+      const result = await api<{
+        id: string;
+        document_hash?: string;
+        import_report?: ImportReport;
+      }>(
         `/imports?name=${encodeURIComponent(name)}&slug=${encodeURIComponent(slug)}${folderId ? `&folder_id=${folderId}` : ''}`,
         { method: 'POST', body: file },
       );
       setImported(result);
+      setLanguageSelection(
+        (result.import_report?.zoj_compatibility?.changes || [])
+          .filter((row) => row.to_language)
+          .map((row) => languageChangeKey(row.kind, row.name)),
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function applyLanguages() {
+    if (!imported?.document_hash || !compatibility || !languageSelection.length)
+      return;
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/problems/${imported.id}/import-language-settings`, {
+        method: 'POST',
+        body: JSON.stringify({
+          document_hash: imported.document_hash,
+          changes: compatibility.changes
+            .filter(
+              (row) =>
+                row.to_language &&
+                languageSelection.includes(
+                  languageChangeKey(row.kind, row.name),
+                ),
+            )
+            .map((row) => ({
+              kind: row.kind,
+              name: row.name,
+              language: row.to_language,
+            })),
+        }),
+      });
+      onCreated(imported.id);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1099,22 +1147,43 @@ function ImportProblem({
   }
   return (
     <Modal
-      title={imported ? '문제 가져오기 완료' : '문제 패키지 가져오기'}
+      wide={needsCompatibility}
+      title={
+        needsCompatibility
+          ? 'ZOJ 채점기 호환성 맞추기'
+          : imported
+            ? '문제 가져오기 완료'
+            : '문제 패키지 가져오기'
+      }
       onClose={() => {
         if (!busy) onClose();
       }}
       footer={
         imported ? (
           <>
-            <button className="button" onClick={onClose}>
+            <button className="button" disabled={busy} onClick={onClose}>
               목록으로
             </button>
             <button
-              className="button primary"
+              className={needsCompatibility ? 'button' : 'button primary'}
+              disabled={busy}
               onClick={() => onCreated(imported.id)}
             >
-              문제 열기
+              {needsCompatibility ? '현재 언어로 열기' : '문제 열기'}
             </button>
+            {needsCompatibility && (
+              <button
+                className="button primary"
+                disabled={
+                  busy || !languageSelection.length || !imported.document_hash
+                }
+                onClick={() => void applyLanguages()}
+              >
+                {busy
+                  ? '설정 적용 중…'
+                  : `선택한 ${languageSelection.length}개 적용 후 열기`}
+              </button>
+            )}
           </>
         ) : (
           <>
@@ -1140,11 +1209,22 @@ function ImportProblem({
       }
     >
       {imported ? (
-        imported.import_report ? (
-          <PackageImportSummary report={imported.import_report} />
-        ) : (
-          <p>문제를 가져왔습니다. 문제 열기를 눌러 자료를 확인하세요.</p>
-        )
+        <>
+          {needsCompatibility && compatibility && (
+            <PackageJudgeCompatibility
+              plan={compatibility}
+              selected={languageSelection}
+              onChange={setLanguageSelection}
+              busy={busy}
+            />
+          )}
+          {imported.import_report ? (
+            <PackageImportSummary report={imported.import_report} />
+          ) : (
+            <p>문제를 가져왔습니다. 문제 열기를 눌러 자료를 확인하세요.</p>
+          )}
+          {error && <Notice tone="error">{error}</Notice>}
+        </>
       ) : (
         <>
           <p className="muted">

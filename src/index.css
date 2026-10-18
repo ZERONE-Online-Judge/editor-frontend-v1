@@ -4174,3 +4174,45 @@ svg {
   scroll-margin-top: 104px;
   outline: none;
 }
+
+.import-compatibility {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.import-compatibility p {
+  margin: 0;
+}
+.import-language-table {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+.import-language-table table {
+  width: 100%;
+  min-width: 490px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.import-language-table th,
+.import-language-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #edf0f7;
+}
+.import-language-table th {
+  position: sticky;
+  top: 0;
+  background: #f6f7fe;
+}
+.import-language-table code {
+  overflow-wrap: anywhere;
+}
+.import-language-table small {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+}
