@@ -111,10 +111,14 @@
     color: #444;
   }
   .review-page .review-sample-pair {
-    display: block;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 6mm;
   }
   .review-sample-print {
     display: block;
+    min-width: 0;
   }
   .review-sample-print h3 {
     margin: 12px 0 8px;
