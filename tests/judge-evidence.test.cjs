@@ -42,6 +42,7 @@ loaded.require = (id) => {
       },
     };
   if (
+    id === '../../components/LanguageResourceLimits' ||
     id === '../../lib/permissions' ||
     id === '../../lib/workspace' ||
     id === '../../lib/executionNavigation' ||

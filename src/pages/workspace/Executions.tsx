@@ -1,3 +1,4 @@
+import LanguageLimits from '../../components/LanguageResourceLimits';
 import JudgeCompatibilityNotice from './JudgeCompatibilityNotice';
 import { can, canEdit } from '../../lib/permissions';
 import { useCallback, useEffect, useState } from 'react';
@@ -66,6 +67,8 @@ export default function Executions({
     reload,
     save,
     dirty,
+    mutate,
+    busy: workspaceBusy,
   } = useWorkspace();
   const { user } = useAuth();
   const canInvoke = can(data.problem, 'execute');
@@ -128,9 +131,7 @@ export default function Executions({
   const [caseResult, setCaseResult] = useState<
     (CaseResult & { solution_name?: string }) | null
   >(null);
-  const [executionBackend, setExecutionBackend] = useState<
-    'editor' | 'zoj' | null
-  >(null);
+  const [executionBackend, setExecutionBackend] = useState<'zoj' | null>(null);
   const [startError, setStartError] = useState<{
     problemId: string;
     backend: string | null;
@@ -149,7 +150,7 @@ export default function Executions({
       try {
         const value = await api<ExecutionEnvironment>('/execution-environment');
         if (active) {
-          setExecutionBackend((previous) => previous ?? value.default_backend);
+          setExecutionBackend('zoj');
           setZojConfigured(value.zoj_configured);
           setEnvironment(value);
         }
@@ -261,8 +262,8 @@ export default function Executions({
     try {
       const result = await run(kind, {
         ...options,
-        ...(executionBackend && (kind === 'verify' || kind === 'package')
-          ? { execution_backend: executionBackend }
+        ...(['verify', 'package', 'stress'].includes(kind)
+          ? { execution_backend: 'zoj' }
           : {}),
       });
       selectJob(result.id);
@@ -304,32 +305,18 @@ export default function Executions({
   }
   const environmentPanel = (
     <section className={verification ? 'verification-environment' : 'card'}>
-      <label>
-        풀이 검증 환경
-        <select
-          value={executionBackend ?? ''}
-          onChange={(e) =>
-            setExecutionBackend(e.target.value as 'editor' | 'zoj')
-          }
-        >
-          <option value="" disabled>
-            검증 환경 확인 중…
-          </option>
-          <option value="zoj" disabled={!zojConfigured}>
-            ZOJ 실제 채점기 · 대회와 같은 환경
-          </option>
-          <option value="editor">
-            에이전트 격리 실행 · 제작 기능 전체 지원
-          </option>
-        </select>
-      </label>
+      <strong>ZOJ 실제 채점기 · 대회와 같은 환경</strong>
       <p className="muted">
-        {executionBackend === null
-          ? '서버에서 기본 검증 환경을 확인하고 있습니다.'
-          : executionBackend === 'zoj'
-            ? '풀이를 기존 ZOJ 채점 큐에 보내 판정과 시간·메모리를 기록합니다. C++17·C99·Python 3.13·Java 8·PyPy·Kotlin을 지원하고, 대회와 같은 언어별 보정을 적용합니다. 입력 생성·Validator·Checker·PDF 실행도 Editor 작업이 허용된 채점 에이전트에서 처리합니다.'
-            : 'Editor 실행이 허용된 채점 VM의 제작용 격리 환경에서 실행합니다. 대화형·그룹 점수 등 제작 기능을 검증합니다. ZOJ 대회의 언어별 시간·메모리 보정은 ‘ZOJ 실제 채점기’ 선택에서 적용됩니다.'}
+        전체 풀이 검증·스트레스 테스트·패키지 검증은 ZOJ 채점기로 실행합니다.
+        언어별 설정을 비워두면 자동 보정하며, 아래 지정한 값이나 보정 끄기
+        설정을 적용합니다. 입력 생성·Validator·기준 정답 생성 등 제작 작업은
+        채점 에이전트가 처리합니다.
       </p>
+      {environment && !zojConfigured && (
+        <Notice tone="error">
+          ZOJ 채점기 연결이 설정되지 않았습니다. 관리자에게 문의하세요.
+        </Notice>
+      )}
     </section>
   );
   return (
@@ -383,14 +370,24 @@ export default function Executions({
           <JudgeCompatibilityNotice
             error={startError.error}
             problemId={data.problem.id}
-            changeBackend={() => {
-              setExecutionBackend('editor');
-              setStartError(null);
-            }}
           />
         )}
       <ExecutionLimitsInfo environment={environment} stress={stress} />
-      {packages && verifyPackage && environmentPanel}
+      {((packages && verifyPackage) || stress) && environmentPanel}
+      {(verification || stress || packages) && (
+        <LanguageLimits
+          document={doc}
+          disabled={busy || workspaceBusy}
+          onChange={
+            can(data.problem, 'edit_info')
+              ? (value) =>
+                  mutate((d) => {
+                    d.language_resource_limits = value;
+                  })
+              : undefined
+          }
+        />
+      )}
       {verification && (
         <section
           className="card verification-launcher"
@@ -411,7 +408,7 @@ export default function Executions({
             limits={environment?.limits}
             allowed={canInvoke}
             writer={draft}
-            busy={busy || executionBackend === null}
+            busy={busy || executionBackend === null || !zojConfigured}
             start={(options) => void start('verify', options)}
           />
         </section>
@@ -452,8 +449,6 @@ export default function Executions({
                   value={exportFormat}
                   onChange={(e) => {
                     setExportFormat(e.target.value);
-                    if (e.target.value === 'linux')
-                      setExecutionBackend('editor');
                   }}
                 >
                   <option value="zoj">ZOJ 문제 ZIP · 대회에 등록</option>
@@ -461,7 +456,7 @@ export default function Executions({
                     Editor / Polygon 형식 · 작업 자료
                   </option>
                   <option value="linux">
-                    Linux 재현 패키지 · Editor 격리 환경
+                    Linux 재현 패키지 · 오프라인 실행 자료
                   </option>
                 </select>
               </label>
@@ -1074,6 +1069,8 @@ export default function Executions({
                       input={example.input_sha}
                       answer={example.answer_sha}
                       actual={finding.actual_sha}
+                      outputTruncated={finding.output_truncated}
+                      outputTotalBytes={finding.output_total_bytes}
                     />
                   )}
                 />

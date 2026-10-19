@@ -103,7 +103,19 @@ export type Material = {
   solutions: string[];
   testsets: string[];
 };
+export type LanguageResourceLimit = {
+  time_limit_ms?: number;
+  memory_limit_mb?: number;
+  disable_auto_adjustment?: boolean;
+};
+export type LanguageResourceLimits = Partial<
+  Record<
+    'cpp17' | 'python3' | 'java8' | 'c99' | 'pypy3' | 'kotlin',
+    LanguageResourceLimit
+  >
+>;
 export type ProblemDocument = {
+  language_resource_limits?: LanguageResourceLimits;
   common_statement?: string;
   common_tutorial?: string;
   translation_source?: string | null;
@@ -264,6 +276,8 @@ export type ExecutionEnvironment = {
   zoj?: { execution?: { online_nodes: number }; online_nodes?: number } | null;
 };
 export type CounterexampleFinding = {
+  output_truncated?: boolean;
+  output_total_bytes?: number | null;
   solution: string;
   tag?: string;
   verdict: string;

@@ -90,6 +90,13 @@ export function documentChanges(
       before[key as keyof ProblemDocument],
       after[key as keyof ProblemDocument],
     );
+  add(
+    'language_resource_limits',
+    '설정',
+    '언어별 시간·메모리 제한',
+    before.language_resource_limits ?? {},
+    after.language_resource_limits ?? {},
+  );
   for (const key of Object.keys(infoNames))
     add(
       `info/${key}`,

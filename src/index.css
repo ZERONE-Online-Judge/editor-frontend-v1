@@ -4548,3 +4548,46 @@ svg {
     display: flex;
   }
 }
+
+.language-resource-limits .section-heading {
+  margin-bottom: 12px;
+}
+.language-resource-limits .section-heading p {
+  max-width: 80ch;
+}
+.language-limit-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--zoj-border);
+}
+.language-limit-name {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+}
+.language-limit-name > strong {
+  font-size: 13px;
+}
+.language-limit-name .checkbox {
+  font-size: 11px;
+}
+.language-limit-row small {
+  color: #718096;
+  font-weight: 400;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .language-limit-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .language-limit-name {
+    grid-column: 1/-1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+}

@@ -692,3 +692,58 @@ test('preparation readiness includes scoped wrong tags but excludes globally ski
     preparationCautions(doc).some((c) => c.code === 'NO_WRONG_SOLUTIONS'),
   );
 });
+
+test('Language limit controls preserve overrides while toggling correction and following base changes', async () => {
+  const Card = source('components/LanguageResourceLimits.tsx').default;
+  const { effectiveLimits } = source('lib/languageLimits.ts');
+  let saved;
+  const original = {
+    info: { time_limit_ms: 1000, memory_limit_mb: 256 },
+    language_resource_limits: { pypy3: { time_limit_ms: 700 } },
+  };
+  function Form() {
+    const [doc, setDoc] = React.useState(original);
+    saved = doc;
+    return React.createElement(Card, {
+      document: doc,
+      onChange: (value) => setDoc({ ...doc, language_resource_limits: value }),
+    });
+  }
+  const { host, close } = await mount(Form);
+  assert.equal(host.querySelectorAll('input[type=checkbox]').length, 4);
+  const row = [...host.querySelectorAll('.language-limit-row')].find((r) =>
+    r.textContent.includes('PyPy'),
+  );
+  assert.match(row.textContent, /640MiB/);
+  await act(async () => row.querySelector('input[type=checkbox]').click());
+  assert.deepEqual(saved.language_resource_limits.pypy3, {
+    time_limit_ms: 700,
+    disable_auto_adjustment: true,
+  });
+  assert.match(row.textContent, /256MiB/);
+  assert.deepEqual(
+    effectiveLimits(
+      { ...saved, info: { time_limit_ms: 2000, memory_limit_mb: 512 } },
+      'pypy3',
+    ),
+    { time_limit_ms: 700, memory_limit_mb: 512 },
+  );
+  await act(async () => row.querySelector('input[type=checkbox]').click());
+  assert.deepEqual(saved.language_resource_limits.pypy3, {
+    time_limit_ms: 700,
+  });
+  assert.match(row.textContent, /640MiB/);
+  await close();
+});
+
+test('Read-only language limits expose policy without granting editing or changing a document', async () => {
+  const Card = source('components/LanguageResourceLimits.tsx').default;
+  const doc = { info: { time_limit_ms: 1000, memory_limit_mb: 256 } };
+  const { host, close } = await mount(Card, { document: doc });
+  assert.equal(host.querySelector('fieldset').disabled, true);
+  assert.match(host.textContent, /기본 설정 편집 권한/);
+  assert.deepEqual(doc, {
+    info: { time_limit_ms: 1000, memory_limit_mb: 256 },
+  });
+  await close();
+});

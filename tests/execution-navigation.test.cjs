@@ -333,14 +333,14 @@ async function selectSets(label, names) {
   await flush();
 }
 
-test('Linux packages explicitly use the Editor replay runtime', async () => {
+test('Linux package verification uses ZOJ while retaining offline replay materials', async () => {
   await mount('packages');
   await setControl('패키지 형식', 'linux');
   await click('검증 후 패키지 생성');
   assert.equal(requests.length, 1);
   assert.equal(requests[0].body.kind, 'package');
   assert.equal(requests[0].body.options.export_format, 'linux');
-  assert.equal(requests[0].body.options.execution_backend, 'editor');
+  assert.equal(requests[0].body.options.execution_backend, 'zoj');
 });
 
 test('execution results include verification history while launch controls remain in the verification tab', async () => {
@@ -2180,7 +2180,7 @@ test('Package creation can be granted without edits or verification execution', 
   );
 });
 
-test('Unsupported solution languages have one summary, per-file settings and an explicit non-running environment switch', async () => {
+test('Unsupported solution languages show file settings without an isolated judging escape', async () => {
   const { ApiError } = source('lib/api.ts');
   const files = Array.from({ length: 7 }, (_, i) => ({
     name: `zoac_s3_wrong_${i}.cpp`,
@@ -2202,13 +2202,6 @@ test('Unsupported solution languages have one summary, per-file settings and an 
       '지원 언어로 풀이 설정을 변경하거나 에이전트 격리 실행을 선택하세요. 언어 표준을 자동으로 바꾸지 않습니다.',
   });
   await mount('verification');
-  const environment = [...host.querySelectorAll('select')].find((s) =>
-    [...s.options].some((o) => o.value === 'zoj'),
-  );
-  await act(async () => {
-    environment.value = 'zoj';
-    environment.dispatchEvent(new window.Event('change', { bubbles: true }));
-  });
   await click('전체 풀이 검증 시작');
   const notice = host.querySelector('.judge-compatibility');
   assert.ok(notice);
@@ -2220,14 +2213,11 @@ test('Unsupported solution languages have one summary, per-file settings and an 
     '/problems/p/solutions',
   );
   assert.equal(requests.length, 1);
-  await click('에이전트 격리 실행으로 변경');
-  assert.equal(environment.value, 'editor');
-  assert.equal(host.querySelector('.judge-compatibility'), null);
-  assert.equal(requests.length, 1);
+  assert.doesNotMatch(notice.textContent, /격리 실행으로 변경/);
   assert.equal(state.document.solutions['main.py'].language, 'python3');
   requestError = null;
   await click('전체 풀이 검증 시작');
-  assert.equal(requests.at(-1).body.options.execution_backend, 'editor');
+  assert.equal(requests.at(-1).body.options.execution_backend, 'zoj');
 });
 
 test('Checker compatibility links open the actual source settings without changing code or starting a job', async () => {
@@ -2256,7 +2246,6 @@ test('Checker compatibility links open the actual source settings without changi
       'Checker 파일 언어 설정에서 지원 표준을 선택한 뒤 다시 검증하세요.',
   });
   await mount('verification');
-  await setControl('풀이 검증 환경', 'zoj');
   await click('전체 풀이 검증 시작');
   const notice = host.querySelector('.judge-compatibility');
   assert.match(notice.textContent, /현재 언어: C\+\+20/);

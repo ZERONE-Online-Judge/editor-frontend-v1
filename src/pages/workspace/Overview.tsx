@@ -1,3 +1,4 @@
+import LanguageLimits from '../../components/LanguageResourceLimits';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { patch, put } from '../../lib/api';
@@ -48,6 +49,18 @@ export default function Overview() {
           </div>
         ))}
       </div>
+      <LanguageLimits
+        document={doc}
+        disabled={busy || !editable}
+        onChange={
+          editable
+            ? (value) =>
+                mutate((d) => {
+                  d.language_resource_limits = value;
+                })
+            : undefined
+        }
+      />
       <section className="card">
         <SectionHeading title="기본 정보" />
         <fieldset disabled={!editable || busy} className="form-grid">
@@ -69,7 +82,7 @@ export default function Overview() {
               <input
                 type="number"
                 min={250}
-                max={15000}
+                max={10000}
                 step={50}
                 value={doc.info.time_limit_ms}
                 onChange={(e) =>
@@ -80,14 +93,14 @@ export default function Overview() {
               />
               <span>ms</span>
             </span>
-            <small>250~15,000ms · 50ms 단위</small>
+            <small>250~10,000ms · 50ms 단위</small>
           </label>
           <label>
             메모리 제한
             <span className="input-unit">
               <input
                 type="number"
-                min={4}
+                min={16}
                 max={1024}
                 value={doc.info.memory_limit_mb}
                 onChange={(e) =>

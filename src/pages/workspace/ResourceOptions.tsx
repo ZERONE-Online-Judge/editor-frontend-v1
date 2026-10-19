@@ -62,8 +62,8 @@ export default function ResourceOptions({
           </div>
           <p className="muted small">
             적용 대상: Solution(풀이) · 적용 단계: Compile(컴파일). 실행 시 원본
-            리소스 파일은 제공하지 않습니다. 이 정책은 Editor 격리 실행에서
-            지원하며, 에이전트 전송 모드에서도 적용됩니다.
+            리소스 파일은 제공하지 않습니다. 이 정책은 오프라인 재현 실행에서
+            지원합니다. ZOJ 실제 채점 검증에는 사용할 수 없습니다.
           </p>
           {!policy.languages.length && (
             <p role="alert">적용 언어를 하나 이상 선택하세요.</p>

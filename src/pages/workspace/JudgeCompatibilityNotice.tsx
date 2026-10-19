@@ -18,11 +18,9 @@ function sources(value: unknown): Source[] {
 export default function JudgeCompatibilityNotice({
   error,
   problemId,
-  changeBackend,
 }: {
   error: ApiError;
   problemId: string;
-  changeBackend: () => void;
 }) {
   const notice = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -120,7 +118,7 @@ export default function JudgeCompatibilityNotice({
         <p className="small">
           {typeof error.details.guidance === 'string'
             ? error.details.guidance
-            : '풀이의 언어 설정 또는 검증 환경을 확인하세요. 언어 표준을 자동으로 변경하지 않습니다.'}
+            : '풀이의 언어·문제 설정을 확인하세요. 언어 표준을 자동으로 변경하지 않습니다.'}
         </p>
         <div className="actions">
           {checker && (
@@ -139,9 +137,6 @@ export default function JudgeCompatibilityNotice({
               풀이 언어 설정
             </Link>
           )}
-          <button className="button small" onClick={changeBackend}>
-            에이전트 격리 실행으로 변경
-          </button>
         </div>
       </Notice>
     </section>
