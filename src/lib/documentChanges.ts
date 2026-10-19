@@ -34,7 +34,7 @@ const statementNames: Record<string, string> = {
   tutorial: '해설',
   show_in_review: '미리보기 표시',
 };
-const equal = (a: unknown, b: unknown): boolean => {
+export const equal = (a: unknown, b: unknown): boolean => {
   if (a === b) return true;
   if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
   if (Array.isArray(a) || Array.isArray(b))
@@ -285,17 +285,19 @@ export function diffLines(before: string, after: string): DiffLine[] {
       }
     }
   } else {
-    rows.push(
-      ...aa.map((text, i): DiffLine => ({
+    aa.forEach((text, i) =>
+      rows.push({
         kind: 'remove',
         text,
         old: start + i + 1,
-      })),
-      ...bb.map((text, i): DiffLine => ({
+      }),
+    );
+    bb.forEach((text, i) =>
+      rows.push({
         kind: 'add',
         text,
         next: start + i + 1,
-      })),
+      }),
     );
   }
   for (let i = 0; i < end; i++)

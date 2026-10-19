@@ -1,69 +1,70 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, time } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
 import type { ProblemDocument, Revision } from '../../lib/types';
-import {
-  Badge,
-  CodeEditor,
-  Icon,
-  Modal,
-  SectionHeading,
-} from '../../components/ui';
-function diff(before: unknown, after: unknown, path = ''): string[] {
-  if (JSON.stringify(before) === JSON.stringify(after)) return [];
-  if (
-    before &&
-    after &&
-    typeof before === 'object' &&
-    typeof after === 'object' &&
-    !Array.isArray(before) &&
-    !Array.isArray(after)
-  ) {
-    const a = before as Record<string, unknown>;
-    const b = after as Record<string, unknown>;
-    return [...new Set([...Object.keys(a), ...Object.keys(b)])].flatMap((key) =>
-      diff(a[key], b[key], path ? `${path} / ${key}` : key),
-    );
-  }
-  return [path];
-}
+import { Badge, Modal, Notice, SectionHeading } from '../../components/ui';
+import RevisionChanges from '../../components/RevisionChanges';
+
+type Selection = {
+  problemId: string;
+  revision: Revision;
+  document?: ProblemDocument;
+  before: ProblemDocument | null;
+  error?: string;
+};
 export default function Revisions() {
   const { data, notify } = useWorkspace();
-  const [rows, setRows] = useState<Revision[]>([]);
-  const [selected, setSelected] = useState<{
-    revision: Revision;
-    document: ProblemDocument;
-    before: ProblemDocument | null;
+  const problemId = data.problem.id;
+  const [history, setHistory] = useState<{
+    problemId: string;
+    rows: Revision[];
   } | null>(null);
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const request = useRef({ version: 0 });
+  const selected = selection?.problemId === problemId ? selection : null;
+  const rows = history?.problemId === problemId ? history.rows : [];
   useEffect(() => {
     let active = true;
-    api<Revision[]>(`/problems/${data.problem.id}/revisions`)
+    const tracker = request.current;
+    api<Revision[]>(`/problems/${problemId}/revisions`)
       .then((values) => {
-        if (active) setRows(values);
+        if (active) setHistory({ problemId, rows: values });
       })
-      .catch((e) => {
-        if (active) notify(e.message, true);
+      .catch((error) => {
+        if (active) notify(error.message, true);
       });
     return () => {
       active = false;
+      tracker.version++;
     };
-  }, [data.problem.id, notify]);
+  }, [problemId, notify]);
   async function view(row: Revision) {
+    const token = ++request.current.version;
+    setSelection({ problemId, revision: row, before: null });
     try {
-      const [d, b] = await Promise.all([
-        api<ProblemDocument>(
-          `/problems/${data.problem.id}/revisions/${row.number}`,
-        ),
+      const [document, before] = await Promise.all([
+        api<ProblemDocument>(`/problems/${problemId}/revisions/${row.number}`),
         row.number > 0
           ? api<ProblemDocument>(
-              `/problems/${data.problem.id}/revisions/${row.number - 1}`,
+              `/problems/${problemId}/revisions/${row.number - 1}`,
             )
           : Promise.resolve(null),
       ]);
-      setSelected({ revision: row, document: d, before: b });
-    } catch (e) {
-      notify((e as Error).message, true);
+      if (request.current.version === token)
+        setSelection({ problemId, revision: row, document, before });
+    } catch (error) {
+      if (request.current.version === token)
+        setSelection({
+          problemId,
+          revision: row,
+          before: null,
+          error: (error as Error).message,
+        });
     }
+  }
+  function close() {
+    request.current.version++;
+    setSelection(null);
   }
   return (
     <div className="section-stack">
@@ -105,6 +106,7 @@ export default function Revisions() {
                 <td>
                   <button
                     className="button small"
+                    aria-label={`r${row.number} 자료 확인`}
                     onClick={() => void view(row)}
                   >
                     자료 확인
@@ -118,36 +120,62 @@ export default function Revisions() {
       {selected && (
         <Modal
           wide
-          title={`r${selected.revision.number} · ${selected.revision.message}`}
-          onClose={() => setSelected(null)}
+          className="revision-review-modal"
+          title={`${selected.revision.number > 0 ? `r${selected.revision.number - 1} → r${selected.revision.number}` : 'r0 · 최초 등록'} · ${selected.revision.message}`}
+          onClose={close}
           footer={
-            <button className="button" onClick={() => setSelected(null)}>
-              닫기
-            </button>
+            <>
+              <div className="revision-review-meta">
+                <strong>{selected.revision.author}</strong>
+                <span>{time(selected.revision.created_at)}</span>
+              </div>
+              <button className="button" onClick={close}>
+                닫기
+              </button>
+            </>
           }
         >
-          <h3>이전 리비전에서 변경한 항목</h3>
-          <div className="revision-diff">
-            {diff(selected.before, selected.document).map((path) => (
-              <div key={path}>
-                <Icon name="branch" size={15} />
-                <code>{path || '새 문제'}</code>
+          {selected.error ? (
+            <Notice tone="error">
+              <p>리비전 자료를 불러오지 못했습니다. {selected.error}</p>
+              <button
+                className="button small"
+                onClick={() => void view(selected.revision)}
+              >
+                다시 불러오기
+              </button>
+            </Notice>
+          ) : !selected.document ? (
+            <p role="status">
+              이전 리비전과 현재 리비전의 자료를 비교하고 있습니다.
+            </p>
+          ) : (
+            <>
+              <RevisionChanges
+                key={`${problemId}-${selected.revision.number}`}
+                problemId={problemId}
+                before={selected.before}
+                after={selected.document}
+              />
+              <div className="revision-snapshot-downloads">
+                <span>전체 자료 보관</span>
+                {selected.revision.number > 0 && (
+                  <a
+                    href={`/api/problems/${problemId}/revisions/${selected.revision.number - 1}`}
+                    download={`revision-${selected.revision.number - 1}.json`}
+                  >
+                    이전 리비전 JSON
+                  </a>
+                )}
+                <a
+                  href={`/api/problems/${problemId}/revisions/${selected.revision.number}`}
+                  download={`revision-${selected.revision.number}.json`}
+                >
+                  현재 리비전 JSON
+                </a>
               </div>
-            ))}
-          </div>
-          <details>
-            <summary>이 리비전의 전체 자료</summary>
-            <CodeEditor
-              value={JSON.stringify(selected.document, null, 2)}
-              readOnly
-              label="리비전 스냅샷"
-              rows={20}
-            />
-          </details>
-          <div className="muted small">
-            파일 내용은 자료 해시로 고정됩니다. 같은 해시의 파일은 리비전과 실행
-            기록에서 재사용합니다.
-          </div>
+            </>
+          )}
         </Modal>
       )}
     </div>

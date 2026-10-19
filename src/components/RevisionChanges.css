@@ -1,0 +1,421 @@
+.editor-modal.wide.revision-review-modal {
+  width: 1320px;
+}
+.revision-review-modal[open] {
+  display: flex;
+  flex-direction: column;
+  height: min(920px, calc(100vh - 32px));
+  max-height: calc(100vh - 32px);
+}
+.revision-review-modal > .modal-heading,
+.revision-review-modal > .modal-footer {
+  flex-shrink: 0;
+}
+.revision-review-modal > .modal-footer {
+  justify-content: space-between;
+}
+.revision-review-modal > .modal-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  gap: 0;
+}
+.revision-changes {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.revision-review-meta {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin: 0;
+  color: var(--zoj-muted);
+  font-size: 12px;
+}
+.revision-review-meta > strong {
+  color: var(--zoj-ink);
+  overflow-wrap: anywhere;
+}
+.revision-change-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+.revision-change-summary > strong {
+  font-size: 14px;
+}
+.revision-change-summary > strong > span {
+  margin-left: 8px;
+  color: var(--zoj-muted);
+  font-weight: 400;
+  font-size: 12px;
+}
+.revision-categories {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+.revision-categories button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 10px;
+  color: var(--zoj-muted);
+  text-align: left;
+  font-size: 12px;
+}
+.revision-categories button strong {
+  font-size: 18px;
+  color: var(--zoj-ink);
+}
+.revision-categories button[aria-pressed='true'] {
+  background: var(--zoj-surface-hover);
+  border-color: var(--zoj-border-selected);
+  color: var(--zoj-accent);
+}
+.revision-change-browser {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.revision-change-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 12px;
+  background: var(--zoj-surface);
+}
+.revision-change-list .search-field {
+  width: 100%;
+  margin-bottom: 10px;
+}
+.revision-change-list .search-field input {
+  min-width: 0;
+  width: 100%;
+}
+.revision-change-items {
+  display: grid;
+  gap: 6px;
+  min-height: 0;
+  overflow: auto;
+}
+.revision-change-items > button {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  text-align: left;
+  background: var(--zoj-surface-raised);
+}
+.revision-change-items > button[aria-pressed='true'] {
+  border-color: var(--zoj-border-selected);
+  box-shadow: inset 3px 0 var(--zoj-accent);
+}
+.revision-change-items > button > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.revision-change-items strong {
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.revision-change-items small {
+  color: var(--zoj-muted);
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.revision-change-list > p {
+  margin: 12px 0;
+  color: var(--zoj-muted);
+}
+.revision-change-detail {
+  min-width: 0;
+  border: 1px solid var(--zoj-border);
+  border-radius: 12px;
+  overflow: auto;
+  max-height: 100%;
+}
+.revision-change-detail > header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--zoj-surface);
+  border-bottom: 1px solid var(--zoj-border);
+}
+.revision-change-detail > header > div {
+  min-width: 0;
+}
+.revision-change-detail h3 {
+  margin: 6px 0;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.revision-change-detail > header p {
+  color: var(--zoj-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.revision-field-table {
+  overflow-x: auto;
+}
+.revision-metadata-strip {
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--zoj-border);
+}
+.revision-metadata-strip > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 12px;
+}
+.revision-metadata-strip strong {
+  min-width: 110px;
+  font-weight: 600;
+  color: var(--zoj-muted);
+}
+.revision-metadata-strip span {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.revision-metadata-strip del {
+  color: #b91c1c;
+  text-decoration: none;
+}
+.revision-metadata-strip ins {
+  color: #047857;
+  text-decoration: none;
+}
+.revision-field-table table {
+  width: 100%;
+  table-layout: fixed;
+}
+.revision-field-table th:first-child {
+  width: 25%;
+}
+.revision-field-table tbody th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--zoj-muted);
+  overflow-wrap: anywhere;
+}
+.revision-field-table td {
+  vertical-align: top;
+}
+.revision-value {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    12px/1.8 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  color: var(--zoj-ink);
+}
+.revision-value-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--zoj-border);
+}
+.revision-value-pair > div {
+  min-width: 0;
+  padding: 18px;
+  background: #fff;
+}
+.revision-value-pair > div > span {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: var(--zoj-muted);
+}
+.revision-content-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 18px 0;
+}
+.revision-content-tabs [aria-pressed='true'] {
+  background: var(--zoj-surface-hover);
+  border-color: var(--zoj-border-selected);
+  color: var(--zoj-accent);
+}
+.revision-content-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 16px;
+}
+.revision-content-heading h4 {
+  margin: 0;
+  font-size: 13px;
+}
+.revision-content-heading .actions {
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 11px;
+}
+.revision-content-diff > p,
+.revision-content-diff > [role='alert'] {
+  margin: 0;
+  padding: 16px 18px;
+  font-size: 12px;
+}
+.revision-diff-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--zoj-border);
+  font-size: 12px;
+}
+.revision-diff-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--zoj-muted);
+  font-size: 11px;
+}
+.revision-diff-toolbar b + b {
+  margin-left: 10px;
+}
+.revision-added {
+  color: #047857;
+}
+.revision-removed {
+  color: #b91c1c;
+}
+.revision-line-head {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--zoj-surface);
+  color: var(--zoj-muted);
+  font-size: 10px;
+}
+.revision-line-head > span:nth-child(-n + 2) {
+  width: 26px;
+  text-align: right;
+}
+.revision-line-head > span:last-child {
+  margin-left: 20px;
+}
+.revision-text-diff .line-diff {
+  max-height: none;
+}
+.revision-text-diff .button {
+  margin: 12px 18px;
+}
+.revision-preview-note {
+  padding: 12px 18px;
+  background: #fffbeb;
+  color: #854d0e;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.revision-no-changes {
+  padding: 24px;
+  border: 1px dashed var(--zoj-border);
+  border-radius: 12px;
+  color: var(--zoj-muted);
+  font-size: 13px;
+}
+.revision-snapshot-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--zoj-border);
+  font-size: 12px;
+  color: var(--zoj-muted);
+  flex-shrink: 0;
+}
+.revision-snapshot-downloads a {
+  color: var(--zoj-accent);
+}
+@media (max-width: 900px) {
+  .revision-categories {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .revision-change-browser {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    overflow: auto;
+  }
+  .revision-change-list {
+    max-height: 260px;
+  }
+  .revision-change-detail {
+    max-height: none;
+    overflow: visible;
+  }
+  .revision-change-items {
+    max-height: 220px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 520px) {
+  .revision-categories button {
+    flex-direction: column;
+    align-items: start;
+    padding: 10px;
+  }
+  .revision-change-items {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .revision-value-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .revision-field-table table {
+    min-width: 440px;
+  }
+}
