@@ -1,4 +1,4 @@
-const { test, after } = require('node:test');
+const { test, after, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -18,6 +18,10 @@ dom.window.HTMLDialogElement.prototype.close = function () {
 const React = require('react');
 const { act, createElement: h } = React;
 const { createRoot } = require('react-dom/client');
+const cleanup = new Set();
+afterEach(async () => {
+  for (const close of [...cleanup]) await close();
+});
 let requests = [],
   reply,
   account = { id: 'owner' };
@@ -61,22 +65,36 @@ const components = load('components/SharedFolders.tsx', {
   '../lib/sharedFolders': helpers,
   './ui': load('components/ui.tsx'),
 });
+const Overview = load('components/SharedFolderOverview.tsx', {
+  '../lib/api': { api: (p, o = {}) => call(o.method || 'GET', p) },
+  '../lib/permissions': permissions,
+  '../lib/authContext': { useAuth: () => ({ user: account }) },
+  '../lib/sharedFolders': helpers,
+  './ui': load('components/ui.tsx'),
+}).default;
 async function mount(Component, props = {}) {
   requests = [];
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
   await act(async () => root.render(h(Component, props)));
+  const close = async () => {
+    await act(async () => root.unmount());
+    host.remove();
+    cleanup.delete(close);
+  };
+  cleanup.add(close);
   return {
     host,
-    close: async () => {
-      await act(async () => root.unmount());
-      host.remove();
-    },
+    render: async (nextProps) =>
+      act(async () => root.render(h(Component, nextProps))),
+    close,
   };
 }
 const buttons = (v, label) =>
-  [...v.host.querySelectorAll('button')].filter((b) => b.textContent === label);
+  [...v.host.querySelectorAll('button')].filter(
+    (b) => b.textContent.trim() === label,
+  );
 const click = async (v, label) => act(async () => buttons(v, label)[0].click());
 const members = {
   role: 'OWNER',
@@ -138,7 +156,10 @@ test('Read members cannot invite or change roles, and leaving requires confirmat
       left = true;
     },
   });
-  assert.equal(v.host.querySelector('input[type=email]'), null);
+  assert.equal(
+    v.host.querySelector('.shared-invite-form input[type=text]'),
+    null,
+  );
   assert.equal(v.host.querySelector('select'), null);
   await click(v, '공유 폴더 나가기');
   assert.match(v.host.querySelector('[role=alert]').textContent, /나갈까요/);
@@ -218,6 +239,7 @@ test('Pending invite permissions open above members and save without accepting o
   };
   const v = await mount(components.SharedFolderMembers, {
     folder,
+    initialTab: 'invitations',
     onClose() {},
     onChanged() {},
     onLeft() {},
@@ -268,6 +290,7 @@ test('Cancel preserves a pending invitation and failed saves keep the modal and 
   };
   const v = await mount(components.SharedFolderMembers, {
     folder,
+    initialTab: 'invitations',
     onClose() {},
     onChanged() {},
     onLeft() {},
@@ -330,6 +353,7 @@ test('A limited manager cannot edit pending grants above their own scope or othe
   });
   const v = await mount(components.SharedFolderMembers, {
     folder,
+    initialTab: 'invitations',
     onClose() {},
     onChanged() {},
     onLeft() {},
@@ -347,11 +371,12 @@ test('Inviting uses the chosen role and explains email notification and inbox ac
   reply = async () => members;
   const v = await mount(components.SharedFolderMembers, {
     folder,
+    initialTab: 'invite',
     onClose() {},
     onChanged() {},
     onLeft() {},
   });
-  const input = v.host.querySelector('input[type=email]');
+  const input = v.host.querySelector('.shared-invite-form input[type=text]');
   const setter = Object.getOwnPropertyDescriptor(
     window.HTMLInputElement.prototype,
     'value',
@@ -378,12 +403,12 @@ test('Inviting uses the chosen role and explains email notification and inbox ac
       method: 'POST',
       path: '/shared-folders/root/invitations',
       body: {
-        email: 'new@example.com',
+        login: 'new@example.com',
         permissions: ['execute', 'render', 'issues'],
       },
     },
   );
-  assert.match(v.host.textContent, /초대 안내 이메일을 보냅니다/);
+  assert.match(v.host.textContent, /해당 계정에 안내 이메일을 보냅니다/);
   assert.match(v.host.textContent, /초대는 7일간 유효/);
   assert.match(v.host.textContent, /안내 메일 발송을 요청했습니다/);
   assert.doesNotMatch(v.host.textContent, /이메일은 발송하지 않습니다/);
@@ -450,7 +475,10 @@ test('Explicit read-only permissions override an old ADMIN label', async () => {
     onChanged() {},
     onLeft() {},
   });
-  assert.equal(v.host.querySelector('input[type=email]'), null);
+  assert.equal(
+    v.host.querySelector('.shared-invite-form input[type=text]'),
+    null,
+  );
   assert.equal(buttons(v, '권한 수정').length, 0);
   await v.close();
 });
@@ -466,6 +494,7 @@ test('Custom membership administrators see the same checklist and cannot grant u
   });
   const v = await mount(components.SharedFolderMembers, {
     folder,
+    initialTab: 'invite',
     onClose() {},
     onChanged() {},
     onLeft() {},
@@ -482,4 +511,234 @@ test('Custom membership administrators see the same checklist and cannot grant u
   assert.equal(checked.length, 1);
   assert.match(checked[0], /이슈/);
   await v.close();
+});
+
+test('Team folder overview shows owner, accepted members and pending invitations separately', async () => {
+  reply = async () => ({
+    ...members,
+    invitations: [
+      {
+        id: 'pending',
+        email: 'new@example.com',
+        role: 'VIEWER',
+        expires_at: 1,
+      },
+    ],
+  });
+  const opened = [];
+  const v = await mount(Overview, {
+    folder,
+    nested: true,
+    onOpen: (tab) => opened.push(tab),
+  });
+  assert.match(
+    v.host.querySelector('.team-folder-facts').textContent,
+    /함께하는 구성원 2명/,
+  );
+  assert.match(
+    v.host.querySelector('.team-folder-facts').textContent,
+    /소유자 작성자/,
+  );
+  assert.match(v.host.textContent, /초대 대기 1건/);
+  assert.match(v.host.textContent, /이 하위 폴더/);
+  assert.equal(v.host.querySelectorAll('.team-member-chip').length, 2);
+  assert.doesNotMatch(v.host.textContent, /new@example.com|접속 중|온라인/);
+  await click(v, '구성원 관리');
+  await click(v, '구성원 초대');
+  await click(v, '초대 대기 1건');
+  assert.deepEqual(opened, ['members', 'invite', 'invitations']);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].path, '/shared-folders/root/members');
+  await v.close();
+});
+
+test('Overview respects explicit read-only permissions even if the old role says ADMIN', async () => {
+  reply = async () => ({
+    ...members,
+    role: 'ADMIN',
+    permissions: [],
+    invitations: [],
+  });
+  const v = await mount(Overview, { folder, onOpen() {} });
+  assert.equal(buttons(v, '구성원 초대').length, 0);
+  assert.equal(buttons(v, '구성원 관리').length, 0);
+  assert.equal(buttons(v, '구성원 보기').length, 1);
+  assert.doesNotMatch(v.host.textContent, /초대 대기/);
+  await v.close();
+});
+
+test('Large rosters have a truthful total and a compact preview with an explicit remainder', async () => {
+  reply = async () => ({
+    ...members,
+    members: [
+      members.members[0],
+      ...Array.from({ length: 7 }, (_, i) => ({
+        ...members.members[1],
+        user_id: `p${i}`,
+        handle: `p${i}`,
+      })),
+    ],
+  });
+  const v = await mount(Overview, { folder, onOpen() {} });
+  assert.match(v.host.textContent, /함께하는 구성원 8명/);
+  assert.equal(v.host.querySelectorAll('.team-member-chip').length, 6);
+  assert.equal(buttons(v, '+2명 더 보기').length, 1);
+  await v.close();
+});
+
+test('Overview refreshes after membership changes and removes focus listeners when closed', async () => {
+  let snapshot = members;
+  reply = async () => snapshot;
+  const v = await mount(Overview, { folder, onOpen() {} });
+  snapshot = { ...members, members: [members.members[0]] };
+  await act(async () => window.dispatchEvent(new window.Event('focus')));
+  assert.match(v.host.textContent, /함께하는 구성원 1명/);
+  assert.equal(requests.length, 2);
+  await v.close();
+  await act(async () => window.dispatchEvent(new window.Event('focus')));
+  assert.equal(requests.length, 2);
+});
+
+test('Overview ignores old folder responses and never displays a previous team roster in another folder', async () => {
+  let resolve;
+  reply = async (method, path) =>
+    path.includes('/root/')
+      ? new Promise((done) => {
+          resolve = done;
+        })
+      : {
+          ...members,
+          members: [{ ...members.members[0], display_name: '다른 소유자' }],
+        };
+  const v = await mount(Overview, { folder, onOpen() {} });
+  await v.render({
+    folder: { ...folder, id: 'next', workspace_id: 'next', name: '다른 팀' },
+    onOpen() {},
+  });
+  assert.match(v.host.textContent, /다른 소유자/);
+  await act(async () => resolve(members));
+  assert.match(v.host.textContent, /다른 소유자/);
+  assert.doesNotMatch(v.host.textContent, /작성자/);
+  await v.close();
+});
+
+test('Failed roster reads do not invent a zero count and offer a working retry', async () => {
+  reply = async () => {
+    throw new Error('일시적인 연결 오류');
+  };
+  const v = await mount(Overview, { folder, onOpen() {} });
+  assert.match(
+    v.host.querySelector('[role=alert]').textContent,
+    /불러오지 못했습니다/,
+  );
+  assert.doesNotMatch(v.host.textContent, /구성원 0명/);
+  reply = async () => members;
+  await click(v, '다시 시도');
+  assert.match(v.host.textContent, /함께하는 구성원 2명/);
+  await v.close();
+});
+
+test('Member management opens on people and supports keyboard tabs and local name search', async () => {
+  reply = async () => members;
+  const v = await mount(components.SharedFolderMembers, {
+    folder,
+    onClose() {},
+    onChanged() {},
+    onLeft() {},
+  });
+  assert.match(
+    v.host.querySelector('[role=tab][aria-selected=true]').textContent,
+    /구성원 2명/,
+  );
+  assert.equal(
+    v.host.querySelector('.shared-invite-form input[type=text]'),
+    null,
+  );
+  const search = v.host.querySelector('[aria-label="구성원 검색"]');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    ).set.call(search, '@peer');
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  assert.equal(
+    v.host.querySelectorAll(
+      '[aria-label="폴더 구성원 목록"] .shared-member-row',
+    ).length,
+    1,
+  );
+  assert.match(
+    v.host.querySelector('[aria-label="폴더 구성원 목록"]').textContent,
+    /동료/,
+  );
+  const tab = v.host.querySelector('[role=tab][aria-selected=true]');
+  await act(async () =>
+    tab.dispatchEvent(
+      new window.KeyboardEvent('keydown', { key: 'End', bubbles: true }),
+    ),
+  );
+  assert.equal(
+    v.host.querySelector('[role=tab][aria-selected=true]').textContent,
+    '새 구성원 초대',
+  );
+  assert.ok(v.host.querySelector('.shared-invite-form input[type=text]'));
+  assert.equal(requests.length, 1);
+  await v.close();
+});
+
+test('An Editor tag can be invited without the browser email-only constraint', async () => {
+  reply = async () => members;
+  const v = await mount(components.SharedFolderMembers, {
+    folder,
+    initialTab: 'invite',
+    onClose() {},
+    onChanged() {},
+    onLeft() {},
+  });
+  const input = v.host.querySelector('.shared-invite-form input[type=text]');
+  assert.match(input.placeholder, /@editor-/);
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    ).set.call(input, '  @editor-0123456789  ');
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  assert.equal(input.checkValidity(), true);
+  await act(async () =>
+    v.host
+      .querySelector('form')
+      .dispatchEvent(
+        new window.Event('submit', { bubbles: true, cancelable: true }),
+      ),
+  );
+  assert.deepEqual(requests.find((r) => r.method === 'POST').body, {
+    login: '@editor-0123456789',
+    permissions: [],
+  });
+  assert.equal(input.value, '');
+});
+
+test('Permission summaries start compact and group every allowed capability', async () => {
+  const v = await mount(checklist.PermissionSummary, {
+    value: permissions.allPermissions,
+  });
+  const details = v.host.querySelector('details');
+  assert.equal(details.open, false);
+  assert.match(details.querySelector('summary').textContent, /권한 16개/);
+  assert.doesNotMatch(
+    details.querySelector('summary').textContent,
+    /지문·해설 편집/,
+  );
+  assert.deepEqual(
+    [...details.querySelectorAll('h4')].map((el) => el.textContent),
+    ['문제 작성', '실행·배포', '협업'],
+  );
+  assert.equal(details.querySelectorAll('li').length, 16);
+  await act(async () => details.querySelector('summary').click());
+  assert.equal(details.open, true);
+  await v.render({ value: [] });
+  assert.equal(v.host.querySelector('details'), null);
+  assert.equal(v.host.textContent, '자료·실행 결과 읽기');
 });

@@ -16,6 +16,8 @@ import {
   NewSharedFolder,
   SharedFolderMembers,
 } from '../components/SharedFolders';
+import type { SharedFolderTab } from '../components/SharedFolders';
+import SharedFolderOverview from '../components/SharedFolderOverview';
 import {
   folderRoles,
   shareScopeChanges,
@@ -46,7 +48,7 @@ export default function Problems() {
   const [deleting, setDeleting] = useState<Folder | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [newShared, setNewShared] = useState(false);
-  const [sharing, setSharing] = useState(false);
+  const [sharing, setSharing] = useState<SharedFolderTab | null>(null);
   const [shareMove, setShareMove] = useState<{
     ids: string[];
     destination: string | null;
@@ -328,14 +330,6 @@ export default function Problems() {
                 <Icon name="plus" size={15} />
                 폴더 만들기
               </button>
-              {sharedRoot && (
-                <button
-                  className="button small"
-                  onClick={() => setSharing(true)}
-                >
-                  구성원 · {folderRoles[current?.workspace_role || 'VIEWER']}
-                </button>
-              )}
               {current && writable && (
                 <>
                   <button
@@ -362,14 +356,14 @@ export default function Problems() {
               )}
             </div>
           </div>
-          {current?.workspace_id && (
-            <div className="shared-folder-banner">
-              <Badge>{folderRoles[current.workspace_role || 'VIEWER']}</Badge>
-              <span>
-                공유 작업 폴더 · 구성원은 하위 폴더와 문제에 같은 권한으로
-                접근합니다.
-              </span>
-            </div>
+          {sharedRoot && (
+            <SharedFolderOverview
+              key={sharedRoot.id}
+              folder={sharedRoot}
+              nested={current?.id !== sharedRoot.id}
+              refreshTick={refreshTick}
+              onOpen={setSharing}
+            />
           )}
           {folderId && !current && !loading && (
             <Notice>
@@ -663,11 +657,13 @@ export default function Problems() {
       )}
       {sharing && sharedRoot && (
         <SharedFolderMembers
+          key={`${sharedRoot.id}-${sharing}`}
           folder={sharedRoot}
-          onClose={() => setSharing(false)}
+          initialTab={sharing}
+          onClose={() => setSharing(null)}
           onChanged={() => void refresh()}
           onLeft={() => {
-            setSharing(false);
+            setSharing(null);
             chooseFolder('all');
             void refresh();
           }}

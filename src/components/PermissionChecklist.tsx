@@ -3,16 +3,44 @@ import {
   folderOnly,
   permissionGroups,
   permissionPresets,
-  permissionLabel,
 } from '../lib/permissions';
 import type { Permission } from '../lib/permissions';
 export function PermissionSummary({ value }: { value: Permission[] }) {
+  const groups = permissionGroups
+    .map((group) => ({
+      title: group.title,
+      items: group.items.filter(([key]) => value.includes(key)),
+    }))
+    .filter((group) => group.items.length);
+  if (!groups.length) {
+    return <span className="permission-summary">자료·실행 결과 읽기</span>;
+  }
   return (
-    <span className="permission-summary">
-      {value.length
-        ? value.map(permissionLabel).join(' · ')
-        : '자료·실행 결과 읽기'}
-    </span>
+    <details className="permission-summary">
+      <summary>
+        <span className="permission-count">권한 {new Set(value).size}개</span>
+        <span className="permission-categories">
+          {groups.map((group) => (
+            <span key={group.title}>
+              {group.title} <b>{group.items.length}</b>
+            </span>
+          ))}
+        </span>
+        <span className="permission-expand">상세 보기</span>
+      </summary>
+      <div className="permission-summary-groups">
+        {groups.map((group) => (
+          <section key={group.title}>
+            <h4>{group.title}</h4>
+            <ul>
+              {group.items.map(([key, label]) => (
+                <li key={key}>{label}</li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </details>
   );
 }
 export default function PermissionChecklist({

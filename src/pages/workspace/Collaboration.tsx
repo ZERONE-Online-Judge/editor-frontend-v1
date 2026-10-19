@@ -107,7 +107,7 @@ function AccessPanel() {
                 value={login}
                 disabled={busy}
                 onChange={(e) => setLogin(e.target.value)}
-                placeholder="name@example.com 또는 handle"
+                placeholder="name@example.com 또는 @editor-1234567890"
               />
             </label>
             <PermissionChecklist
@@ -132,7 +132,9 @@ function AccessPanel() {
                 <div>
                   <strong>{member.display_name}</strong>
                   <span className="subtext"> @{member.handle}</span>
-                  <PermissionSummary value={permissionsOf(member)} />
+                  {member.role !== 'OWNER' && (
+                    <PermissionSummary value={permissionsOf(member)} />
+                  )}
                 </div>
                 {member.role === 'OWNER' ? (
                   <Badge tone="accent">소유자 · 모든 권한</Badge>
