@@ -1,6 +1,7 @@
 import { useEffect, useRef, useId, type ReactNode } from 'react';
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
+    menu: <path d="M4 6h16M4 12h16M4 18h16" />,
     plus: <path d="M12 5v14M5 12h14" />,
     search: (
       <>

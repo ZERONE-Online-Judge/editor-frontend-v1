@@ -9,7 +9,7 @@ import {
   lazy,
   Suspense,
 } from 'react';
-import { Link, NavLink, useBlocker, useParams } from 'react-router-dom';
+import { Link, useBlocker, useParams } from 'react-router-dom';
 import { api, post, put, ApiError, jobLabels } from '../lib/api';
 import type {
   Job,
@@ -22,6 +22,7 @@ import type { NoticeAction } from '../lib/workspace';
 import { Badge, Icon, Modal, Notice } from '../components/ui';
 import PreparationNotice from '../components/PreparationNotice';
 import RevisionNotice from '../components/RevisionNotice';
+import WorkspaceNavigation from '../components/WorkspaceNavigation';
 import { useRevisionUpdates } from '../lib/useRevisionUpdates';
 import { preparationCautions } from '../lib/readiness';
 import { executionResultPath } from '../lib/executionNavigation';
@@ -36,40 +37,6 @@ import Collaboration from './workspace/Collaboration';
 import Revisions from './workspace/Revisions';
 import Review from './workspace/Review';
 import Materials from './workspace/Materials';
-const sections = [
-  {
-    label: '문제 작성',
-    items: [
-      ['overview', '개요', 'settings'],
-      ['statements', '지문', 'file'],
-      ['files', '파일 · 리소스', 'folder'],
-      ['checker', 'Checker', 'shield'],
-      ['validator', 'Validator', 'shield'],
-      ['interactor', 'Interactor', 'code'],
-    ],
-  },
-  {
-    label: '테스트 · 검증',
-    items: [
-      ['tests', '테스트 · 생성 스크립트', 'tests'],
-      ['solutions', '풀이', 'code'],
-      ['verification', '전체 검증', 'check'],
-      ['invocations', '실행 결과', 'play'],
-      ['stress', '스트레스 테스트', 'spark'],
-    ],
-  },
-  {
-    label: '검수 · 배포',
-    items: [
-      ['review', '문제 미리보기', 'file'],
-      ['issues', '이슈', 'issue'],
-      ['access', '협업 권한', 'users'],
-      ['revisions', '리비전', 'history'],
-      ['materials', '공개 자료', 'folder'],
-      ['packages', '패키지', 'box'],
-    ],
-  },
-];
 export default function ProblemWorkspace() {
   const { problemId = '', tab = 'overview' } = useParams();
   const [data, setData] = useState<WorkspaceData | null>(null);
@@ -492,54 +459,18 @@ export default function ProblemWorkspace() {
           onUpdate={() => void workingAction('update')}
         />
         <div className="workspace-layout">
-          <aside className="problem-sidebar" aria-label="문제 작업 메뉴">
-            {sections.map((group) => (
-              <div className="sidebar-group" key={group.label}>
-                <div>{group.label}</div>
-                {group.items.map(([id, label, icon]) => (
-                  <NavLink
-                    key={id}
-                    to={`/problems/${problemId}/${id}`}
-                    className={({ isActive }) => (isActive ? 'active' : '')}
-                  >
-                    <Icon name={icon} size={17} />
-                    <span>{label}</span>
-                    {id === 'overview' && (
-                      <span
-                        className={`nav-readiness ${required ? 'blocking' : ''}`}
-                      >
-                        {required ? `필수 ${required}` : '필수 완료'}
-                        {recommended ? ` · 권장 ${recommended}` : ''}
-                      </span>
-                    )}
-                    {id === 'invocations' &&
-                      Boolean(
-                        data.pending_preparations?.filter((r) => !r.stale)
-                          .length,
-                      ) && (
-                        <span className="nav-count">
-                          미반영{' '}
-                          {
-                            data.pending_preparations?.filter((r) => !r.stale)
-                              .length
-                          }
-                        </span>
-                      )}
-                  </NavLink>
-                ))}
-              </div>
-            ))}
-            <div className="sidebar-bottom">
-              <span>작업 사본은 나에게만 보입니다.</span>
-              <button
-                className="text-button"
-                disabled={busy}
-                onClick={() => setDiscardModal(true)}
-              >
-                작업 사본 되돌리기
-              </button>
-            </div>
-          </aside>
+          <WorkspaceNavigation
+            key={`${problemId}/${tab}`}
+            problemId={problemId}
+            tab={tab}
+            required={required}
+            recommended={recommended}
+            pendingPreparations={
+              data.pending_preparations?.filter((r) => !r.stale).length ?? 0
+            }
+            busy={busy}
+            onDiscard={() => setDiscardModal(true)}
+          />
           <div className="workspace-main">
             <PreparationNotice onPendingChange={updatePreparations} />
             {message && (
