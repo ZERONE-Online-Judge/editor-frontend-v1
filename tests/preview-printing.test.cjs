@@ -34,6 +34,9 @@ window.print = () => {
       .printIncluded,
     title: document.querySelector('.problem-preview h1').textContent,
     sample: document.querySelector('.review-sample-print pre')?.textContent,
+    fontSize: document
+      .querySelector('.review-page')
+      .style.getPropertyValue('--review-print-font-size'),
   });
 };
 
@@ -209,6 +212,7 @@ test('Default printing excludes the editorial, preserves complete examples and c
       watermark: 'true',
       title: '줄 세기',
       sample: longInput,
+      fontSize: '10pt',
     },
   ]);
   await view.close();
@@ -240,6 +244,45 @@ test('Selections apply only to print, retain the chosen language and allow remov
   await click(button(view.host, '기본값 복원'));
   assert.equal(checkbox(view.host, '해설 · 검수용').checked, false);
   assert.equal(checkbox(view.host, '하단 ZOJ 워터마크').checked, true);
+  await view.close();
+});
+
+test('Print font size survives closing options, reaches print, and resets with defaults', async () => {
+  const view = await mount();
+  await click(button(view.host, '인쇄'));
+  const range = view.host.querySelector('input[type=range]');
+  assert.equal(range.value, '10');
+  assert.equal(range.min, '8');
+  assert.equal(range.max, '16');
+  assert.equal(range.step, '0.5');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    ).set.call(range, '12.5');
+    range.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  assert.equal(view.host.querySelector('output').textContent, '12.5pt');
+  assert.equal(
+    view.host.querySelector('.review-print-font-preview').style.fontSize,
+    '12.5pt',
+  );
+  assert.equal(view.host.querySelector('.review-page').style.fontSize, '');
+  await click(button(view.host, '취소'));
+  await click(button(view.host, '인쇄'));
+  assert.equal(view.host.querySelector('input[type=range]').value, '12.5');
+  await click(button(view.host, '선택한 범위 인쇄'));
+  assert.equal(printing[0].fontSize, '12.5pt');
+  assert.equal(printing[0].modalOpen, false);
+  await click(button(view.host, '인쇄'));
+  await click(button(view.host, '기본값 복원'));
+  assert.equal(view.host.querySelector('input[type=range]').value, '10');
+  assert.equal(
+    view.host
+      .querySelector('.review-page')
+      .style.getPropertyValue('--review-print-font-size'),
+    '10pt',
+  );
   await view.close();
 });
 

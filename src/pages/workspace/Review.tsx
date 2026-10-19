@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import { useWorkspace } from '../../lib/workspace';
 import { blobText } from '../../lib/api';
@@ -41,6 +42,7 @@ const defaultPrintSections: Record<PrintSection, boolean> = {
   notes: true,
   tutorial: false,
 };
+const defaultPrintFontSize = 10;
 
 export default function Review() {
   const { data, document: doc } = useWorkspace();
@@ -53,6 +55,8 @@ export default function Review() {
   const [printOptionsOpen, setPrintOptionsOpen] = useState(false);
   const [printChoices, setPrintChoices] = useState(defaultPrintSections);
   const [watermark, setWatermark] = useState(true);
+  const [printFontSize, setPrintFontSize] = useState(defaultPrintFontSize);
+  const fontSizeId = useId();
   const [sampleResult, setSampleResult] = useState<{
     key: string;
     items: { input: string; answer: string }[];
@@ -134,7 +138,12 @@ export default function Review() {
     };
   }, [data.problem.id, sampleKey, sampleRequestKey]);
   return (
-    <div className="section-stack review-page">
+    <div
+      className="section-stack review-page"
+      style={
+        { '--review-print-font-size': `${printFontSize}pt` } as CSSProperties
+      }
+    >
       <SectionHeading
         title="문제 미리보기"
         description="현재 작업 사본의 지문과 예제를 참가자 화면처럼 확인합니다."
@@ -304,6 +313,36 @@ export default function Review() {
             <br />
             선택한 항목만 인쇄합니다. 화면의 미리보기는 그대로 유지됩니다.
           </p>
+          <div className="review-print-font">
+            <div className="review-print-font-heading">
+              <label htmlFor={fontSizeId}>글자 크기</label>
+              <output htmlFor={fontSizeId}>{printFontSize}pt</output>
+            </div>
+            <input
+              id={fontSizeId}
+              type="range"
+              min={8}
+              max={16}
+              step={0.5}
+              value={printFontSize}
+              aria-valuetext={`${printFontSize}포인트`}
+              aria-describedby={`${fontSizeId}-help`}
+              onChange={(event) => setPrintFontSize(Number(event.target.value))}
+            />
+            <div className="review-print-font-scale" aria-hidden="true">
+              <span>8pt</span>
+              <span>16pt</span>
+            </div>
+            <p id={`${fontSizeId}-help`} className="muted small">
+              본문과 예제 입출력에 적용합니다. 제목은 비율에 맞춰 조절됩니다.
+            </p>
+            <p
+              className="review-print-font-preview"
+              style={{ fontSize: `${printFontSize}pt` }}
+            >
+              예제 입력과 출력은 한 쌍으로 나란히 인쇄합니다.
+            </p>
+          </div>
           <fieldset className="review-print-range">
             <legend>
               인쇄 범위 <span>{selectedCount}개 선택</span>
@@ -353,7 +392,7 @@ export default function Review() {
                 : sampleError && printChoices.samples
                   ? '예제를 다시 불러오거나 인쇄 범위에서 제외해 주세요.'
                   : selectedCount
-                    ? `${selectedCount}개 항목 · 워터마크 ${watermark ? '포함' : '제외'}`
+                    ? `${printFontSize}pt · ${selectedCount}개 항목 · 워터마크 ${watermark ? '포함' : '제외'}`
                     : '인쇄할 항목을 하나 이상 선택하세요.'}
             </span>
             <button
@@ -361,6 +400,7 @@ export default function Review() {
               onClick={() => {
                 setPrintChoices(defaultPrintSections);
                 setWatermark(true);
+                setPrintFontSize(defaultPrintFontSize);
               }}
             >
               기본값 복원

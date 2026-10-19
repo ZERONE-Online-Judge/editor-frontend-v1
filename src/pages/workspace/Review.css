@@ -10,11 +10,57 @@
 .review-print-description strong {
   color: var(--zoj-ink);
 }
+.review-print-options > .modal-body {
+  gap: 16px;
+}
+.review-print-font {
+  padding: 16px;
+  border: 1px solid var(--zoj-border);
+  border-radius: var(--zoj-radius-inset);
+  background: var(--zoj-surface);
+}
+.review-print-font-heading,
+.review-print-font-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.review-print-font-heading label {
+  font-size: 13px;
+  font-weight: 650;
+}
+.review-print-font-heading output {
+  color: var(--zoj-accent);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.review-print-font input[type='range'] {
+  width: 100%;
+  margin: 14px 0 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--zoj-accent);
+}
+.review-print-font-scale {
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: var(--zoj-muted);
+}
+.review-print-font-preview {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--zoj-surface-raised);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
 .review-print-range {
   border: 1px solid var(--zoj-border);
   border-radius: var(--zoj-radius-inset);
   padding: 16px;
-  margin: 20px 0 16px;
+  margin: 0;
 }
 .review-print-range legend {
   padding: 0 8px;
@@ -67,7 +113,6 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 18px;
   font-size: 12px;
   color: var(--zoj-muted);
 }
@@ -92,6 +137,26 @@
   .review-page {
     display: block;
     color: #111;
+    font-size: var(--review-print-font-size, 10pt);
+  }
+  .review-page .markdown {
+    font-size: 1em;
+  }
+  .review-page .markdown h1 {
+    font-size: 1.75em;
+  }
+  .review-page .markdown h2 {
+    font-size: 1.35em;
+  }
+  .review-page .markdown h3 {
+    font-size: 1.15em;
+  }
+  .review-page .problem-preview > header > h1 {
+    font-size: 1.8em;
+  }
+  .review-page .problem-preview > section > h2,
+  .review-page .review-editorial > h2 {
+    font-size: 1.2em;
   }
   .review-page .card {
     border: 0;
@@ -109,6 +174,7 @@
   }
   .review-page .problem-preview > header > div {
     color: #444;
+    font-size: 0.85em;
   }
   .review-page .review-sample-pair {
     display: grid;
@@ -122,7 +188,7 @@
   }
   .review-sample-print h3 {
     margin: 12px 0 8px;
-    font-size: 11pt;
+    font-size: 1.1em;
   }
   .review-sample-print pre {
     margin: 0;
@@ -131,7 +197,7 @@
     background: #fff;
     color: #111;
     font:
-      9pt/1.6 ui-monospace,
+      1em/1.6 ui-monospace,
       SFMono-Regular,
       Consolas,
       monospace;
