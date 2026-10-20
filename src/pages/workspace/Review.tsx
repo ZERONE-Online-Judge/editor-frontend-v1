@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { useEffect, useId, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
@@ -149,7 +150,7 @@ export default function Review() {
         description="현재 작업 사본의 지문과 예제를 참가자 화면처럼 확인합니다."
         actions={
           <>
-            <select
+            <Select
               aria-label="미리보기 언어"
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
@@ -157,7 +158,7 @@ export default function Review() {
               {Object.keys(doc.statements).map((lang) => (
                 <option key={lang}>{lang}</option>
               ))}
-            </select>
+            </Select>
             <button
               className="button"
               disabled={!statement}

@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { can, permissionsOf } from '../../lib/permissions';
 import type { Permission } from '../../lib/permissions';
 import PermissionChecklist, {
@@ -350,11 +351,11 @@ function IssuesPanel() {
           </label>
           <label>
             유형
-            <select value={kind} onChange={(e) => setKind(e.target.value)}>
+            <Select value={kind} onChange={(e) => setKind(e.target.value)}>
               <option value="BUG">오류 보고</option>
               <option value="ENHANCEMENT">개선 요청</option>
               <option value="DISCUSSION">논의</option>
-            </select>
+            </Select>
           </label>
           <label>
             내용

@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { can } from '../../lib/permissions';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -381,7 +382,7 @@ export default function Tests() {
                             </div>
                           </td>
                           <td>
-                            <select
+                            <Select
                               disabled={!editable || !set.groups_enabled}
                               aria-label={`테스트 ${test.index} 그룹`}
                               value={test.group}
@@ -398,7 +399,7 @@ export default function Tests() {
                               {Object.keys(set.groups).map((g) => (
                                 <option key={g}>{g}</option>
                               ))}
-                            </select>
+                            </Select>
                           </td>
                           {doc.info.points_enabled && (
                             <td>
@@ -838,7 +839,7 @@ function GroupEditor({
           <div className="form-grid">
             <label>
               점수 정책
-              <select
+              <Select
                 value={g.points_policy}
                 disabled={!editable}
                 onChange={(e) =>
@@ -850,11 +851,11 @@ function GroupEditor({
               >
                 <option value="COMPLETE_GROUP">그룹 전체 통과</option>
                 <option value="EACH_TEST">테스트별 점수</option>
-              </select>
+              </Select>
             </label>
             <label>
               피드백
-              <select
+              <Select
                 value={g.feedback_policy}
                 disabled={!editable}
                 onChange={(e) =>
@@ -867,7 +868,7 @@ function GroupEditor({
                 {['NONE', 'POINTS', 'ICPC', 'COMPLETE'].map((v) => (
                   <option key={v}>{v}</option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label>
               의존 그룹

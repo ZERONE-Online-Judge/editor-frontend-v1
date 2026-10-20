@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { can } from '../../lib/permissions';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -244,7 +245,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
           <div className="card-heading">
             <label>
               파일 분류 보기
-              <select
+              <Select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
               >
@@ -254,7 +255,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
                 <option value="aux">Aux · 제작 보조 자료</option>
                 <option value="solution">Solution · 풀이</option>
                 <option value="statement">지문 리소스</option>
-              </select>
+              </Select>
             </label>
           </div>
         )}
@@ -334,7 +335,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
                     <td>
                       {isSolution ? (
                         <>
-                          <select
+                          <Select
                             aria-label={`${file.name} 기대 판정`}
                             value={(file as Solution).tag}
                             disabled={
@@ -358,7 +359,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
                                 {tag} · {label}
                               </option>
                             ))}
-                          </select>
+                          </Select>
                           <button
                             className="text-button small"
                             onClick={() => edit(file, true)}
@@ -568,7 +569,7 @@ function ReuseSolution({ onClose }: { onClose: () => void }) {
       </p>
       <label>
         기존 소스 파일
-        <select value={name} onChange={(e) => setName(e.target.value)}>
+        <Select value={name} onChange={(e) => setName(e.target.value)}>
           <option value="">파일 선택</option>
           {candidates.map((f) => (
             <option
@@ -582,11 +583,11 @@ function ReuseSolution({ onClose }: { onClose: () => void }) {
                 : ''}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <label>
         기대 판정
-        <select
+        <Select
           value={tag}
           onChange={(e) => setTag(e.target.value as SolutionTag)}
         >
@@ -595,7 +596,7 @@ function ReuseSolution({ onClose }: { onClose: () => void }) {
               {id} · {label}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       {tag === 'MA' &&
         Object.values(doc.solutions).some((s) => s.tag === 'MA') && (
@@ -802,7 +803,7 @@ function FileEditor({
         </label>
         <label>
           언어
-          <select
+          <Select
             value={language}
             onChange={(e) => setLanguage(e.target.value as Language)}
           >
@@ -811,12 +812,12 @@ function FileEditor({
                 {label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         {solutions ? (
           <label>
             기대 판정
-            <select
+            <Select
               value={tag}
               onChange={(e) => setTag(e.target.value as SolutionTag)}
             >
@@ -825,12 +826,12 @@ function FileEditor({
                   {id} · {label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         ) : (
           <label>
             파일 분류
-            <select
+            <Select
               value={kind}
               onChange={(e) => {
                 setKind(e.target.value as SourceFile['kind']);
@@ -841,7 +842,7 @@ function FileEditor({
               <option value="resource">컴파일 리소스</option>
               <option value="aux">보조 파일</option>
               <option value="statement">지문 리소스</option>
-            </select>
+            </Select>
           </label>
         )}
         {!solutions && kind === 'source' && language !== 'text' && (

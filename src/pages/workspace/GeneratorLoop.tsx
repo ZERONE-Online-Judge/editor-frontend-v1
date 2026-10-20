@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { useState } from 'react';
 import { CodeEditor } from '../../components/ui';
 
@@ -62,12 +63,12 @@ export default function GeneratorLoop({
         </label>
         <label>
           생성 테스트 그룹
-          <select value={group} onChange={(e) => setGroup(e.target.value)}>
+          <Select value={group} onChange={(e) => setGroup(e.target.value)}>
             <option value="">그룹 없음</option>
             {groups.map((name) => (
               <option key={name}>{name}</option>
             ))}
-          </select>
+          </Select>
         </label>
       </fieldset>
       {preview && (

@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { useEffect, useState } from 'react';
 import { api, tags } from '../../lib/api';
 import { parseTestIndices } from '../../lib/invocationOptions';
@@ -137,7 +138,7 @@ export default function InvocationControls({
         </label>
         <label>
           실행할 자료
-          <select
+          <Select
             value={snapshot}
             onChange={(e) => setSnapshot(e.target.value)}
           >
@@ -145,7 +146,7 @@ export default function InvocationControls({
               내 작업 사본 · 실행 전에 저장
             </option>
             <option value="committed">커밋된 리비전 r{revision}</option>
-          </select>
+          </Select>
         </label>
         <TestsetSelector
           label="검증 테스트 세트"
@@ -160,13 +161,13 @@ export default function InvocationControls({
         />
         <label>
           대상 풀이
-          <select
+          <Select
             value={solutionMode}
             onChange={(e) => setSolutionMode(e.target.value)}
           >
             <option value="all">전체 풀이</option>
             <option value="selected">선택한 풀이</option>
-          </select>
+          </Select>
         </label>
         {solutionMode === 'selected' && (
           <div className="span-2 invocation-select-list">
@@ -206,7 +207,7 @@ export default function InvocationControls({
         )}
         <label>
           테스트 범위
-          <select
+          <Select
             value={testMode}
             disabled={multipleSets}
             onChange={(e) => setTestMode(e.target.value)}
@@ -214,7 +215,7 @@ export default function InvocationControls({
             <option value="all">전체 테스트</option>
             <option value="range">번호 범위</option>
             <option value="selected">선택한 등록 테스트</option>
-          </select>
+          </Select>
         </label>
         {multipleSets && (
           <p className="muted small span-2">
@@ -353,7 +354,7 @@ export default function InvocationControls({
             </label>
             <label>
               임시 코드 언어
-              <select
+              <Select
                 value={reviewLanguage}
                 onChange={(e) => setReviewLanguage(e.target.value as Language)}
               >
@@ -370,11 +371,11 @@ export default function InvocationControls({
                 ].map((language) => (
                   <option key={language}>{language}</option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label>
               임시 코드의 기대 판정
-              <select
+              <Select
                 value={reviewTag}
                 onChange={(e) => setReviewTag(e.target.value as SolutionTag)}
               >
@@ -385,7 +386,7 @@ export default function InvocationControls({
                       {title}
                     </option>
                   ))}
-              </select>
+              </Select>
             </label>
           </div>
           <CodeEditor

@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
@@ -65,7 +66,7 @@ export function ReviewReportView({
       </div>
       <label className="review-report-filter">
         분류{' '}
-        <select
+        <Select
           aria-label="검수 보고서 분류"
           value={category}
           onChange={(event) => setCategory(event.target.value)}
@@ -76,7 +77,7 @@ export function ReviewReportView({
               {label}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <div className="review-report-list">
         {items.map((item, index) => (

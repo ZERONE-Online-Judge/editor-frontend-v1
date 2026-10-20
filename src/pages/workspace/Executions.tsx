@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import LanguageLimits from '../../components/LanguageResourceLimits';
 import JudgeCompatibilityNotice from './JudgeCompatibilityNotice';
 import { can, canEdit } from '../../lib/permissions';
@@ -445,7 +446,7 @@ export default function Executions({
             <div className="form-grid">
               <label>
                 패키지 형식
-                <select
+                <Select
                   value={exportFormat}
                   onChange={(e) => {
                     setExportFormat(e.target.value);
@@ -458,13 +459,13 @@ export default function Executions({
                   <option value="linux">
                     Linux 재현 패키지 · 오프라인 실행 자료
                   </option>
-                </select>
+                </Select>
               </label>
               {exportFormat === 'zoj' && (
                 <>
                   <label>
                     ZOJ 기본 지문 언어
-                    <select
+                    <Select
                       value={statementLanguage}
                       onChange={(e) => setStatementLanguage(e.target.value)}
                     >
@@ -475,7 +476,7 @@ export default function Executions({
                           </option>
                         ),
                       )}
-                    </select>
+                    </Select>
                   </label>
                   <TestsetSelector
                     label="ZOJ에서 사용할 테스트 세트"

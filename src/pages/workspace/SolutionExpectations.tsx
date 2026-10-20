@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { tags } from '../../lib/api';
 import type { ProblemDocument, Solution } from '../../lib/types';
 
@@ -23,7 +24,7 @@ export default function SolutionExpectations({
     return (
       <label key={label}>
         {label}
-        <select
+        <Select
           aria-label={label}
           value={value}
           disabled={disabled}
@@ -37,7 +38,7 @@ export default function SolutionExpectations({
                 {tag} · {name}
               </option>
             ))}
-        </select>
+        </Select>
       </label>
     );
   }

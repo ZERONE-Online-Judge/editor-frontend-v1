@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { useMemo, useState } from 'react';
 import type { Job, CaseResult } from '../../lib/types';
 import { Icon } from '../../components/ui';
@@ -70,11 +71,11 @@ export default function TestVerdictMatrix({ job }: { job: Job }) {
         <div className="inline-form">
           <label>
             비교할 값
-            <select value={mode} onChange={(e) => setMode(e.target.value)}>
+            <Select value={mode} onChange={(e) => setMode(e.target.value)}>
               <option value="verdict">판정</option>
               <option value="cpu">CPU 시간</option>
               <option value="memory">최대 메모리</option>
-            </select>
+            </Select>
           </label>
           <label className="checkbox">
             <input

@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { useState } from 'react';
 import { useWorkspace } from '../../lib/workspace';
 import { Badge, Empty, Icon, Modal, SectionHeading } from '../../components/ui';
@@ -52,7 +53,7 @@ export default function Materials() {
             />
             <label>
               공개 시점
-              <select
+              <Select
                 disabled={!editable}
                 value={material.strategy}
                 onChange={(e) =>
@@ -65,7 +66,7 @@ export default function Materials() {
                 <option value="NONE">비공개 · 보관만</option>
                 <option value="WITH_STATEMENT">지문과 함께 공개</option>
                 <option value="WITH_TUTORIAL">해설과 함께 공개</option>
-              </select>
+              </Select>
             </label>
             {(['files', 'solutions', 'testsets'] as const).map((type) => (
               <div className="material-section" key={type}>

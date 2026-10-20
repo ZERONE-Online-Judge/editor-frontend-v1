@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { useEffect, useState } from 'react';
 import { api, post, time } from '../../lib/api';
 import { useAuth } from '../../lib/authContext';
@@ -279,7 +280,7 @@ export default function ZojPublishing({
                 <>
                   <label>
                     대회
-                    <select
+                    <Select
                       value={contestId}
                       disabled={busy}
                       onChange={(e) => {
@@ -294,11 +295,11 @@ export default function ZojPublishing({
                           {c.locked ? ' · 진행 중, 등록 불가' : ''}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </label>
                   <label>
                     참가 유형
-                    <select
+                    <Select
                       value={divisionId}
                       disabled={busy || !contest}
                       onChange={(e) => setDivisionId(e.target.value)}
@@ -309,7 +310,7 @@ export default function ZojPublishing({
                           {d.name} ({d.code})
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </label>
                   {contest && !contest.divisions.length && (
                     <Notice>이 대회에 참가 유형을 먼저 추가해 주세요.</Notice>

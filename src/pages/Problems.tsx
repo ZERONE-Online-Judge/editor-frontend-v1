@@ -1,3 +1,4 @@
+import Select from '../components/Select';
 import { permissionsOf } from '../lib/permissions';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -862,13 +863,13 @@ function MoveModal({
     >
       <label>
         이동할 폴더
-        <select
+        <Select
           value={destination}
           onChange={(e) => setDestination(e.target.value)}
         >
           <option value="">분류되지 않은 문제</option>
           <FolderOptions folders={folderDestinations(folders)} />
-        </select>
+        </Select>
       </label>
       <p className="muted">
         문제 주소와 작업 사본은 유지됩니다. 공유 폴더 안의 이동은 구성원
@@ -940,7 +941,7 @@ function FolderModal({
       </label>
       <label>
         상위 폴더
-        <select
+        <Select
           value={destination}
           onChange={(e) => setDestination(e.target.value)}
         >
@@ -955,7 +956,7 @@ function FolderModal({
             }
             exclude={folder?.id}
           />
-        </select>
+        </Select>
       </label>
       {error && <Notice tone="error">{error}</Notice>}
     </Modal>

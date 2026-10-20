@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { useState } from 'react';
 import type {
   ExecutionLimits,
@@ -85,7 +86,7 @@ export default function StressControls({
         />
         <label>
           기준 풀이
-          <select
+          <Select
             value={reference}
             onChange={(e) => {
               setReference(e.target.value);
@@ -99,11 +100,11 @@ export default function StressControls({
               .map((name) => (
                 <option key={name}>{name}</option>
               ))}
-          </select>
+          </Select>
         </label>
         <label>
           테스트 세트
-          <select
+          <Select
             value={testset}
             onChange={(e) => {
               setTestset(e.target.value);
@@ -113,7 +114,7 @@ export default function StressControls({
             {Object.keys(doc.testsets).map((name) => (
               <option key={name}>{name}</option>
             ))}
-          </select>
+          </Select>
         </label>
         {advanced && (
           <>
@@ -140,7 +141,7 @@ export default function StressControls({
             {groups.length > 0 && (
               <label>
                 검증·등록 그룹
-                <select
+                <Select
                   value={group}
                   onChange={(event) => setGroup(event.target.value)}
                 >
@@ -148,7 +149,7 @@ export default function StressControls({
                   {groups.map((name) => (
                     <option key={name}>{name}</option>
                   ))}
-                </select>
+                </Select>
                 <small>
                   Validator에 전달하며 반례를 등록할 때 기본 그룹으로
                   사용합니다.
@@ -200,10 +201,10 @@ export default function StressControls({
         </div>
         <label>
           실행 기준
-          <select value={mode} onChange={(e) => setMode(e.target.value)}>
+          <Select value={mode} onChange={(e) => setMode(e.target.value)}>
             <option value="iterations">반복 횟수</option>
             <option value="duration">실행 시간 + 반복 횟수</option>
-          </select>
+          </Select>
         </label>
         <label>
           최대 반복 횟수
@@ -218,7 +219,7 @@ export default function StressControls({
         {mode === 'duration' && (
           <label>
             최대 실행 시간
-            <select
+            <Select
               value={selectedSeconds}
               onChange={(e) => setSeconds(Number(e.target.value))}
             >
@@ -227,12 +228,12 @@ export default function StressControls({
                   {value < 60 ? `${value}초` : `${value / 60}분`}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         )}
         <label>
           반례 발견 후
-          <select
+          <Select
             value={allCandidates ? 'all' : stopFirst ? 'first' : 'collect'}
             onChange={(e) => {
               setStopFirst(e.target.value === 'first');
@@ -244,12 +245,12 @@ export default function StressControls({
             {advanced && (
               <option value="all">모든 비교 풀이에서 최소 1개씩 발견</option>
             )}
-          </select>
+          </Select>
         </label>
         {!stopFirst && !allCandidates && (
           <label>
             목표 반례 수
-            <select
+            <Select
               value={target}
               onChange={(e) => setTarget(Number(e.target.value))}
             >
@@ -258,7 +259,7 @@ export default function StressControls({
                   {value}개
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         )}
         {advanced && !stopFirst && (

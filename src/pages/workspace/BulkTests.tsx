@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { useState } from 'react';
 import { Modal } from '../../components/ui';
 import { useWorkspace } from '../../lib/workspace';
@@ -74,7 +75,7 @@ export default function BulkTests({
       <fieldset className="form-grid" disabled={!editable || busy || scripted}>
         <label>
           일괄 작업
-          <select
+          <Select
             value={action}
             onChange={(e) => {
               setAction(e.target.value as BulkAction);
@@ -94,12 +95,12 @@ export default function BulkTests({
                 {text}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         {(action === 'copy' || action === 'move') && (
           <label>
             대상 테스트 세트
-            <select
+            <Select
               value={target}
               onChange={(e) => {
                 setTarget(e.target.value);
@@ -112,19 +113,19 @@ export default function BulkTests({
                 .map((name) => (
                   <option key={name}>{name}</option>
                 ))}
-            </select>
+            </Select>
           </label>
         )}
         {(action === 'group' || action === 'copy' || action === 'move') && (
           <label>
             적용할 그룹
-            <select value={group} onChange={(e) => setGroup(e.target.value)}>
+            <Select value={group} onChange={(e) => setGroup(e.target.value)}>
               <option value="">그룹 없음</option>
               {destination?.groups_enabled &&
                 Object.keys(destination.groups).map((name) => (
                   <option key={name}>{name}</option>
                 ))}
-            </select>
+            </Select>
           </label>
         )}
         {action === 'description' && (

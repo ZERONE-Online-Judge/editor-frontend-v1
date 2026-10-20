@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { useState, type ReactNode } from 'react';
 import { post, tags, bytes } from '../../lib/api';
 import type {
@@ -283,7 +284,7 @@ export default function StressCounterexamples({
           <div className="form-grid stress-counterexample-filters">
             <label>
               검출한 풀이로 분류
-              <select
+              <Select
                 value={currentFilter.solution}
                 onChange={(event) =>
                   setFilter({
@@ -297,11 +298,11 @@ export default function StressCounterexamples({
                 {solutionNames.map((name) => (
                   <option key={name}>{name}</option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label>
               관측 판정으로 분류
-              <select
+              <Select
                 value={currentFilter.verdict}
                 onChange={(event) =>
                   setFilter({
@@ -315,7 +316,7 @@ export default function StressCounterexamples({
                 {verdictNames.map((name) => (
                   <option key={name}>{name}</option>
                 ))}
-              </select>
+              </Select>
             </label>
           </div>
           {job.result.coverage?.example_ids.length ? (
@@ -464,7 +465,7 @@ export default function StressCounterexamples({
           <div className="inline-form">
             <label>
               추가할 테스트 세트
-              <select
+              <Select
                 value={setName}
                 onChange={(e) =>
                   setTarget({ id: job.id, name: e.target.value })
@@ -473,12 +474,12 @@ export default function StressCounterexamples({
                 {testsets.map((name) => (
                   <option key={name}>{name}</option>
                 ))}
-              </select>
+              </Select>
             </label>
             {advanced && (
               <label>
                 등록할 테스트 그룹
-                <select
+                <Select
                   value={group}
                   onChange={(event) =>
                     setGroupTarget({
@@ -492,7 +493,7 @@ export default function StressCounterexamples({
                   {groups.map((name) => (
                     <option key={name}>{name}</option>
                   ))}
-                </select>
+                </Select>
               </label>
             )}
             <button

@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { can } from '../../lib/permissions';
 import { useEffect, useState } from 'react';
 import { useWorkspace } from '../../lib/workspace';
@@ -99,7 +100,7 @@ export default function SharedStatements({ language }: { language: string }) {
       </details>
       <label>
         번역 기준 원문
-        <select
+        <Select
           disabled={!editable}
           value={doc.translation_source || ''}
           onChange={(e) =>
@@ -114,7 +115,7 @@ export default function SharedStatements({ language }: { language: string }) {
           {Object.keys(doc.statements).map((name) => (
             <option key={name}>{name}</option>
           ))}
-        </select>
+        </Select>
       </label>
       <div className="source-role-badges">
         {Object.keys(doc.statements).map((name) => {

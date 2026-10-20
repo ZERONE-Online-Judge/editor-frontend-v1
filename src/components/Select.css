@@ -1,0 +1,102 @@
+select.zoj-select {
+  appearance: none;
+  min-height: 38px;
+  max-width: 100%;
+  border: 1px solid #dce2eb;
+  border-radius: 9px;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  padding-right: 36px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 450;
+  cursor: pointer;
+  transition:
+    border-color 140ms,
+    box-shadow 140ms;
+}
+select.zoj-select:hover:not(:disabled) {
+  border-color: #aeb8c9;
+}
+select.zoj-select:focus-visible,
+select.zoj-select[data-open='true'] {
+  border-color: #818cf8;
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(99 102 241 / 0.1);
+}
+select.zoj-select:disabled {
+  cursor: not-allowed;
+  background-color: #f8fafc;
+  color: #94a3b8;
+}
+.zoj-select-menu {
+  position: fixed;
+  z-index: 10000;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 5px;
+  border: 1px solid #e1e6ef;
+  border-radius: 11px;
+  background: #fff;
+  color: #334155;
+  box-shadow:
+    0 12px 36px rgb(15 23 42 / 0.12),
+    0 2px 6px rgb(15 23 42 / 0.04);
+  scrollbar-width: thin;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+  animation: zoj-select-enter 120ms ease-out;
+}
+.zoj-select-option {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.zoj-select-option > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.zoj-select-option[data-active='true'] {
+  background: #f2f4f8;
+}
+.zoj-select-option[aria-selected='true'] {
+  background: #eef0ff;
+  color: #4338ca;
+  font-weight: 550;
+}
+.zoj-select-option[aria-disabled='true'] {
+  color: #a1a9b7;
+  cursor: not-allowed;
+}
+.zoj-select-group {
+  padding: 8px 10px 4px;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 550;
+}
+@media (max-width: 767px) {
+  select.zoj-select {
+    font-size: 16px !important;
+    min-height: 44px;
+  }
+  .zoj-select-option {
+    min-height: 42px;
+    font-size: 14px;
+  }
+}
+@keyframes zoj-select-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

@@ -1,3 +1,4 @@
+import Select from '../../components/Select';
 import { can } from '../../lib/permissions';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -45,7 +46,7 @@ export default function ComponentTests({
       <section className="card">
         <label>
           사용할 {title} 프로그램
-          <select
+          <Select
             value={doc[kind]}
             disabled={!editable}
             onChange={(e) =>
@@ -73,7 +74,7 @@ export default function ComponentTests({
                 {f.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         {kind === 'validator' && (
           <>
@@ -290,14 +291,14 @@ function UnitModal({
     >
       <label>
         기대 판정
-        <select value={expected} onChange={(e) => setExpected(e.target.value)}>
+        <Select value={expected} onChange={(e) => setExpected(e.target.value)}>
           {(kind === 'checker'
             ? ['OK', 'WRONG_ANSWER', 'PRESENTATION_ERROR', 'CRASHED']
             : ['VALID', 'INVALID']
           ).map((v) => (
             <option key={v}>{v}</option>
           ))}
-        </select>
+        </Select>
       </label>
       <CodeEditor
         value={input}
