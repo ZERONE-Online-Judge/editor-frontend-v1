@@ -1,3 +1,4 @@
+import { BoundedText } from '../../components/ui';
 import { useEffect, useState } from 'react';
 import { post } from '../../lib/api';
 import type { Publication, ZojPackageUpdatePreview } from '../../lib/types';
@@ -154,7 +155,7 @@ export default function ZojPackageUpdate({
                           ].map(([label, text]) => (
                             <div key={label}>
                               <small>{label}</small>
-                              <pre>{text}</pre>
+                              <BoundedText>{text}</BoundedText>
                             </div>
                           ))}
                         </div>

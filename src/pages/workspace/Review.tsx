@@ -1,9 +1,10 @@
+import { textPreview } from '../../lib/largeText';
 import Select from '../../components/Select';
 import { useEffect, useId, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import { useWorkspace } from '../../lib/workspace';
-import { blobText } from '../../lib/api';
+import { blobPreview } from '../../lib/api';
 import { effectiveStatement } from '../../lib/sharedStatements';
 import {
   CodeEditor,
@@ -109,33 +110,58 @@ export default function Review() {
         ? 'English'
         : language;
   useEffect(() => {
-    let active = true;
+    const abort = new AbortController();
     const items = JSON.parse(sampleKey) as (string | null)[][];
+    async function sampleText(
+      sha: string | null,
+      display: string | null,
+      missing: string,
+    ) {
+      if (display != null) {
+        const value = textPreview(display, 65536);
+        if (value.truncated)
+          throw new Error('지문 표시용 예제의 크기를 줄여 주세요.');
+        return value.text;
+      }
+      if (!sha) return missing;
+      const preview = await blobPreview(
+        data.problem.id,
+        sha,
+        abort.signal,
+        65536,
+      );
+      if (preview.truncated || preview.binary)
+        throw new Error(
+          '예제 파일이 미리보기 한도를 넘거나 바이너리입니다. 지문 표시용 예제를 따로 작성하세요.',
+        );
+      return preview.text;
+    }
     Promise.all(
       items.map(async ([inp, ans, displayInput, displayOutput]) => ({
-        input:
-          displayInput ?? (inp ? await blobText(data.problem.id, inp) : ''),
-        answer:
-          displayOutput ??
-          (ans
-            ? await blobText(data.problem.id, ans)
-            : 'Main 풀이로 기대 출력을 생성하세요.'),
+        input: await sampleText(inp, displayInput, ''),
+        answer: await sampleText(
+          ans,
+          displayOutput,
+          'Main 풀이로 기대 출력을 생성하세요.',
+        ),
       })),
     )
       .then((values) => {
-        if (active)
+        if (!abort.signal.aborted)
           setSampleResult({ key: sampleRequestKey, items: values, error: '' });
       })
-      .catch(() => {
-        if (active)
+      .catch((error) => {
+        if (!abort.signal.aborted)
           setSampleResult({
             key: sampleRequestKey,
             items: [],
-            error: '예제를 불러오지 못했습니다. 화면을 다시 열어 주세요.',
+            error:
+              error.message ||
+              '예제를 불러오지 못했습니다. 화면을 다시 열어 주세요.',
           });
       });
     return () => {
-      active = false;
+      abort.abort();
     };
   }, [data.problem.id, sampleKey, sampleRequestKey]);
   return (

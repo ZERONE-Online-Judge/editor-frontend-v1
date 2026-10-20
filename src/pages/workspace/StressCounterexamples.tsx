@@ -1,3 +1,4 @@
+import { BoundedText } from '../../components/ui';
 import Select from '../../components/Select';
 import { useState, type ReactNode } from 'react';
 import { post, tags, bytes } from '../../lib/api';
@@ -435,9 +436,9 @@ export default function StressCounterexamples({
                         ? '축소 전 원본을 생성한 명령'
                         : '이 반례를 생성한 명령'}
                     </strong>
-                    <pre className="stress-command">
+                    <BoundedText className="stress-command">
                       <code>{example.command}</code>
-                    </pre>
+                    </BoundedText>
                   </div>
                 )}
                 <details>

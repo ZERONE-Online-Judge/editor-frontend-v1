@@ -20,7 +20,8 @@ window.HTMLDialogElement.prototype.close = function () {
 };
 let context,
   uploads = [],
-  blobs = [];
+  blobs = [],
+  previewOverride = null;
 const router = {
   useSearchParams: () => React.useState(() => new window.URLSearchParams()),
   Link: ({ children, to, ...props }) =>
@@ -44,11 +45,17 @@ function source(relative) {
           uploads.push(args);
           return { sha256: 'new', size: 20 };
         },
-        blobText: async (problem, sha) => {
+        blobPreview: async (problem, sha, signal) => {
           blobs.push(sha);
-          return sha === 'old'
-            ? 'int x = 1;\nreturn x;'
-            : 'int x = 2;\nreturn x;';
+          if (typeof previewOverride === 'function')
+            return previewOverride(problem, sha, signal);
+          if (previewOverride) return previewOverride;
+          return {
+            text:
+              sha === 'old' ? 'int x = 1;\nreturn x;' : 'int x = 2;\nreturn x;',
+            truncated: false,
+            binary: false,
+          };
         },
       };
     if (id.startsWith('.'))
@@ -746,4 +753,83 @@ test('Read-only language limits expose policy without granting editing or changi
     info: { time_limit_ms: 1000, memory_limit_mb: 256 },
   });
   await close();
+});
+
+test('Large input and answer previews are read-only and metadata saves retain both original blobs', async () => {
+  const doc = workspace();
+  const original = doc.testsets.tests.tests.one;
+  original.answer_sha = 'answer-original';
+  uploads = [];
+  previewOverride = { text: 'prefix only', truncated: true, binary: false };
+  const view = await mount(source('pages/workspace/Tests.tsx').TestEditor, {
+    test: original,
+    testset: 'tests',
+    onClose: () => {},
+  });
+  try {
+    const areas = [...view.host.querySelectorAll('textarea')];
+    assert.equal(areas.length, 2);
+    assert.ok(areas.every((el) => el.readOnly && el.value === 'prefix only'));
+    await act(async () =>
+      [...view.host.querySelectorAll('button')]
+        .find((b) => b.textContent === '작업 사본에 반영')
+        .click(),
+    );
+    assert.equal(doc.testsets.tests.tests['1'].input_sha, 'input');
+    assert.equal(doc.testsets.tests.tests['1'].answer_sha, 'answer-original');
+    assert.deepEqual(uploads, []);
+  } finally {
+    previewOverride = null;
+    await view.close();
+  }
+});
+
+test('Large source metadata saves keep the complete original file and never upload its preview', async () => {
+  const doc = workspace();
+  doc.files['main.cpp'].size = 100000000;
+  uploads = [];
+  previewOverride = { text: '// prefix only', truncated: true, binary: false };
+  const view = await mount(source('pages/workspace/Files.tsx').FileEditor, {
+    asset: doc.files['main.cpp'],
+    solutions: false,
+    onClose: () => {},
+  });
+  try {
+    assert.equal(view.host.querySelector('textarea').readOnly, true);
+    assert.match(view.host.textContent, /원본 파일 다운로드/);
+    await act(async () =>
+      [...view.host.querySelectorAll('button')]
+        .find((b) => b.textContent === '작업 사본에 반영')
+        .click(),
+    );
+    assert.equal(doc.files['main.cpp'].sha256, 'old');
+    assert.equal(doc.files['main.cpp'].size, 100000000);
+    assert.deepEqual(uploads, []);
+  } finally {
+    previewOverride = null;
+    await view.close();
+  }
+});
+
+test('Closing a pending test preview aborts both reads instead of continuing to load hidden large files', async () => {
+  const doc = workspace();
+  doc.testsets.tests.tests.one.answer_sha = 'answer';
+  const signals = [];
+  previewOverride = (_problem, _sha, signal) => {
+    signals.push(signal);
+    return new Promise(() => {});
+  };
+  const view = await mount(source('pages/workspace/Tests.tsx').TestEditor, {
+    test: doc.testsets.tests.tests.one,
+    testset: 'tests',
+    onClose: () => {},
+  });
+  try {
+    assert.equal(signals.length, 2);
+    assert.ok(signals.every((signal) => !signal.aborted));
+  } finally {
+    await view.close();
+    previewOverride = null;
+  }
+  assert.ok(signals.every((signal) => signal.aborted));
 });

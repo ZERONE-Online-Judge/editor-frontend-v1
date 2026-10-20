@@ -3,7 +3,7 @@ import { can } from '../../lib/permissions';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  blobText,
+  blobPreview,
   bytes,
   inferLanguage,
   languages,
@@ -13,7 +13,7 @@ import {
 import { useWorkspace } from '../../lib/workspace';
 import SolutionExpectations from './SolutionExpectations';
 import ResourceOptions from './ResourceOptions';
-import { DownloadActions } from '../../components/Downloads';
+import { BlobDownload, DownloadActions } from '../../components/Downloads';
 import { sourceDownloads } from '../../lib/downloads';
 import type {
   Language,
@@ -611,7 +611,7 @@ function ReuseSolution({ onClose }: { onClose: () => void }) {
   );
 }
 
-function FileEditor({
+export function FileEditor({
   asset,
   solutions,
   onClose,
@@ -654,6 +654,8 @@ function FileEditor({
     Record<string, Record<string, string>>
   >(asset ? doc.solutions[asset.name]?.group_tags || {} : {});
   const [code, setCode] = useState('');
+  const [codeChanged, setCodeChanged] = useState(false);
+  const [previewOnly, setPreviewOnly] = useState(Boolean(asset));
   const [busy, setBusy] = useState(
     Boolean(
       asset && !/\.(png|jpg|jpeg|gif|webp|pdf|zip|a|o)$/i.test(asset.name),
@@ -664,20 +666,23 @@ function FileEditor({
     asset && /\.(png|jpg|jpeg|gif|webp|pdf|zip|a|o)$/i.test(asset.name),
   );
   useEffect(() => {
-    let active = true;
+    const abort = new AbortController();
     if (asset && !binary)
-      blobText(data.problem.id, asset.sha256)
+      blobPreview(data.problem.id, asset.sha256, abort.signal)
         .then((value) => {
-          if (active) setCode(value);
+          if (!abort.signal.aborted) {
+            setCode(value.text);
+            setPreviewOnly(value.truncated || value.binary);
+          }
         })
         .catch((e) => {
-          if (active) setError(e.message);
+          if (!abort.signal.aborted) setError(e.message);
         })
         .finally(() => {
-          if (active) setBusy(false);
+          if (!abort.signal.aborted) setBusy(false);
         });
     return () => {
-      active = false;
+      abort.abort();
     };
   }, [asset, binary, data.problem.id]);
   async function submit() {
@@ -710,7 +715,7 @@ function FileEditor({
     setBusy(true);
     try {
       const blob =
-        binary && asset
+        asset && (binary || !codeChanged)
           ? { sha256: asset.sha256, size: asset.size }
           : await upload(data.problem.id, code);
       mutate((d) => {
@@ -960,12 +965,29 @@ function FileEditor({
       ) : (
         <CodeEditor
           value={code}
-          onChange={setCode}
-          readOnly={!editable || busy}
+          onChange={(value) => {
+            setCode(value);
+            setCodeChanged(true);
+          }}
+          readOnly={!editable || busy || previewOnly}
           label={name || '새 파일'}
           rows={22}
         />
-      )}{' '}
+      )}
+      {previewOnly && !busy && !binary && (
+        <Notice>
+          큰 파일 또는 바이너리는 앞부분만 표시합니다. 내용 변경은 파일 올리기로
+          교체하세요. 설정만 저장하면 원본 파일은 유지됩니다.
+        </Notice>
+      )}
+      {asset && !binary && (
+        <BlobDownload
+          problemId={data.problem.id}
+          sha={asset.sha256}
+          filename={asset.name}
+          label="원본 파일 다운로드"
+        />
+      )}
       {error && <Notice tone="error">{error}</Notice>}
     </Modal>
   );

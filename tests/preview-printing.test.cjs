@@ -52,9 +52,13 @@ function source(relative) {
     if (id.endsWith('/workspace')) return { useWorkspace: () => context };
     if (id.endsWith('/api'))
       return {
-        blobText: async (_problem, sha) => {
+        blobPreview: async (_problem, sha) => {
           if (failSamples) throw new Error('Unavailable');
-          return sha === 'sample-input' ? longInput : '30\n';
+          return {
+            text: sha === 'sample-input' ? longInput : '30\n',
+            truncated: false,
+            binary: false,
+          };
         },
       };
     if (id.endsWith('/Markdown'))

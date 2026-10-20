@@ -46,8 +46,11 @@ function source(relative) {
         ...source('lib/api.ts'),
         api: get,
         post: post,
-        blobText: async (problem, sha) =>
-          sha === 'actual' ? 'Wrong\n' : '1 2\n',
+        blobPreview: async (problem, sha) => ({
+          text: sha === 'actual' ? 'Wrong\n' : '1 2\n',
+          truncated: false,
+          binary: false,
+        }),
         put: putWorking,
       };
     if (

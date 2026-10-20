@@ -1,5 +1,6 @@
+import { textPreview } from '../lib/largeText';
 import { useEffect, useMemo, useState } from 'react';
-import { blobText } from '../lib/api';
+import { blobPreview } from '../lib/api';
 import {
   documentChanges,
   diffLines,
@@ -26,6 +27,7 @@ function ChangeDetails({
   const [opened, setOpened] = useState(false);
   const [text, setText] = useState<[string, string] | null>(null);
   const [error, setError] = useState('');
+  const [limited, setLimited] = useState(false);
   const large = Boolean(
     change.source &&
     [change.source.before, change.source.after].some(
@@ -33,29 +35,34 @@ function ChangeDetails({
     ),
   );
   useEffect(() => {
-    let active = true;
+    const abort = new AbortController();
     if (opened && change.source && !large) {
       void Promise.all(
         [change.source.before, change.source.after].map((f) =>
-          f ? blobText(problemId, f.sha256) : Promise.resolve(''),
+          f
+            ? blobPreview(problemId, f.sha256, abort.signal)
+            : Promise.resolve({ text: '', truncated: false, binary: false }),
         ),
       )
         .then((values) => {
-          if (active) setText(values as [string, string]);
+          if (!abort.signal.aborted) {
+            setText(values.map((v) => v.text) as [string, string]);
+            setLimited(values.some((v) => v.truncated || v.binary));
+          }
         })
         .catch((e) => {
-          if (active) setError((e as Error).message);
+          if (!abort.signal.aborted) setError((e as Error).message);
         });
     }
     return () => {
-      active = false;
+      abort.abort();
     };
   }, [opened, change.source, large, problemId]);
   const lines = useMemo(
     () =>
       diffLines(
-        text?.[0] ?? valueText(change.before),
-        text?.[1] ?? valueText(change.after),
+        textPreview(text?.[0] ?? valueText(change.before)).text,
+        textPreview(text?.[1] ?? valueText(change.after)).text,
       ),
     [text, change.before, change.after],
   );
@@ -102,6 +109,14 @@ function ChangeDetails({
                   ),
               )}
             </div>
+          )}
+          {(limited ||
+            textPreview(valueText(change.before)).truncated ||
+            textPreview(valueText(change.after)).truncated) && (
+            <p className="muted small">
+              파일의 앞부분만 비교합니다. 전체 내용은 원본을 다운로드해
+              확인하세요.
+            </p>
           )}
           {large ? (
             <p className="muted small">

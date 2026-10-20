@@ -1,3 +1,4 @@
+import { BoundedText } from '../../components/ui';
 import type { Job } from '../../lib/types';
 import { bytes } from '../../lib/api';
 
@@ -44,9 +45,9 @@ export default function SolutionJudgeSummary({
           </dl>
           {(record.compile_message ||
             (record.status === 'system_error' && record.judge_message)) && (
-            <pre className="solution-judge-message">
+            <BoundedText className="solution-judge-message">
               {record.compile_message || record.judge_message}
-            </pre>
+            </BoundedText>
           )}
         </div>
       ))}

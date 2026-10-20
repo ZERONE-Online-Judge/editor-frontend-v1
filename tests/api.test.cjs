@@ -14,6 +14,21 @@ const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
 const loaded = new Module(filename, module);
 loaded.filename = filename;
 loaded.paths = module.paths;
+const helperName = path.resolve(__dirname, '../src/lib/largeText.ts');
+const helper = new Module(helperName, module);
+helper.paths = module.paths;
+helper._compile(
+  ts.transpileModule(fs.readFileSync(helperName, 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText,
+  helperName,
+);
+const originalRequire = loaded.require.bind(loaded);
+loaded.require = (id) =>
+  id === './largeText' ? helper.exports : originalRequire(id);
 loaded._compile(compiled, filename);
 const { api, upload, ApiError } = loaded.exports;
 test('Mutation requests keep same-origin credentials and the CSRF header', async () => {

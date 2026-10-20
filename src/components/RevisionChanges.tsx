@@ -1,3 +1,5 @@
+import { BoundedText } from './ui';
+import { textPreview } from '../lib/largeText';
 import { useEffect, useMemo, useState } from 'react';
 import { blobPreview, languages, tags } from '../lib/api';
 import { diffLines, type DocumentChange } from '../lib/documentChanges';
@@ -51,7 +53,11 @@ function fieldText(value: unknown, field?: string) {
   return displayValue(value);
 }
 function FieldValue({ value, field }: { value: unknown; field?: string }) {
-  return <pre className="revision-value">{fieldText(value, field)}</pre>;
+  return (
+    <BoundedText className="revision-value">
+      {fieldText(value, field)}
+    </BoundedText>
+  );
 }
 function ValuePair({
   before,
@@ -80,7 +86,7 @@ function TextDiff({ before, after }: { before: string; after: string }) {
   const [limit, setLimit] = useState(500);
   const truncated = before.length > 262144 || after.length > 262144;
   const lines = useMemo(
-    () => diffLines(before.slice(0, 262144), after.slice(0, 262144)),
+    () => diffLines(textPreview(before).text, textPreview(after).text),
     [before, after],
   );
   const added = lines.filter((line) => line.kind === 'add').length;
@@ -118,6 +124,11 @@ function TextDiff({ before, after }: { before: string; after: string }) {
       {truncated && (
         <p className="revision-preview-note">
           긴 내용은 앞부분을 비교합니다. 전체 자료를 내려받아 확인하세요.
+        </p>
+      )}
+      {(textPreview(before).truncated || textPreview(after).truncated) && (
+        <p className="revision-preview-note">
+          표시 한도를 넘어 앞부분만 비교합니다. 원본은 다운로드해 확인하세요.
         </p>
       )}
       <div className="revision-line-head" aria-hidden="true">

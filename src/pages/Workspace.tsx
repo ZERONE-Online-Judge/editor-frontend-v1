@@ -1,3 +1,4 @@
+import { BoundedText } from '../components/ui';
 import { can, canEdit, permissionsOf, tabEditable } from '../lib/permissions';
 import {
   useCallback,
@@ -567,7 +568,7 @@ export default function ProblemWorkspace() {
                     />{' '}
                     내 변경 유지
                   </span>
-                  <pre>{atPath(doc, path)}</pre>
+                  <BoundedText>{atPath(doc, path)}</BoundedText>
                 </label>
                 <label>
                   <span>
@@ -581,7 +582,7 @@ export default function ProblemWorkspace() {
                     />{' '}
                     공유 변경 유지
                   </span>
-                  <pre>{atPath(resolution.shared, path)}</pre>
+                  <BoundedText>{atPath(resolution.shared, path)}</BoundedText>
                 </label>
               </div>
             </fieldset>

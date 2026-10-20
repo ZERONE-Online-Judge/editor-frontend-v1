@@ -31,7 +31,9 @@ function load(name, mocks = {}) {
   m.filename = filename;
   m.paths = Module._nodeModulePaths(path.dirname(filename));
   const native = m.require.bind(m);
-  m.require = (id) => mocks[id] || native(id);
+  m.require = (id) =>
+    mocks[id] ||
+    (id.endsWith('/largeText') ? load('lib/largeText.ts') : native(id));
   m._compile(
     ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
       compilerOptions: {

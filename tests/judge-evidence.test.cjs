@@ -36,9 +36,13 @@ loaded.require = (id) => {
   if (id === '../../lib/downloads') return {};
   if (id === '../../lib/api')
     return {
-      blobText: async (problem, sha) => {
+      blobPreview: async (problem, sha) => {
         calls.push({ problem, sha });
-        return sha === 'input' ? '1 2\n3 4\n' : '3\n7\n';
+        return {
+          text: sha === 'input' ? '1 2\n3 4\n' : '3\n7\n',
+          truncated: false,
+          binary: false,
+        };
       },
     };
   if (

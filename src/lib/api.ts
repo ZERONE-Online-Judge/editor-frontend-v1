@@ -1,3 +1,4 @@
+import { responsePreview } from './largeText';
 import type { SourceFile } from './types';
 export class ApiError extends Error {
   code: string;
@@ -56,11 +57,12 @@ export async function blobText(
   problemId: string,
   sha: string,
 ): Promise<string> {
-  const r = await fetch(`/api/problems/${problemId}/blobs/${sha}`, {
-    credentials: 'same-origin',
-  });
-  if (!r.ok) throw new Error('파일을 불러오지 못했습니다.');
-  return r.text();
+  const preview = await blobPreview(problemId, sha);
+  if (preview.truncated || preview.binary)
+    throw new Error(
+      '전체 내용을 편집창에 불러올 수 없습니다. 원본 파일을 다운로드해 확인하세요.',
+    );
+  return preview.text;
 }
 export async function blobPreview(
   problemId: string,
@@ -73,55 +75,9 @@ export async function blobPreview(
     headers: { Range: `bytes=0-${limit}` },
     signal,
   });
-  if (
-    response.status === 416 &&
-    /\/0$/.test(response.headers.get('Content-Range') || '')
-  )
-    return { text: '', truncated: false, binary: false };
-  if (!response.ok) throw new Error('파일을 불러오지 못했습니다.');
-  const total = Number(response.headers.get('Content-Range')?.split('/')[1]);
-  let truncated = total > limit;
-  const reader = response.body?.getReader();
-  if (!reader)
-    throw new Error('파일 미리보기를 읽을 수 없습니다. 다운로드해 확인하세요.');
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (size <= limit) {
-      const part = await reader.read();
-      if (part.done) break;
-      const kept = part.value.subarray(0, limit + 1 - size);
-      chunks.push(kept);
-      size += kept.length;
-      if (size > limit) {
-        truncated = true;
-        break;
-      }
-    }
-  } finally {
-    await reader.cancel().catch(() => {});
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(Math.min(size, limit));
-  let offset = 0;
-  for (const part of chunks) {
-    const kept = part.subarray(0, bytes.length - offset);
-    bytes.set(kept, offset);
-    offset += kept.length;
-  }
-  try {
-    if (bytes.subarray(0, 4096).includes(0)) throw new Error('binary');
-    return {
-      text: new TextDecoder('utf-8', { fatal: true }).decode(bytes, {
-        stream: truncated,
-      }),
-      truncated,
-      binary: false,
-    };
-  } catch {
-    return { text: '', truncated, binary: true };
-  }
+  return responsePreview(response, limit);
 }
+
 export const languages = {
   cpp17: 'C++17 · ZOJ 채점기',
   cpp20: 'C++20',

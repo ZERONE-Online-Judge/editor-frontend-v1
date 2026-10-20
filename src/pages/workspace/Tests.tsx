@@ -2,7 +2,7 @@ import Select from '../../components/Select';
 import { can } from '../../lib/permissions';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { blobText, upload } from '../../lib/api';
+import { blobPreview, upload } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
 import GeneratorLoop from './GeneratorLoop';
 import BulkTests from './BulkTests';
@@ -488,7 +488,7 @@ export default function Tests() {
     </div>
   );
 }
-function TestEditor({
+export function TestEditor({
   test,
   testset,
   onClose,
@@ -506,6 +506,10 @@ function TestEditor({
       ) + 1,
   );
   const [input, setInput] = useState('');
+  const [limited, setLimited] = useState({
+    input: Boolean(test),
+    answer: Boolean(test),
+  });
   const [answer, setAnswer] = useState('');
   const [description, setDescription] = useState(test?.description || '');
   const [sample, setSample] = useState(test?.sample || false);
@@ -524,31 +528,35 @@ function TestEditor({
   const [changed, setChanged] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
-    let active = true;
+    const abort = new AbortController();
     if (test) {
       Promise.all([
         test.input_sha
-          ? blobText(data.problem.id, test.input_sha)
-          : Promise.resolve(''),
+          ? blobPreview(data.problem.id, test.input_sha, abort.signal)
+          : Promise.resolve({ text: '', truncated: false, binary: false }),
         test.answer_sha
-          ? blobText(data.problem.id, test.answer_sha)
-          : Promise.resolve(''),
+          ? blobPreview(data.problem.id, test.answer_sha, abort.signal)
+          : Promise.resolve({ text: '', truncated: false, binary: false }),
       ])
         .then(([inp, ans]) => {
-          if (active) {
-            setInput(inp);
-            setAnswer(ans);
+          if (!abort.signal.aborted) {
+            setInput(inp.text);
+            setAnswer(ans.text);
+            setLimited({
+              input: inp.truncated || inp.binary,
+              answer: ans.truncated || ans.binary,
+            });
           }
         })
         .catch((e) => {
-          if (active) setError(e.message);
+          if (!abort.signal.aborted) setError(e.message);
         })
         .finally(() => {
-          if (active) setBusy(false);
+          if (!abort.signal.aborted) setBusy(false);
         });
     }
     return () => {
-      active = false;
+      abort.abort();
     };
   }, [test, data.problem.id]);
   async function submit() {
@@ -686,8 +694,8 @@ function TestEditor({
                   test?.statement_input == null &&
                   test?.statement_output == null
                 ) {
-                  setDisplayInput(input);
-                  setDisplayOutput(answer);
+                  setDisplayInput(limited.input ? '' : input);
+                  setDisplayOutput(limited.answer ? '' : answer);
                 }
               }}
             />
@@ -742,7 +750,7 @@ function TestEditor({
           }}
           label="테스트 입력"
           rows={10}
-          readOnly={!editable || busy}
+          readOnly={!editable || busy || limited.input}
         />
         <CodeEditor
           value={answer}
@@ -756,9 +764,16 @@ function TestEditor({
               : '기대 출력 · 작성 중 참고용 (선택)'
           }
           rows={10}
-          readOnly={!editable || busy}
+          readOnly={!editable || busy || limited.answer}
         />
       </div>
+      {(limited.input || limited.answer) && !busy && (
+        <Notice>
+          큰 파일 또는 바이너리는 앞부분만 표시하며 직접 편집하지 않습니다. 원본
+          다운로드와 테스트 파일 업로드를 이용하세요. 다른 설정을 저장해도 원본
+          입출력은 유지됩니다.
+        </Notice>
+      )}
       <p className="muted small">
         {doc.info.interactive
           ? '이 값은 Interactor가 읽는 참고 자료로 전달됩니다. 입력·정답 생성에서도 이 자료를 유지하며, Main과 Interactor의 대화 내용을 기대 출력으로 덮어쓰지 않습니다. Interactor가 참고 자료를 사용하지 않으면 비워 두세요.'

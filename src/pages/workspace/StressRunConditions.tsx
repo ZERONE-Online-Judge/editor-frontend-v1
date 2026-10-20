@@ -1,3 +1,4 @@
+import { BoundedText } from '../../components/ui';
 import type { Job, StressConfiguration } from '../../lib/types';
 import { tags } from '../../lib/api';
 
@@ -85,18 +86,18 @@ export default function StressRunConditions({ job }: { job: Job }) {
             {config.patterns.map((pattern, index) => (
               <div className="stress-saved-pattern" key={index}>
                 <small>{pattern.name}</small>
-                <pre className="stress-command">
+                <BoundedText className="stress-command">
                   <code>{pattern.command}</code>
-                </pre>
+                </BoundedText>
               </div>
             ))}
           </>
         ) : (
           <>
             <strong>생성기 명령</strong>
-            <pre className="stress-command">
+            <BoundedText className="stress-command">
               <code>{config.generator || '기록되지 않았습니다.'}</code>
-            </pre>
+            </BoundedText>
           </>
         )}
       </div>
@@ -219,9 +220,9 @@ export default function StressRunConditions({ job }: { job: Job }) {
                   : '마지막 생성 요청 명령'}{' '}
                 · 시드 {lastSeed}
               </summary>
-              <pre className="stress-command">
+              <BoundedText className="stress-command">
                 <code>{stats.last_command}</code>
-              </pre>
+              </BoundedText>
               {stats.last_range_values?.length ? (
                 <p className="muted small">
                   범위 치환 ·{' '}

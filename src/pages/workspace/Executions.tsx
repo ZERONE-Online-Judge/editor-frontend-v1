@@ -12,7 +12,7 @@ import {
 import {
   api,
   ApiError,
-  blobText,
+  blobPreview,
   jobLabels,
   post,
   statusLabels,
@@ -1282,32 +1282,37 @@ export function CodeEvidence({
   outputError?: string | null;
   answerError?: string;
 }) {
-  const [values, setValues] = useState<string[]>([]);
+  const [values, setValues] = useState<
+    { text: string; truncated: boolean; binary: boolean }[]
+  >([]);
   const [error, setError] = useState('');
   useEffect(() => {
-    let active = true;
+    const abort = new AbortController();
     Promise.all(
       [input, answer, actual].map((sha, index) =>
         sha
-          ? blobText(problemId, sha)
-          : Promise.resolve(
-              index === 2
-                ? outputError ||
+          ? blobPreview(problemId, sha, abort.signal)
+          : Promise.resolve({
+              text:
+                index === 2
+                  ? outputError ||
                     '이 실행 기록에는 저장된 실제 출력이 없습니다. 컴파일·실행 환경 오류 또는 이전 채점 기록인지 확인하세요.'
-                : index === 1 && answerError
-                  ? answerError
-                  : '개별 테스트가 지정되지 않은 판정입니다.',
-            ),
+                  : index === 1 && answerError
+                    ? answerError
+                    : '개별 테스트가 지정되지 않은 판정입니다.',
+              truncated: false,
+              binary: false,
+            }),
       ),
     )
       .then((value) => {
-        if (active) setValues(value);
+        if (!abort.signal.aborted) setValues(value);
       })
       .catch((e) => {
-        if (active) setError(e.message);
+        if (!abort.signal.aborted) setError(e.message);
       });
     return () => {
-      active = false;
+      abort.abort();
     };
   }, [problemId, input, answer, actual, outputError, answerError]);
   if (error) return <Notice tone="error">{error}</Notice>;
@@ -1339,8 +1344,16 @@ export function CodeEvidence({
             }
             label={`${label}${i === 2 && outputTruncated ? '(일부)' : ''} 다운로드`}
           />
+          {(values[i]?.truncated || values[i]?.binary) && (
+            <Notice>
+              {values[i]?.binary
+                ? '바이너리 파일입니다.'
+                : '큰 파일의 앞부분만 표시합니다.'}{' '}
+              원본은 다운로드해 확인하세요.
+            </Notice>
+          )}
           <CodeEditor
-            value={values[i] ?? '불러오는 중…'}
+            value={values[i]?.text ?? '불러오는 중…'}
             readOnly
             label={label}
             rows={6}

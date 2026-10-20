@@ -1,4 +1,13 @@
-import { useEffect, useRef, useId, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useId,
+  useMemo,
+  useState,
+  type ReactNode,
+  type HTMLAttributes,
+} from 'react';
+import { textPreview } from '../lib/largeText';
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
     menu: <path d="M4 6h16M4 12h16M4 18h16" />,
@@ -240,21 +249,73 @@ export function CodeEditor({
   readOnly?: boolean;
   rows?: number;
 }) {
+  const preview = useMemo(() => textPreview(value), [value]);
+  const [rejected, setRejected] = useState(false);
+  const lines = useMemo(() => {
+    let count = 1;
+    for (let i = 0; i < preview.text.length; i++)
+      if (preview.text.charCodeAt(i) === 10) count++;
+    return count;
+  }, [preview.text]);
   return (
-    <div className={`code-editor ${readOnly ? 'readonly' : ''}`}>
+    <div
+      className={`code-editor ${readOnly || preview.truncated ? 'readonly' : ''}`}
+      onPasteCapture={(event) => {
+        if (textPreview(event.clipboardData.getData('text/plain')).truncated) {
+          event.preventDefault();
+          setRejected(true);
+        }
+      }}
+    >
       <div className="code-editor-bar">
         <Icon name="code" size={15} />
         <span>{label}</span>
-        <span className="code-line-count">{value.split('\n').length}행</span>
+        <span className="code-line-count">
+          {lines}행{preview.truncated ? ' · 일부' : ''}
+        </span>
       </div>
       <textarea
         aria-label={label}
         spellCheck={false}
-        value={value}
+        value={preview.text}
         rows={rows}
-        readOnly={readOnly}
-        onChange={(e) => onChange?.(e.target.value)}
+        wrap="off"
+        readOnly={readOnly || preview.truncated}
+        onChange={(e) => {
+          if (textPreview(e.target.value).truncated) {
+            setRejected(true);
+            return;
+          }
+          setRejected(false);
+          onChange?.(e.target.value);
+        }}
       />
+      {(preview.truncated || rejected) && (
+        <p className="muted small" role="status">
+          편집창 표시 한도를 넘었습니다. 원본은 다운로드하고, 변경은 파일
+          업로드로 반영하세요.
+        </p>
+      )}
     </div>
+  );
+}
+
+export function BoundedText({
+  children,
+  ...props
+}: HTMLAttributes<HTMLPreElement>) {
+  const preview = useMemo(
+    () => (typeof children === 'string' ? textPreview(children) : null),
+    [children],
+  );
+  return (
+    <>
+      <pre {...props}>{preview?.text ?? children}</pre>
+      {preview?.truncated && (
+        <p className="muted small" role="status">
+          표시 한도를 넘어 앞부분만 표시합니다. 원본은 다운로드해 확인하세요.
+        </p>
+      )}
+    </>
   );
 }
