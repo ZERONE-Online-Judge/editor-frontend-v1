@@ -7,6 +7,9 @@ const escapeHtml = (value: string) =>
         c
       ]!,
   );
+// Keep Markdown from consuming TeX escapes or interpreting math as markup.
+const escapeMath = (value: string) =>
+  value.replace(/[^\p{L}\p{N}\t ]/gu, (c) => `&#${c.codePointAt(0)};`);
 const unescapeText = (value: string) =>
   value.replace(/\\([%&#_${}])/g, '$1').replace(/\\textbackslash\{\}/g, '\\');
 
@@ -115,7 +118,7 @@ export function statementToMarkdown(value: string): string {
       : `<code>${escapeHtml(text)}</code>`;
   const math = (text: string, display: boolean) =>
     keep(
-      `<code class="language-math math-${display ? 'display' : 'inline'}">${escapeHtml(text)}</code>`,
+      `<code class="language-math math-${display ? 'display' : 'inline'}">${escapeMath(text)}</code>`,
     );
   const findEnd = (
     source: string,

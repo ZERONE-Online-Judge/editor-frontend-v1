@@ -106,6 +106,63 @@ test('math commands and all common math delimiters keep their semantics', async 
   assert.equal(doc.querySelectorAll('.katex-error').length, 0);
   assert.equal(doc.querySelectorAll('.katex-display').length, 2);
 });
+test('math spacing and escaped punctuation reach KaTeX unchanged', async () => {
+  const expressions = [
+    String.raw`100\,000`,
+    String.raw`1\;000 + a\!b`,
+    String.raw`\{x\}`,
+    String.raw`\text{a*b*c [x](y) ~~z~~ a|b}`,
+  ];
+  for (const expression of expressions) {
+    for (const input of [
+      `$${expression}$`,
+      `\\(${expression}\\)`,
+      `$$\n${expression}\n$$`,
+      `\\[${expression}\\]`,
+    ]) {
+      const doc = await render(input);
+      assert.equal(doc.querySelectorAll('.katex-error').length, 0, input);
+      assert.equal(
+        doc
+          .querySelector('annotation[encoding="application/x-tex"]')
+          ?.textContent.trim(),
+        expression,
+        input,
+      );
+      if (expression === String.raw`100\,000`)
+        assert.equal(doc.querySelector('.katex-html').textContent, '100000');
+    }
+  }
+});
+test('display math preserves matrix row separators and internal line breaks', async () => {
+  const expression = String.raw`\begin{matrix}
+a & b \\
+c & d
+\end{matrix}`;
+  const doc = await render(`$$\n${expression}\n$$`);
+  assert.equal(doc.querySelectorAll('.katex-error').length, 0);
+  assert.equal(
+    doc
+      .querySelector('annotation[encoding="application/x-tex"]')
+      ?.textContent.trim(),
+    expression,
+  );
+  assert.equal(doc.querySelectorAll('.katex-display').length, 1);
+});
+test('math containing pipes remains in one Markdown table cell', async () => {
+  const expression = String.raw`\lvert x\rvert + \text{a|b}`;
+  const doc = await render(
+    `| Math | Value |\n| --- | --- |\n| $${expression}$ | 1 |`,
+  );
+  const cells = doc.querySelectorAll('tbody td');
+  assert.equal(cells.length, 2);
+  assert.equal(
+    cells[0].querySelector('annotation[encoding="application/x-tex"]')
+      ?.textContent,
+    expression,
+  );
+  assert.equal(cells[1].textContent, '1');
+});
 test('Markdown code fences, inline code and TeX verbatim are literal', async () => {
   const code = String.raw`\textbf{literal} $x$ <img src=x onerror=alert(1)>`;
   const doc = await render(
