@@ -268,9 +268,9 @@ function Help() {
     <div className="page-container help-page">
       <div className="page-heading">
         <div>
-          <span className="eyebrow">MAKE. TEST. VERIFY.</span>
-          <h1>아이디어에서 검증된 문제까지.</h1>
-          <p>Editor의 실제 작업 흐름을 따라 문제를 준비하세요.</p>
+          <span className="eyebrow">ZOJ EDITOR</span>
+          <h1>Editor 이용안내</h1>
+          <p>문제 작성, 테스트 생성, 풀이 검증과 패키지 생성 순서입니다.</p>
         </div>
       </div>
       <section className="card guide-workflow">

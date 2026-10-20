@@ -216,9 +216,9 @@ export default function Problems() {
     <div className="page-container">
       <div className="page-heading">
         <div>
-          <span className="eyebrow">YOUR WORKSPACE</span>
+          <span className="eyebrow">ZOJ EDITOR</span>
           <h1>문제 작업 공간</h1>
-          <p>폴더로 정리하고, 함께 완성한 문제를 ZOJ로 보내세요.</p>
+          <p>문제를 작성하고 폴더별로 관리합니다.</p>
         </div>
         <div className="actions">
           <button
@@ -296,7 +296,7 @@ export default function Problems() {
           <div className="folder-tree">{tree(null, 0, true)}</div>
           {!folders.some((f) => f.workspace_id) && (
             <p className="folder-hint">
-              폴더를 만들고 동료를 초대해 문제를 함께 준비하세요.
+              팀 폴더에서 구성원과 문제별 접근 권한을 관리합니다.
             </p>
           )}
           <p className="folder-hint">

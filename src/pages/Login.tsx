@@ -130,11 +130,7 @@ export default function Login() {
           <Icon name="code" size={28} />
         </div>
         <h1>ZOJ 로그인</h1>
-        <p>
-          ZOJ 계정으로 로그인하고
-          <br />
-          아이디어를 검증된 문제로 완성하세요.
-        </p>
+        <p>이메일 인증번호 또는 비밀번호로 로그인합니다.</p>
         {params.get('password') === 'changed' && (
           <Notice>
             비밀번호가 변경되었습니다. 기존 로그인은 모두 해제되었으며, 새
