@@ -37,6 +37,15 @@ export default function Problems() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
+  const [hideTags, setHideTags] = useState(() => {
+    try {
+      return (
+        window.localStorage.getItem('zoj-editor.hide-problem-tags') !== 'false'
+      );
+    } catch {
+      return true;
+    }
+  });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -431,6 +440,25 @@ export default function Problems() {
                 {visible.length}개 문제 {query && '· 모든 폴더 검색'}
               </span>
               <div className="actions">
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={hideTags}
+                    onChange={(e) => {
+                      const hidden = e.target.checked;
+                      setHideTags(hidden);
+                      try {
+                        window.localStorage.setItem(
+                          'zoj-editor.hide-problem-tags',
+                          String(hidden),
+                        );
+                      } catch {
+                        // The current view still works when storage is disabled.
+                      }
+                    }}
+                  />
+                  태그 숨기기
+                </label>
                 {selection.length > 0 && (
                   <>
                     <strong>{selection.length}개 선택</strong>
@@ -545,11 +573,13 @@ export default function Problems() {
                                 .join(' / ')}
                             </button>
                           )}
-                          <div className="inline-tags">
-                            {p.tags.map((tag) => (
-                              <Badge key={tag}>{tag}</Badge>
-                            ))}
-                          </div>
+                          {!hideTags && p.tags.length > 0 && (
+                            <div className="inline-tags">
+                              {p.tags.map((tag) => (
+                                <Badge key={tag}>{tag}</Badge>
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td>
                           <span>{p.owner_name}</span>
