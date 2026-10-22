@@ -2198,7 +2198,7 @@ test('Unsupported solution languages show file settings without an isolated judg
     supported_languages: [
       { language: 'cpp17', label: 'C++17' },
       { language: 'c99', label: 'C99' },
-      { language: 'python3', label: 'Python 3.13' },
+      { language: 'python3', label: 'Python 3.11' },
       { language: 'java8', label: 'Java 8' },
     ],
     guidance:
@@ -2242,7 +2242,7 @@ test('Checker compatibility links open the actual source settings without changi
       name,
       language: 'cpp20',
       label: 'C++20',
-      supported_languages: ['C++17', 'C99', 'Python 3.13'],
+      supported_languages: ['C++17', 'C99', 'Python 3.11'],
     },
     supported_languages: [{ language: 'java8', label: 'Java 8' }],
     guidance:
@@ -2254,7 +2254,7 @@ test('Checker compatibility links open the actual source settings without changi
   assert.match(notice.textContent, /현재 언어: C\+\+20/);
   assert.match(
     notice.textContent,
-    /Checker 지원 언어: C\+\+17 · C99 · Python 3.13/,
+    /Checker 지원 언어: C\+\+17 · C99 · Python 3.11/,
   );
   assert.doesNotMatch(notice.textContent, /풀이 언어 설정|Java 8/);
   const link = notice.querySelector('a');
@@ -2278,7 +2278,7 @@ test('Checker compatibility links open the actual source settings without changi
   );
   assert.match(
     language.querySelector('option[value="python3"]').textContent,
-    /Python 3.13 · ZOJ 채점기/,
+    /Python 3.11 · ZOJ 채점기/,
   );
   assert.equal(requests.length, 1);
   assert.equal(state.document.files[name].language, 'cpp20');

@@ -6,8 +6,8 @@ export const limitLanguages: {
 }[] = [
   { key: 'cpp17', label: 'C++17', corrected: false },
   { key: 'c99', label: 'C99', corrected: false },
-  { key: 'python3', label: 'Python 3.13', corrected: true },
-  { key: 'pypy3', label: 'PyPy 3.9', corrected: true },
+  { key: 'python3', label: 'Python 3.11', corrected: true },
+  { key: 'pypy3', label: 'PyPy 3.11', corrected: true },
   { key: 'java8', label: 'Java 8', corrected: true },
   { key: 'kotlin', label: 'Kotlin', corrected: true },
 ];
