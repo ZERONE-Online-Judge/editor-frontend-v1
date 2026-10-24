@@ -1,3 +1,4 @@
+import GeneratedTestResults from './GeneratedTestResults';
 import Select from '../../components/Select';
 import Pagination, { PaginatedList } from '../../components/Pagination';
 import { useRemotePage } from '../../lib/useRemotePage';
@@ -23,8 +24,7 @@ import {
   bytes,
 } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
-import { BlobDownload, DownloadActions } from '../../components/Downloads';
-import { testDownloads } from '../../lib/downloads';
+import { BlobDownload } from '../../components/Downloads';
 import type { CaseResult, Job } from '../../lib/types';
 import ZojPublishing from './ZojPublishing';
 import InvocationComments from './InvocationComments';
@@ -171,6 +171,7 @@ export default function Executions({
     chosenPackageSets.includes(name),
   );
   const [busy, setBusy] = useState(false);
+  const [deciding, setDeciding] = useState(false);
   const [exportFormat, setExportFormat] = useState('zoj');
   const [verifyPackage, setVerifyPackage] = useState(true);
   const [statementLanguage, setStatementLanguage] = useState(
@@ -299,7 +300,8 @@ export default function Executions({
   const scope = (job?.result.scope || job?.options.scope) as
     InvocationScope | undefined;
   async function apply() {
-    if (!job) return;
+    if (!job || deciding) return;
+    setDeciding(true);
     try {
       const version = await save();
       await post(`/problems/${data.problem.id}/jobs/${job.id}/apply`, {
@@ -309,8 +311,28 @@ export default function Executions({
       setJob(await api<Job>(`/problems/${data.problem.id}/jobs/${job.id}`));
       await fetchRows();
       notify('생성된 입력과 정답을 작업 사본에 반영했습니다.');
+      window.dispatchEvent(new window.Event('editor-preparation-decided'));
     } catch (e) {
       notify((e as Error).message, true);
+    } finally {
+      setDeciding(false);
+    }
+  }
+  async function discardGenerated() {
+    if (!job || deciding) return;
+    setDeciding(true);
+    try {
+      await post(`/problems/${data.problem.id}/jobs/${job.id}/discard`);
+      setJob(await api<Job>(`/problems/${data.problem.id}/jobs/${job.id}`));
+      await fetchRows();
+      window.dispatchEvent(new window.Event('editor-preparation-decided'));
+      notify(
+        '생성 결과를 반영하지 않고 버렸습니다. 작업 사본은 그대로 유지됩니다.',
+      );
+    } catch (error) {
+      notify((error as Error).message, true);
+    } finally {
+      setDeciding(false);
     }
   }
   const environmentPanel = (
@@ -319,8 +341,8 @@ export default function Executions({
       <p className="muted">
         전체 풀이 검증·스트레스 테스트·패키지 검증은 ZOJ 채점기로 실행합니다.
         언어별 설정을 비워두면 자동 보정하며, 아래 지정한 값이나 보정 끄기
-        설정을 적용합니다. 입력 생성·Validator·기준 정답 생성 등 제작 작업은
-        채점 에이전트가 처리합니다.
+        설정을 적용합니다. Main 정답 생성도 같은 ZOJ 채점기와 언어별 제한을
+        사용하며 생성기·Validator 등 제작 작업도 ZOJ 에이전트가 처리합니다.
       </p>
       {environment && !zojConfigured && (
         <Notice tone="error">
@@ -647,11 +669,13 @@ export default function Executions({
                             : 'neutral'
                       }
                     >
-                      {row.application
-                        ? '내 사본에 반영됨'
-                        : row.document_hash === data.document_hash
-                          ? '미반영'
-                          : '이전 자료'}
+                      {row.discarded_at
+                        ? '반영하지 않고 버림'
+                        : row.application
+                          ? '내 사본에 반영됨'
+                          : row.document_hash === data.document_hash
+                            ? '미반영'
+                            : '이전 자료'}
                     </Badge>
                   )}
                   <Badge
@@ -800,8 +824,8 @@ export default function Executions({
                     ? 'ZOJ 실제 채점기'
                     : job.result.runtime?.backend === 'agent' ||
                         job.options.execution_transport === 'agent'
-                      ? '채점 에이전트 제작용 격리 실행'
-                      : 'Editor 격리 실행 (이전 기록)'}
+                      ? 'ZOJ 에이전트 · 제작 작업'
+                      : '이전 Editor 실행 기록'}
               </p>
               <p className="muted small">
                 자료 기준:{' '}
@@ -896,7 +920,9 @@ export default function Executions({
                                 <td>
                                   {run.runtime === 'renderer'
                                     ? 'PDF 렌더링'
-                                    : '제작용 실행'}
+                                    : run.runtime === 'reference'
+                                      ? 'Main 정답 생성 · ZOJ 채점기'
+                                      : '제작용 실행'}
                                 </td>
                                 <td>
                                   {{
@@ -1025,14 +1051,26 @@ export default function Executions({
                       </small>
                     )}
                   </span>
-                  {!job.application && (
-                    <button
-                      className="button primary"
-                      disabled={!canApply || stale || dirty}
-                      onClick={() => void apply()}
-                    >
-                      작업 사본에 반영
-                    </button>
+                  {job.discarded_at && (
+                    <small>반영하지 않고 버림 · {time(job.discarded_at)}</small>
+                  )}
+                  {!job.application && !job.discarded_at && (
+                    <div className="actions">
+                      <button
+                        className="button"
+                        disabled={!canApply || deciding}
+                        onClick={() => void discardGenerated()}
+                      >
+                        반영하지 않고 버리기
+                      </button>
+                      <button
+                        className="button primary"
+                        disabled={!canApply || stale || dirty || deciding}
+                        onClick={() => void apply()}
+                      >
+                        작업 사본에 반영
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
@@ -1042,20 +1080,13 @@ export default function Executions({
                     '자동 반영되지 않았습니다. 실행 당시 자료와 작업 사본을 확인하세요.'}
                 </Notice>
               )}
-              {job.kind === 'prepare' &&
-                Object.entries(job.result.testsets || {}).map(
-                  ([name, tests]) => (
-                    <DownloadActions
-                      key={name}
-                      problemId={data.problem.id}
-                      files={testDownloads(name, tests)}
-                      filename={`${name.slice(0, 85)}-tests.zip`}
-                      allLabel={`${name} 생성 파일 다운로드`}
-                      selectable={false}
-                      note="이 실행에서 저장된 실제 입력·기대 출력을 받습니다. 작업 사본에 반영하기 전에도 다운로드할 수 있습니다."
-                    />
-                  ),
-                )}
+              {job.kind === 'prepare' && (
+                <GeneratedTestResults
+                  key={job.id}
+                  job={job}
+                  problemId={data.problem.id}
+                />
+              )}
               {job.kind === 'stress' && (
                 <StressTestResults
                   job={job}

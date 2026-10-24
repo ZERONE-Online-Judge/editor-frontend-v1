@@ -23,7 +23,9 @@ export default function PreparationNotice({
   useEffect(() => {
     let active = true;
     let timer: number;
-    async function poll() {
+    let sequence = 0;
+    async function refresh() {
+      const token = ++sequence;
       try {
         const value = await api<{
           version: number;
@@ -31,7 +33,7 @@ export default function PreparationNotice({
             WorkspaceData['pending_preparations']
           >;
         }>(`/problems/${data.problem.id}/preparation-status`);
-        if (active) {
+        if (active && token === sequence) {
           setState(value);
           onPendingChange(value.pending_preparations);
           if (value.version !== data.version && !dirty) await reload(true);
@@ -39,12 +41,20 @@ export default function PreparationNotice({
       } catch {
         /* The main workspace reports connection and save errors. */
       }
+    }
+    async function poll() {
+      await refresh();
       if (active) timer = window.setTimeout(() => void poll(), 5000);
     }
+    const onDecision = () => {
+      if (editable) void refresh();
+    };
+    window.addEventListener('editor-preparation-decided', onDecision);
     if (editable) void poll();
     return () => {
       active = false;
       window.clearTimeout(timer);
+      window.removeEventListener('editor-preparation-decided', onDecision);
     };
   }, [data.problem.id, data.version, dirty, editable, reload, onPendingChange]);
   const rows = state.pending_preparations.filter((row) => !row.stale);
@@ -66,7 +76,7 @@ export default function PreparationNotice({
         <p>
           {changed
             ? '저장하지 않은 내용은 현재 화면에 유지됩니다. 최신 자료를 확인한 뒤 변경을 다시 반영하세요.'
-            : '작업은 성공했지만 입력과 정답은 아직 내 작업 사본에 반영되지 않았습니다. 새 검증을 실행하기 전에 결과를 확인하거나 반영하세요.'}
+            : '생성된 입력·정답을 미리 확인한 뒤 사본에 반영하거나 버릴 수 있습니다.'}
         </p>
       </div>
       <div className="actions">
@@ -87,6 +97,32 @@ export default function PreparationNotice({
             >
               실행 결과로 이동
             </Link>
+            <button
+              className="button"
+              disabled={applying}
+              onClick={async () => {
+                setApplying(true);
+                const id = rows[0].id;
+                try {
+                  await post(`/problems/${data.problem.id}/jobs/${id}/discard`);
+                  const pending = state.pending_preparations.filter(
+                    (row) => row.id !== id,
+                  );
+                  setState({ ...state, pending_preparations: pending });
+                  onPendingChange(pending);
+                  window.dispatchEvent(
+                    new window.Event('editor-preparation-decided'),
+                  );
+                  notify('생성 결과를 반영하지 않고 버렸습니다.');
+                } catch (error) {
+                  notify((error as Error).message, true);
+                } finally {
+                  setApplying(false);
+                }
+              }}
+            >
+              반영하지 않고 버리기
+            </button>
             <button
               className="button primary"
               disabled={dirty || applying}

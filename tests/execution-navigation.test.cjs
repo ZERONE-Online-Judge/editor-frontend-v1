@@ -206,6 +206,11 @@ async function post(url, body) {
       version: state.version,
       needs_context_validation: false,
     };
+  if (url.endsWith('/discard')) {
+    const row = jobs.find((entry) => url.includes('/jobs/' + entry.id + '/'));
+    row.discarded_at = 1778506777;
+    return { discarded_at: row.discarded_at };
+  }
   assert.equal(url, '/problems/p/jobs');
   const result = job(
     'new-' + body.kind,
@@ -2470,4 +2475,45 @@ test('Checker compatibility links open the actual source settings without changi
   await click('닫기');
   assert.equal(host.querySelector('dialog'), null);
   assert.equal(requests.length, 1);
+});
+
+test('generated input and answer can be read before applying and discarded without saving the copy', async () => {
+  jobs[1].result.testsets = {
+    tests: [
+      {
+        index: 1,
+        input_sha: 'input',
+        answer_sha: 'actual',
+        main_cpu_ms: 125,
+        command: 'generator 1',
+      },
+    ],
+  };
+  const before = JSON.stringify(state.document);
+  await mount('invocations?job=old');
+  const preview = host.querySelector(
+    '[aria-label="생성된 입력·정답 미리보기"]',
+  );
+  assert.ok(preview);
+  assert.match(preview.textContent, /Main CPU 125ms/);
+  assert.ok(
+    [...preview.querySelectorAll('textarea')].every((field) => field.readOnly),
+  );
+  assert.deepEqual(
+    [...preview.querySelectorAll('textarea')].map((field) => field.value),
+    ['1 2\n', 'Wrong\n'],
+  );
+  await click('반영하지 않고 버리기');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, '/problems/p/jobs/old/discard');
+  assert.equal(JSON.stringify(state.document), before);
+  assert.equal(state.version, 1);
+  assert.match(host.textContent, /반영하지 않고 버림/);
+  assert.equal(
+    [...host.querySelectorAll('button')].some(
+      (button) => button.textContent === '작업 사본에 반영',
+    ),
+    false,
+  );
+  assert.ok(host.querySelector('[aria-label="생성된 입력·정답 미리보기"]'));
 });
