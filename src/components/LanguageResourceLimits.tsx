@@ -33,14 +33,14 @@ export default function LanguageLimits({
   }
   return (
     <section
-      className="card language-resource-limits"
+      className="language-resource-limits"
       aria-label="언어별 시간·메모리 제한"
     >
       <div className="section-heading">
         <div>
-          <h3>언어별 시간·메모리 제한</h3>
           <p>
-            빈칸은 ZOJ 자동 보정을 적용합니다. 직접 입력한 값은 보정 없이 그대로
+            입력·정답 생성과 모든 검증에서 함께 사용하는 설정입니다. 빈칸은 ZOJ
+            자동 보정을 적용합니다. 직접 입력한 값은 보정 없이 그대로
             사용합니다.
           </p>
           <p>

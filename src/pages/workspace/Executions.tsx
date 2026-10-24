@@ -3,7 +3,6 @@ import Select from '../../components/Select';
 import Pagination, { PaginatedList } from '../../components/Pagination';
 import { useRemotePage } from '../../lib/useRemotePage';
 import { jobRelation, requesterName } from '../../lib/jobHistory';
-import LanguageLimits from '../../components/LanguageResourceLimits';
 import JudgeCompatibilityNotice from './JudgeCompatibilityNotice';
 import { can, canEdit } from '../../lib/permissions';
 import { useEffect, useState } from 'react';
@@ -71,8 +70,6 @@ export default function Executions({
     reload,
     save,
     dirty,
-    mutate,
-    busy: workspaceBusy,
   } = useWorkspace();
   const { user } = useAuth();
   const canInvoke = can(data.problem, 'execute');
@@ -340,9 +337,10 @@ export default function Executions({
       <strong>ZOJ 실제 채점기 · 대회와 같은 환경</strong>
       <p className="muted">
         전체 풀이 검증·스트레스 테스트·패키지 검증은 ZOJ 채점기로 실행합니다.
-        언어별 설정을 비워두면 자동 보정하며, 아래 지정한 값이나 보정 끄기
-        설정을 적용합니다. Main 정답 생성도 같은 ZOJ 채점기와 언어별 제한을
-        사용하며 생성기·Validator 등 제작 작업도 ZOJ 에이전트가 처리합니다.
+        언어별 설정을 비워두면 자동 보정하며, 개요의 기본 정보에서 지정한 값이나
+        자동 보정 끄기를 적용합니다. Main 정답 생성도 같은 ZOJ 채점기와 언어별
+        제한을 사용하며 생성기·Validator 등 제작 작업도 ZOJ 에이전트가
+        처리합니다.
       </p>
       {environment && !zojConfigured && (
         <Notice tone="error">
@@ -406,20 +404,6 @@ export default function Executions({
         )}
       <ExecutionLimitsInfo environment={environment} stress={stress} />
       {((packages && verifyPackage) || stress) && environmentPanel}
-      {(verification || stress || packages) && (
-        <LanguageLimits
-          document={doc}
-          disabled={busy || workspaceBusy}
-          onChange={
-            can(data.problem, 'edit_info')
-              ? (value) =>
-                  mutate((d) => {
-                    d.language_resource_limits = value;
-                  })
-              : undefined
-          }
-        />
-      )}
       {verification && (
         <section
           className="card verification-launcher"

@@ -2517,3 +2517,18 @@ test('generated input and answer can be read before applying and discarded witho
   );
   assert.ok(host.querySelector('[aria-label="생성된 입력·정답 미리보기"]'));
 });
+
+test('verification shares overview resource policy without rendering another settings form', async () => {
+  state.document.language_resource_limits = {
+    pypy3: { time_limit_ms: 700, memory_limit_mb: 384 },
+  };
+  await mount('verification');
+  assert.equal(
+    host.querySelector('[aria-label="언어별 시간·메모리 제한"]'),
+    null,
+  );
+  assert.match(host.textContent, /개요의 기본 정보/);
+  assert.deepEqual(state.document.language_resource_limits, {
+    pypy3: { time_limit_ms: 700, memory_limit_mb: 384 },
+  });
+});

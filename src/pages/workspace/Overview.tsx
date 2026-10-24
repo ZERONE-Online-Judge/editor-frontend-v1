@@ -49,18 +49,6 @@ export default function Overview() {
           </div>
         ))}
       </div>
-      <LanguageLimits
-        document={doc}
-        disabled={busy || !editable}
-        onChange={
-          editable
-            ? (value) =>
-                mutate((d) => {
-                  d.language_resource_limits = value;
-                })
-            : undefined
-        }
-      />
       <section className="card">
         <SectionHeading title="기본 정보" />
         <fieldset disabled={!editable || busy} className="form-grid">
@@ -112,6 +100,32 @@ export default function Overview() {
               <span>MiB</span>
             </span>
           </label>
+          <details className="span-2 language-limits-disclosure">
+            <summary>
+              <span>
+                <strong>언어별 개별 설정</strong>
+                <small>시간·메모리 제한 · 모든 생성·검증에 공통 적용</small>
+              </span>
+              <span className="language-limits-state">
+                {Object.keys(doc.language_resource_limits || {}).length
+                  ? `${Object.keys(doc.language_resource_limits || {}).length}개 언어 설정됨`
+                  : '기본 보정 사용'}
+                <Icon name="down" />
+              </span>
+            </summary>
+            <LanguageLimits
+              document={doc}
+              disabled={busy || !editable}
+              onChange={
+                editable
+                  ? (value) =>
+                      mutate((d) => {
+                        d.language_resource_limits = value;
+                      })
+                  : undefined
+              }
+            />
+          </details>
           <label>
             입력 파일
             <input
