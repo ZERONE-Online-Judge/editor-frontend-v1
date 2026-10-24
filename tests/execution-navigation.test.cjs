@@ -1379,7 +1379,7 @@ test('stored all-set verification displays its scope and per-set progress', asyn
   assert.deepEqual(requests, []);
 });
 
-test('preparation counts are separate from measured judging progress and collapse by default', async () => {
+test('legacy judging progress retains its meaning and cache details collapse by default', async () => {
   const row = liveVerification();
   row.result.preparation_cache = {
     enabled: true,
@@ -1401,6 +1401,123 @@ test('preparation counts are separate from measured judging progress and collaps
   );
   assert.match(summary.textContent, /판정·시간·메모리를 재사용하지 않습니다/);
   assert.equal(host.querySelector('[aria-label="전체 풀이 검증"]').value, 37);
+});
+
+function preparationVerification(status = 'running', phase = 'preparing') {
+  const row = liveVerification(status);
+  row.result.verification_progress = {
+    phase,
+    current: 4,
+    total: 18,
+    percent: 22,
+    completed_solutions: 0,
+    total_solutions: 4,
+    preparation: {
+      current: 4,
+      total: 10,
+      percent: 40,
+      stages: {
+        input: { current: 2, total: 2, percent: 100 },
+        validator: { current: 1, total: 2, percent: 50 },
+        answer: { current: 1, total: 2, percent: 50 },
+        checker: { current: 0, total: 2, percent: 0 },
+        sample: { current: 0, total: 0, percent: 0 },
+        ready: { current: 0, total: 2, percent: 0 },
+      },
+    },
+    judging: { current: 0, total: 8, percent: 0 },
+  };
+  for (const solution of row.result.solutions) {
+    solution.state = 'queued';
+    solution.cases = [];
+    solution.completed_tests = 0;
+    solution.matched = false;
+  }
+  return row;
+}
+
+test('overall verification includes preparation before any contestant verdict exists', async () => {
+  preparationVerification();
+  await mount('invocations?job=live-verification');
+  const panel = host.querySelector('.verification-progress');
+  assert.match(panel.textContent, /테스트 자료 준비 중.*22%/);
+  assert.match(panel.textContent, /테스트 준비4 \/ 10단계.*풀이 판정0 \/ 8건/);
+  assert.match(panel.textContent, /전체 처리 4 \/ 18개/);
+  assert.equal(panel.querySelector('[aria-label="전체 풀이 검증"]').value, 22);
+  assert.equal(panel.querySelector('[aria-label="테스트 준비"]').value, 4);
+  assert.equal(panel.querySelector('[aria-label="테스트 준비"]').max, 10);
+  assert.equal(panel.querySelector('[aria-label="풀이 판정"]').value, 0);
+  const stages = panel.querySelector('.verification-preparation-stages');
+  assert.match(
+    stages.textContent,
+    /입력 확인 2 \/ 2.*Validator 검사 1 \/ 2.*정답 준비 1 \/ 2.*중복 확인·저장 0 \/ 2/,
+  );
+  assert.doesNotMatch(stages.textContent, /지문 예제/);
+  assert.match(panel.textContent, /재사용한 준비 결과도 포함/);
+  assert.match(panel.textContent, /소요 시간의 비율과는 다릅니다/);
+  assert.doesNotMatch(
+    panel.textContent,
+    /실행 대상 풀이 × 테스트 중 실제 판정이 저장된 비율/,
+  );
+  assert.equal(host.querySelectorAll('.case-chip').length, 0);
+  assert.ok(
+    [...host.querySelectorAll('.solution-run-progress progress')].every(
+      (el) => el.value === 0,
+    ),
+  );
+});
+
+test('judging continues from preparation and keeps per-solution progress independent', async () => {
+  const row = preparationVerification('running', 'judging');
+  const progress = row.result.verification_progress;
+  progress.preparation.current = 10;
+  progress.preparation.percent = 100;
+  progress.judging = { current: 1, total: 8, percent: 12 };
+  progress.current = 11;
+  progress.percent = 61;
+  row.result.solutions[0].state = 'running';
+  row.result.solutions[0].completed_tests = 1;
+  await mount('invocations?job=live-verification');
+  const panel = host.querySelector('.verification-progress');
+  assert.match(panel.textContent, /전체 풀이 검증 중.*61%/);
+  assert.match(panel.textContent, /테스트 준비10 \/ 10단계.*풀이 판정1 \/ 8건/);
+  assert.equal(
+    host.querySelector('[aria-label="main.py 테스트 진행률"]').value,
+    1,
+  );
+  assert.equal(
+    host.querySelector('[aria-label="main.py 테스트 진행률"]').max,
+    2,
+  );
+});
+
+for (const status of ['failed', 'cancelled']) {
+  test(`${status} preparation keeps only confirmed progress after opening the saved result`, async () => {
+    preparationVerification(status);
+    await mount('invocations?job=live-verification');
+    const panel = host.querySelector('.verification-progress');
+    assert.match(panel.textContent, /전체 풀이 검증 중단.*22%/);
+    assert.match(
+      panel.textContent,
+      /테스트 준비4 \/ 10단계.*풀이 판정0 \/ 8건/,
+    );
+    assert.doesNotMatch(panel.textContent, /100%/);
+  });
+}
+
+test('completed work with a compile error retains unjudged testcase gaps', async () => {
+  const row = preparationVerification('completed', 'complete');
+  const progress = row.result.verification_progress;
+  progress.preparation.current = 10;
+  progress.preparation.percent = 100;
+  progress.judging = { current: 6, total: 8, percent: 75 };
+  progress.current = 16;
+  progress.percent = 88;
+  await mount('invocations?job=live-verification');
+  const panel = host.querySelector('.verification-progress');
+  assert.match(panel.textContent, /전체 풀이 검증 종료.*88%/);
+  assert.match(panel.textContent, /풀이 판정6 \/ 8건/);
+  assert.equal(panel.querySelector('[aria-label="전체 풀이 검증"]').value, 88);
 });
 
 test('selected verification submits exact solution names and a normalized test range', async () => {

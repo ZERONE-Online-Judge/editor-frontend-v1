@@ -408,11 +408,27 @@ export type Job = {
       current: number;
       total: number;
       percent: number;
+      preparation?: {
+        current: number;
+        total: number;
+        percent: number;
+        stages?: Record<
+          string,
+          { current: number; total: number; percent: number }
+        >;
+      };
+      judging?: { current: number; total: number; percent: number };
       completed_solutions?: number;
       total_solutions?: number;
       testsets?: Record<
         string,
-        { current: number; total: number; percent: number }
+        {
+          current: number;
+          total: number;
+          percent: number;
+          preparation?: { current: number; total: number; percent: number };
+          judging?: { current: number; total: number; percent: number };
+        }
       >;
     };
     stress_configuration?: StressConfiguration;
