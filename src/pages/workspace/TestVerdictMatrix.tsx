@@ -1,3 +1,5 @@
+import Pagination from '../../components/Pagination';
+import { usePagination } from '../../lib/pagination';
 import Select from '../../components/Select';
 import { useMemo, useState } from 'react';
 import type { Job, CaseResult } from '../../lib/types';
@@ -18,9 +20,12 @@ export default function TestVerdictMatrix({ job }: { job: Job }) {
       ),
     [job.result.solutions],
   );
+  const selected = new Set(matrix?.cover.test_ids || []);
+  const rows = (matrix?.rows || []).filter(
+    (row) => !coverOnly || selected.has(row.id),
+  );
+  const paging = usePagination(rows, `${job.id}/${coverOnly}`, 50);
   if (!matrix) return null;
-  const selected = new Set(matrix.cover.test_ids);
-  const rows = matrix.rows.filter((row) => !coverOnly || selected.has(row.id));
   return (
     <details className="test-verdict-matrix card compact">
       <summary className="matrix-summary">
@@ -109,7 +114,7 @@ export default function TestVerdictMatrix({ job }: { job: Job }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {paging.items.map((row) => (
                 <tr
                   key={row.id}
                   className={selected.has(row.id) ? 'matrix-cover-row' : ''}
@@ -211,6 +216,7 @@ export default function TestVerdictMatrix({ job }: { job: Job }) {
             </tbody>
           </table>
         </div>
+        <Pagination {...paging} label="테스트별 검출력" />
         <details className="matrix-help">
           <summary>검출력·커버 안내</summary>
           <div>

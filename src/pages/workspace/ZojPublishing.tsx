@@ -1,5 +1,8 @@
+import Pagination from '../../components/Pagination';
+import { useRemotePage } from '../../lib/useRemotePage';
+import { requesterName } from '../../lib/jobHistory';
 import Select from '../../components/Select';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { api, post, time } from '../../lib/api';
 import { useAuth } from '../../lib/authContext';
 import type { Job, Publication, ZojContest } from '../../lib/types';
@@ -27,7 +30,17 @@ export default function ZojPublishing({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [published, setPublished] = useState<Publication | null>(null);
-  const [history, setHistory] = useState<Publication[]>([]);
+  const [pagination, setPagination] = useState({ problemId, page: 1 });
+  const page = pagination.problemId === problemId ? pagination.page : 1;
+  const {
+    data: historyPage,
+    error: historyError,
+    refresh: refreshHistory,
+  } = useRemotePage<Publication>(
+    `/problems/${problemId}/zoj-publications?page=${page}&page_size=20`,
+    page,
+  );
+  const history = historyPage?.items || [];
   const [updateTarget, setUpdateTarget] = useState<Publication | null>(null);
   const ready =
     job?.status === 'completed' &&
@@ -35,17 +48,6 @@ export default function ZojPublishing({
     job.result.package.verified &&
     !stale;
   const contest = contests.find((c) => c.id === contestId);
-  useEffect(() => {
-    let active = true;
-    api<Publication[]>(`/problems/${problemId}/zoj-publications`)
-      .then((rows) => {
-        if (active) setHistory(rows);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [problemId]);
   async function show() {
     setOpen(true);
     setBusy(true);
@@ -93,9 +95,8 @@ export default function ZojPublishing({
         },
       );
       setPublished(result);
-      setHistory(
-        await api<Publication[]>(`/problems/${problemId}/zoj-publications`),
-      );
+      setPagination({ problemId, page: 1 });
+      await refreshHistory();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -145,9 +146,14 @@ export default function ZojPublishing({
           )}
         </div>
       )}
+      {historyError && (
+        <Notice tone="error">
+          전송 기록을 불러오지 못했습니다. {historyError}
+        </Notice>
+      )}
       {history.length > 0 && (
         <details className="publication-history">
-          <summary>ZOJ 전송 기록 {history.length}개</summary>
+          <summary>ZOJ 전송 기록 {historyPage?.total || 0}개</summary>
           {history.map((row) => (
             <div className="publication-row" key={row.operation_id}>
               <div>
@@ -155,7 +161,9 @@ export default function ZojPublishing({
                   {row.problem_code}. {row.result.title}
                 </strong>
                 <small>
-                  r{row.result.revision} · {time(row.created_at)}
+                  {requesterName(row, user?.id)} ·{' '}
+                  {row.result.kind === 'update' ? '문제 업데이트' : '문제 등록'}{' '}
+                  · r{row.result.revision} · {time(row.created_at)}
                 </small>
               </div>
               <button
@@ -176,6 +184,13 @@ export default function ZojPublishing({
               </a>
             </div>
           ))}
+          {historyPage && (
+            <Pagination
+              {...historyPage}
+              label="ZOJ 전송 기록"
+              onPageChange={(page) => setPagination({ problemId, page })}
+            />
+          )}
         </details>
       )}
       {updateTarget && job && (
@@ -185,9 +200,7 @@ export default function ZojPublishing({
           target={updateTarget}
           onClose={() => setUpdateTarget(null)}
           onUpdated={() => {
-            void api<Publication[]>(`/problems/${problemId}/zoj-publications`)
-              .then(setHistory)
-              .catch(() => {});
+            void refreshHistory();
           }}
         />
       )}

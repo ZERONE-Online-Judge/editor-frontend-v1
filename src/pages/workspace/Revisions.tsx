@@ -1,3 +1,5 @@
+import Pagination from '../../components/Pagination';
+import { useRemotePage } from '../../lib/useRemotePage';
 import { useEffect, useRef, useState } from 'react';
 import { api, time } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
@@ -13,31 +15,28 @@ type Selection = {
   error?: string;
 };
 export default function Revisions() {
-  const { data, notify } = useWorkspace();
+  const { data } = useWorkspace();
   const problemId = data.problem.id;
-  const [history, setHistory] = useState<{
-    problemId: string;
-    rows: Revision[];
-  } | null>(null);
+  const [pagination, setPagination] = useState({ problemId, page: 1 });
+  const page = pagination.problemId === problemId ? pagination.page : 1;
+  const {
+    data: history,
+    error: historyError,
+    refresh,
+  } = useRemotePage<Revision>(
+    `/problems/${problemId}/revisions?page=${page}&page_size=20`,
+    page,
+  );
   const [selection, setSelection] = useState<Selection | null>(null);
   const request = useRef({ version: 0 });
   const selected = selection?.problemId === problemId ? selection : null;
-  const rows = history?.problemId === problemId ? history.rows : [];
+  const rows = history?.items || [];
   useEffect(() => {
-    let active = true;
     const tracker = request.current;
-    api<Revision[]>(`/problems/${problemId}/revisions`)
-      .then((values) => {
-        if (active) setHistory({ problemId, rows: values });
-      })
-      .catch((error) => {
-        if (active) notify(error.message, true);
-      });
     return () => {
-      active = false;
       tracker.version++;
     };
-  }, [problemId, notify]);
+  }, [problemId]);
   async function view(row: Revision) {
     const token = ++request.current.version;
     setSelection({ problemId, revision: row, before: null });
@@ -72,6 +71,14 @@ export default function Revisions() {
         title="리비전"
         description="동료와 공유한 변경과 문제 자료의 스냅샷을 확인합니다."
       />
+      {historyError && (
+        <Notice tone="error">
+          {historyError}
+          <button className="button small" onClick={() => void refresh()}>
+            다시 불러오기
+          </button>
+        </Notice>
+      )}
       <section className="card no-padding">
         <table className="data-table">
           <thead>
@@ -117,6 +124,13 @@ export default function Revisions() {
           </tbody>
         </table>
       </section>
+      {history && (
+        <Pagination
+          {...history}
+          label="리비전 기록"
+          onPageChange={(page) => setPagination({ problemId, page })}
+        />
+      )}
       {selected && (
         <Modal
           wide

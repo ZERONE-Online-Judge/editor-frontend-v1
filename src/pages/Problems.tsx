@@ -1,3 +1,5 @@
+import Pagination from '../components/Pagination';
+import { usePagination } from '../lib/pagination';
 import Select from '../components/Select';
 import { permissionsOf } from '../lib/permissions';
 import { useEffect, useState } from 'react';
@@ -124,7 +126,10 @@ export default function Problems() {
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
-  const movable = visible.filter((p) => canOrganizeProblem(p, user?.handle));
+  const paging = usePagination(visible, `${location}/${filter}/${query}`);
+  const movable = paging.items.filter((p) =>
+    canOrganizeProblem(p, user?.handle),
+  );
   const children = folders.filter((f) => f.parent_id === folderId);
   function chooseFolder(id: string) {
     setParams(id === 'all' ? {} : { folder: id });
@@ -497,8 +502,15 @@ export default function Problems() {
                             onChange={(e) =>
                               setSelection(
                                 e.target.checked
-                                  ? movable.map((p) => p.id)
-                                  : [],
+                                  ? [
+                                      ...new Set([
+                                        ...selection,
+                                        ...movable.map((p) => p.id),
+                                      ]),
+                                    ]
+                                  : selection.filter(
+                                      (id) => !movable.some((p) => p.id === id),
+                                    ),
                               )
                             }
                           />
@@ -512,7 +524,7 @@ export default function Problems() {
                     </tr>
                   </thead>
                   <tbody>
-                    {visible.map((p) => (
+                    {paging.items.map((p) => (
                       <tr
                         key={p.id}
                         draggable={
@@ -673,6 +685,7 @@ export default function Problems() {
                 }
               />
             )}
+            {!loading && <Pagination {...paging} label="문제 목록" />}
           </section>
         </div>
       </div>

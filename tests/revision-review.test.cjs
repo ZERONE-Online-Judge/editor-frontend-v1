@@ -351,7 +351,7 @@ test('Revision requests cannot replace a newer selection after closing the old m
   });
   context = { data: { problem: { id: 'p', revision: 2 } }, notify() {} };
   responder = (p) =>
-    p.endsWith('/revisions')
+    p.includes('/revisions?')
       ? [revision(2), revision(1), revision(0)]
       : p.endsWith('/2')
         ? new Promise((resolve) => {
@@ -379,7 +379,7 @@ test('A failed previous revision is not treated as an initial snapshot and can b
   let failure = true;
   context = { data: { problem: { id: 'p', revision: 1 } }, notify() {} };
   responder = (p) =>
-    p.endsWith('/revisions')
+    p.includes('/revisions?')
       ? [{ number: 1, message: 'change', author: '작성자', created_at: 1 }]
       : p.endsWith('/0') && failure
         ? Promise.reject(Error('network'))

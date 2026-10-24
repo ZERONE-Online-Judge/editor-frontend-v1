@@ -1,3 +1,5 @@
+import Pagination from '../../components/Pagination';
+import { usePagination } from '../../lib/pagination';
 import Select from '../../components/Select';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -44,6 +46,10 @@ export function ReviewReportView({
       (category === 'all' || item.category === category) &&
       (severity === 'all' || item.severity === severity),
   );
+  const paging = usePagination(
+    items,
+    `${problemId}/${report.document_hash}/${category}/${severity}`,
+  );
   return (
     <>
       {stale && (
@@ -80,7 +86,7 @@ export function ReviewReportView({
         </Select>
       </label>
       <div className="review-report-list">
-        {items.map((item, index) => (
+        {paging.items.map((item, index) => (
           <article key={`${item.code}-${index}`}>
             <div>
               <Badge
@@ -109,6 +115,7 @@ export function ReviewReportView({
           <p className="muted">선택한 분류에 표시할 항목이 없습니다.</p>
         )}
       </div>
+      <Pagination {...paging} label="검수 보고서" />
       <p className="muted review-report-method">
         {report.method}
         <br />

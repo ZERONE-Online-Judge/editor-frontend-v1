@@ -1,3 +1,5 @@
+import Pagination from '../../components/Pagination';
+import { usePagination } from '../../lib/pagination';
 import { useEffect, useState } from 'react';
 import { api, post, time } from '../../lib/api';
 import { Notice } from '../../components/ui';
@@ -27,6 +29,7 @@ export default function InvocationComments({
   const [busy, setBusy] = useState(false);
   const text = draft.id === jobId ? draft.text : '';
   const rows = loaded.id === jobId ? loaded.rows : [];
+  const paging = usePagination(rows, `${problemId}/${jobId}`);
   const path = `/problems/${problemId}/jobs/${jobId}/comments`;
   useEffect(() => {
     let active = true;
@@ -49,6 +52,7 @@ export default function InvocationComments({
         id: jobId,
         rows: [...(previous.id === jobId ? previous.rows : []), note],
       }));
+      paging.onPageChange(Math.ceil((rows.length + 1) / 20));
       setDraft({ id: jobId, text: '' });
       setError('');
     } catch (e) {
@@ -63,13 +67,14 @@ export default function InvocationComments({
       <p className="muted small">
         이 실행의 결과와 의견을 함께 보관하며 문제 협업자가 열람할 수 있습니다.
       </p>
-      {rows.map((note) => (
+      {paging.items.map((note) => (
         <article className="notice neutral" key={note.id}>
           <strong>{note.author}</strong>
           <span className="muted small"> · {time(note.created_at)}</span>
           <p style={{ whiteSpace: 'pre-wrap' }}>{note.content}</p>
         </article>
       ))}
+      <Pagination {...paging} label="검수 의견" />
       {error && <Notice tone="error">{error}</Notice>}
       {allowed && (
         <>

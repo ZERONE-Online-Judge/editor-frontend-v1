@@ -1,3 +1,5 @@
+import Pagination, { PaginatedList } from '../../components/Pagination';
+import { usePagination } from '../../lib/pagination';
 import Select from '../../components/Select';
 import { can, permissionsOf } from '../../lib/permissions';
 import type { Permission } from '../../lib/permissions';
@@ -31,6 +33,7 @@ function AccessPanel() {
     can(data.problem, 'manage_access') &&
     data.problem.can_manage_access !== false;
   const [rows, setRows] = useState<Access[]>([]);
+  const paging = usePagination(rows, data.problem.id);
   const [login, setLogin] = useState('');
   const [selected, setSelected] = useState<Permission[]>([]);
   const [memberPermissions, setMemberPermissions] = useState<Permission[]>([]);
@@ -128,7 +131,7 @@ function AccessPanel() {
           </section>
           <section className="card">
             <SectionHeading title="문제에 직접 공유한 구성원" />
-            {rows.map((member) => (
+            {paging.items.map((member) => (
               <div className="permission-member" key={member.user_id}>
                 <div>
                   <strong>{member.display_name}</strong>
@@ -172,6 +175,7 @@ function AccessPanel() {
                 )}
               </div>
             ))}
+            <Pagination {...paging} label="공유 구성원" />
           </section>
         </>
       )}
@@ -217,6 +221,7 @@ function AccessPanel() {
 function IssuesPanel() {
   const { data, notify } = useWorkspace();
   const [rows, setRows] = useState<Issue[]>([]);
+  const paging = usePagination(rows, data.problem.id);
   const [adding, setAdding] = useState(false);
   const [selected, setSelected] = useState<Issue | null>(null);
   const [title, setTitle] = useState('');
@@ -297,7 +302,7 @@ function IssuesPanel() {
       />
       <section className="card no-padding">
         {rows.length ? (
-          rows.map((row) => (
+          paging.items.map((row) => (
             <button
               key={row.id}
               className="issue-row"
@@ -326,6 +331,7 @@ function IssuesPanel() {
           />
         )}
       </section>
+      <Pagination {...paging} label="문제 이슈" />
       {adding && (
         <Modal
           title="새 이슈"
@@ -407,18 +413,26 @@ function IssuesPanel() {
           </div>
           <Markdown>{selected.content}</Markdown>
           <div className="issue-comments">
-            {selected.comments.map((c, i) => (
-              <div className="issue-comment" key={i}>
-                <strong>{c.author}</strong>
-                <span>{time(c.created_at)}</span>
-                <Markdown>{c.content}</Markdown>
-                {c.changes.map((change) => (
-                  <p className="subtext" key={change}>
-                    {change}
-                  </p>
-                ))}
-              </div>
-            ))}
+            <PaginatedList
+              items={selected.comments}
+              resetKey={selected.id}
+              label="이슈 댓글"
+            >
+              {(comments, offset) =>
+                comments.map((c, i) => (
+                  <div className="issue-comment" key={offset + i}>
+                    <strong>{c.author}</strong>
+                    <span>{time(c.created_at)}</span>
+                    <Markdown>{c.content}</Markdown>
+                    {c.changes.map((change) => (
+                      <p className="subtext" key={change}>
+                        {change}
+                      </p>
+                    ))}
+                  </div>
+                ))
+              }
+            </PaginatedList>
           </div>
           {canEdit && selected.status !== 'CLOSED' && (
             <>
