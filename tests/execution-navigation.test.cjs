@@ -565,6 +565,35 @@ test('All four solutions and confirmed partial results appear while the full ver
   );
 });
 
+test('Validation failures show readable guidance instead of a code editor', async () => {
+  const row = job('invalid-script', 'prepare', '작업을 완료하지 못했습니다.');
+  row.status = 'failed';
+  row.result.error_code = 'invalid_script';
+  row.result.error =
+    '생성 스크립트: 1행: 생성 명령 끝에 > 테스트번호 또는 > $를 붙여 주세요. 예: gen 100 > 1';
+  jobs = [row];
+  await mount('invocations?job=invalid-script');
+  const notice = host.querySelector('.execution-error-message');
+  assert.match(notice.textContent, /생성 스크립트를 확인해 주세요/);
+  assert.match(notice.textContent, /1행.*gen 100 > 1/);
+  assert.equal(notice.querySelector('textarea'), null);
+  assert.doesNotMatch(notice.textContent, /400:|invalid_script/);
+});
+
+test('Unexpected execution failures retain their diagnostic log', async () => {
+  const row = job('runtime-error', 'prepare', '작업을 완료하지 못했습니다.');
+  row.status = 'failed';
+  row.result.error = 'RuntimeError: worker connection lost\nretry later';
+  jobs = [row];
+  await mount('invocations?job=runtime-error');
+  assert.equal(host.querySelector('.execution-error-message'), null);
+  assert.ok(
+    [...host.querySelectorAll('textarea')].some(
+      (node) => node.value === row.result.error,
+    ),
+  );
+});
+
 test('execution results show live verification progress and individual solution results without changing tabs', async () => {
   liveVerification();
   await mount('invocations?job=live-verification');
