@@ -107,12 +107,12 @@ export const tags = {
 };
 export const jobLabels = {
   prepare: '입력·정답 생성',
-  verify: '풀이 검증',
-  'validator-tests': 'Validator 자체 테스트',
-  'checker-tests': 'Checker 자체 테스트',
+  verify: '풀이 검증 · 전체 검증',
+  'validator-tests': 'Validator 검사',
+  'checker-tests': 'Checker 검사',
   stress: '스트레스 테스트',
   package: '패키지 생성',
-  render: '지문 렌더링',
+  render: '지문 파일 생성',
 };
 export const statusLabels = {
   queued: '대기 중',

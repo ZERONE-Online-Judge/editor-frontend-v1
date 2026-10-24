@@ -33,6 +33,7 @@ let state,
   advancedLimits,
   historyGate;
 let revisionRequests,
+  historyReads,
   workspaceReads,
   saveEnabled,
   updateSnapshot,
@@ -149,6 +150,7 @@ async function get(url, options = {}) {
   if (url.endsWith('/preparation-status'))
     return { version: state.version, pending_preparations: [] };
   if (url.startsWith('/problems/p/jobs?')) {
+    historyReads++;
     const query = new URL(url, 'http://editor.test').searchParams;
     if (historyGate?.page === Number(query.get('page')))
       return historyGate.promise;
@@ -157,7 +159,16 @@ async function get(url, options = {}) {
     const matching = (row) =>
       (row.options.source_document_hash || row.document_hash) === hash ||
       row.application?.document_hash === hash;
-    const all = jobs.filter((row) => kind === 'all' || row.kind === kind);
+    const category = query.get('category') || 'all';
+    const all = jobs.filter(
+      (row) =>
+        (kind === 'all' || row.kind === kind) &&
+        (category === 'all' ||
+          (category === 'prepare'
+            ? row.kind === 'prepare'
+            : source('lib/executionCategories.ts').jobCategory(row).id ===
+              category)),
+    );
     const current = all.filter(matching).length;
     const filtered = all.filter(
       (row) =>
@@ -239,6 +250,7 @@ async function putWorking(url, body) {
 let root, host;
 beforeEach(() => {
   revisionRequests = [];
+  historyReads = 0;
   workspaceReads = 0;
   saveEnabled = false;
   updateSnapshot = null;
@@ -417,16 +429,98 @@ test('execution results include verification history while launch controls remai
   await flush();
   assert.ok(host.querySelector('.verification-launcher .invocation-controls'));
   assert.equal(host.querySelector('.execution-launcher'), null);
-  assert.match(
-    host.querySelector('.execution-list').textContent,
-    /다른 최신 검증 결과/,
-  );
-  assert.doesNotMatch(
-    host.querySelector('.execution-list').textContent,
-    /이전 입력·정답 결과/,
-  );
+  assert.equal(host.querySelector('.execution-history'), null);
+  assert.equal(host.querySelector('.execution-detail'), null);
   assert.deepEqual(requests, []);
 });
+
+for (const [tab, category] of [
+  ['verification', 'verify'],
+  ['stress', 'stress'],
+  ['packages', 'package'],
+]) {
+  test(`${tab} contains launch controls only and links to its category in execution results`, async () => {
+    await mount(tab);
+    assert.equal(historyReads, 0);
+    assert.equal(host.querySelector('.execution-history'), null);
+    assert.equal(host.querySelector('.execution-detail'), null);
+    const link = host.querySelector(
+      `a[href="/problems/p/invocations?history_category=${category}"]`,
+    );
+    assert.ok(link);
+    await act(() => link.click());
+    await flush();
+    assert.ok(historyReads > 0);
+    assert.ok(host.querySelector('.execution-history'));
+    assert.equal(
+      host.querySelector('[aria-label="기록 작업 종류"]').value,
+      category,
+    );
+    assert.deepEqual(requests, []);
+  });
+}
+
+const detailedCategories = [
+  'prepare-full',
+  'prepare-inputs',
+  'prepare-validate',
+  'prepare-answers',
+  'verify',
+  'validator-tests',
+  'checker-tests',
+  'stress',
+  'render',
+  'package',
+];
+for (const category of detailedCategories) {
+  test(`history filters ${category} separately, resets its page and selects a result with a consistent name`, async () => {
+    jobs = detailedCategories.flatMap((type) =>
+      Array.from({ length: 3 }, (_, index) => {
+        const row = job(
+          `${type}-${index}`,
+          type.startsWith('prepare-') ? 'prepare' : type,
+          `${type} 결과`,
+        );
+        row.options.prepare_mode = type.startsWith('prepare-')
+          ? type.slice(8)
+          : 'full';
+        row.options.name = `예전에 지정한 이름 ${type} ${index}`;
+        return row;
+      }),
+    );
+    await mount('invocations?history_page=2');
+    await setControl('작업 종류', category);
+    const definition = source(
+      'lib/executionCategories.ts',
+    ).executionCategories.find((row) => row.id === category);
+    assert.equal(host.querySelectorAll('.job-row').length, 3);
+    assert.doesNotMatch(
+      host.querySelector('#location').textContent,
+      /history_page=/,
+    );
+    assert.match(
+      host.querySelector('#location').textContent,
+      new RegExp(`history_category=${category}`),
+    );
+    assert.equal(
+      host.querySelector('.job-row strong').textContent,
+      definition.label,
+    );
+    assert.equal(
+      host.querySelector('.execution-detail h3').textContent,
+      definition.label,
+    );
+    assert.match(
+      host.querySelector('.execution-detail').textContent,
+      new RegExp(`요청 이름: 예전에 지정한 이름 ${category}`),
+    );
+    assert.match(
+      host.querySelector('.execution-source-summary').textContent,
+      new RegExp(definition.label),
+    );
+    assert.deepEqual(requests, []);
+  });
+}
 
 test('verification result links stay in execution results and preserve saved jobs and query options', async () => {
   await mount('invocations?job=latest&view=team');
@@ -479,16 +573,22 @@ test('the solutions shortcut opens verification setup without sending a judge re
 test('read-only users can view the verification history but cannot start a new verification', async () => {
   state.problem.role = 'READ';
   await mount('verification');
-  assert.match(
-    host.querySelector('.execution-detail').textContent,
-    /다른 최신 검증 결과/,
-  );
+  assert.equal(host.querySelector('.execution-detail'), null);
   const start = [
     ...host.querySelectorAll('.verification-launcher button'),
   ].find((el) => el.textContent.trim() === '전체 풀이 검증 시작');
   assert.ok(start.disabled);
   await act(() => start.click());
   assert.deepEqual(requests, []);
+  const results = host.querySelector(
+    'a[href="/problems/p/invocations?history_category=verify"]',
+  );
+  await act(() => results.click());
+  await flush();
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /다른 최신 검증 결과/,
+  );
 });
 
 function liveVerification(status = 'running') {
@@ -1038,7 +1138,7 @@ for (const allSets of [false, true]) {
     assert.equal(request.options.prepare_mode, 'inputs');
     assert.equal(request.options.auto_apply, false);
     assert.equal(request.options.test_indices, undefined);
-    assert.match(request.options.name, /전체 테스트 검사/);
+    assert.match(request.options.name, /입력 생성·검사/);
     assert.equal(
       host.querySelector('#location').textContent,
       '/problems/p/invocations?job=new-prepare',
@@ -1682,7 +1782,7 @@ test('polling new jobs does not replace the record currently being viewed', asyn
     return 0;
   };
   try {
-    await mount('verification');
+    await mount('invocations?history_category=verify');
     assert.match(
       host.querySelector('.execution-detail').textContent,
       /다른 최신 검증 결과/,
@@ -1715,14 +1815,14 @@ test('History pages retain the selected result and show original requesters', as
       handle: 'reviewer',
     },
   }));
-  await mount('verification');
+  await mount('invocations?history_category=verify');
   assert.equal(host.querySelectorAll('.job-row').length, 20);
   assert.match(
     host.querySelector('.execution-source-summary').textContent,
     /검수 동료.*@reviewer/,
   );
   assert.match(host.querySelector('.job-row').textContent, /검수 동료 요청/);
-  const next = host.querySelector('[aria-label="검증 기록 다음 페이지"]');
+  const next = host.querySelector('[aria-label="작업 기록 다음 페이지"]');
   await act(async () => next.click());
   await flush();
   assert.equal(host.querySelectorAll('.job-row').length, 20);
@@ -1733,7 +1833,7 @@ test('History pages retain the selected result and show original requesters', as
   );
   assert.match(host.querySelector('#location').textContent, /history_page=2/);
   await act(async () =>
-    host.querySelector('[aria-label="검증 기록 7페이지"]').click(),
+    host.querySelector('[aria-label="작업 기록 7페이지"]').click(),
   );
   await flush();
   assert.equal(host.querySelectorAll('.job-row').length, 5);
@@ -1811,9 +1911,9 @@ test('A slow previous page cannot overwrite the page restored by browser back', 
       resolve = done;
     }),
   };
-  await mount('verification');
+  await mount('invocations?history_category=verify');
   await act(async () =>
-    host.querySelector('[aria-label="검증 기록 다음 페이지"]').click(),
+    host.querySelector('[aria-label="작업 기록 다음 페이지"]').click(),
   );
   await flush();
   assert.match(host.textContent, /기록을 불러오고 있습니다/);
@@ -2615,7 +2715,7 @@ for (const role of ['WRITE', 'READ']) {
       },
     };
     jobs = [artifact];
-    await mount('packages');
+    await mount('invocations?job=archive');
     const publish = [...host.querySelectorAll('button')].find(
       (el) => el.textContent.trim() === 'ZOJ에 바로 등록',
     );

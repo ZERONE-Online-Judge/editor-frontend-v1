@@ -7,6 +7,7 @@ export function useRemotePage<T>(
   page: number,
   interval = 0,
   legacyFilter?: (items: T[]) => T[],
+  enabled = true,
 ) {
   const [state, setState] = useState<{
     url: string;
@@ -20,7 +21,7 @@ export function useRemotePage<T>(
   }, [legacyFilter]);
   const refresh = useCallback(async () => {
     const tracker = sequence.current;
-    if (tracker.url !== url) return;
+    if (!enabled || tracker.url !== url) return;
     const token = ++tracker.value;
     try {
       let value = await api<Page<T> | T[]>(url);
@@ -35,8 +36,9 @@ export function useRemotePage<T>(
           error: (error as Error).message,
         }));
     }
-  }, [url, page]);
+  }, [url, page, enabled]);
   useEffect(() => {
+    if (!enabled) return;
     const tracker = sequence.current;
     tracker.url = url;
     let pending = false;
@@ -58,10 +60,10 @@ export function useRemotePage<T>(
       tracker.url = '';
       if (timer) window.clearInterval(timer);
     };
-  }, [refresh, interval, url]);
+  }, [refresh, interval, url, enabled]);
   return {
-    data: state.url === url ? state.data : undefined,
-    error: state.url === url ? state.error : undefined,
+    data: enabled && state.url === url ? state.data : undefined,
+    error: enabled && state.url === url ? state.error : undefined,
     refresh,
   };
 }

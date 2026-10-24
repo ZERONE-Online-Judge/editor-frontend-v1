@@ -51,6 +51,7 @@ loaded.require = (id) => {
     id === '../../components/Pagination' ||
     id === '../../lib/useRemotePage' ||
     id === '../../lib/jobHistory' ||
+    id === '../../lib/executionCategories' ||
     id === '../../lib/permissions' ||
     id === '../../lib/workspace' ||
     id === '../../lib/executionNavigation' ||
