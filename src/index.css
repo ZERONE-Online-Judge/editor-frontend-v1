@@ -2172,6 +2172,29 @@ svg {
   font-size: 22px;
   font-variant-numeric: tabular-nums;
 }
+.verification-phases {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 12px 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.verification-phases li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.verification-phases progress {
+  grid-column: 1 / -1;
+}
+.verification-preparation-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
 .verification-testsets {
   display: flex;
   flex-wrap: wrap;

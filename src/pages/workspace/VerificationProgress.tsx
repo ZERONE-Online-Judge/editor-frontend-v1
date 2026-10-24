@@ -3,6 +3,15 @@ import { Badge } from '../../components/ui';
 
 type Solution = NonNullable<Job['result']['solutions']>[number];
 
+const preparationStages: Record<string, string> = {
+  input: '입력 확인',
+  validator: 'Validator 검사',
+  answer: '정답 준비',
+  checker: 'Checker 확인',
+  sample: '지문 예제 검사',
+  ready: '중복 확인·저장',
+};
+
 function solutionRunLabel(solution: Solution, status: Job['status']) {
   if (!solution.state || solution.state === 'completed') return null;
   if (status !== 'running' && status !== 'queued') return '검증 중단';
@@ -117,15 +126,61 @@ export default function VerificationProgress({ job }: { job: Job }) {
           <strong className="verification-percent">{percent}%</strong>
         </div>
         <progress aria-label="전체 풀이 검증" value={percent} max={100} />
+        {progress.preparation && progress.judging && (
+          <ul
+            className="verification-phases"
+            aria-label="준비와 채점 진행 현황"
+          >
+            {[
+              {
+                title: '테스트 준비',
+                count: progress.preparation,
+                unit: '단계',
+              },
+              { title: '풀이 판정', count: progress.judging, unit: '건' },
+            ].map(({ title, count, unit }) => (
+              <li key={title}>
+                <span>{title}</span>
+                <strong>
+                  {count.current.toLocaleString()} /{' '}
+                  {count.total.toLocaleString()}
+                  {unit}
+                </strong>
+                <progress
+                  aria-label={title}
+                  value={count.current}
+                  max={count.total || 1}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+        {progress.preparation?.stages && (
+          <p className="muted small verification-preparation-stages">
+            {Object.entries(progress.preparation.stages)
+              .filter(([, count]) => count.total > 0)
+              .map(([stage, count]) => (
+                <span key={stage}>
+                  {preparationStages[stage] || stage}{' '}
+                  {count.current.toLocaleString()} /{' '}
+                  {count.total.toLocaleString()}
+                </span>
+              ))}
+          </p>
+        )}
         <p className="muted small">
-          판정 확인 {progress.current.toLocaleString()} /{' '}
+          {progress.preparation && progress.judging ? '전체 처리' : '판정 확인'}{' '}
+          {progress.current.toLocaleString()} /{' '}
           {progress.total.toLocaleString()}개
           {progress.total_solutions != null &&
             ` · 풀이 ${progress.completed_solutions ?? 0} / ${progress.total_solutions}개 종료`}
         </p>
         <p className="muted small">
-          실행 대상 풀이 × 테스트 중 실제 판정이 저장된 비율입니다. WA·TLE·MLE도
-          확인한 결과로 집계하며, 실행 제외(NR)는 분모에서 뺍니다.
+          {progress.preparation && progress.judging
+            ? '테스트 준비 단계와 풀이별 테스트 판정을 합산한 진행률입니다. 재사용한 준비 결과도 포함하며, 실패하거나 중단된 단계는 완료로 처리하지 않습니다. 소요 시간의 비율과는 다릅니다. '
+            : '실행 대상 풀이 × 테스트 중 실제 판정이 저장된 비율입니다. '}
+          WA·TLE·MLE도 확인한 판정으로 집계하며, 실행 제외(NR)는 풀이 판정
+          건수에서 뺍니다.
         </p>
         {progress.testsets && Object.keys(progress.testsets).length > 1 && (
           <ul className="verification-testsets" aria-label="세트별 검증 진행률">
