@@ -35,7 +35,7 @@ export default function PasswordSetupGuidance({
       </span>
       <div className="password-setup-guidance-copy">
         <strong>비밀번호 로그인 설정</strong>
-        <p>비밀번호를 등록하면 이메일 인증번호 없이 로그인할 수 있습니다.</p>
+        <p>비밀번호를 등록하면 비밀번호로도 로그인할 수 있습니다.</p>
       </div>
       <button
         className="password-setup-guidance-action"
