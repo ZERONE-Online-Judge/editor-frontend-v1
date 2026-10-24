@@ -791,6 +791,42 @@ test('selected test preparation requests only the chosen indices and operation',
   assert.deepEqual(requests[0].body.options.test_indices, [1]);
   assert.equal(requests[0].body.options.prepare_mode, 'answers');
 });
+for (const allSets of [false, true]) {
+  test(`whole input check saves the script and checks ${allSets ? 'all sets' : 'the current set'} without generating answers or auto-applying`, async () => {
+    saveEnabled = true;
+    state.document.solutions = {};
+    await mount('tests');
+    await act(() => {
+      const input = host.querySelector('[aria-label="tests · 생성 스크립트"]');
+      Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        'value',
+      ).set.call(input, 'gen 10 > $');
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+    const auto = host.querySelector('.generation-auto-apply input');
+    await act(() => auto.click());
+    if (allSets) await setControl('검사 범위', 'all');
+    await click('전체 테스트 검사');
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0].url, '/problems/p/working-copy');
+    assert.equal(requests[0].body.document.testsets.tests.script, 'gen 10 > $');
+    const request = requests[1].body;
+    assert.equal(request.kind, 'prepare');
+    assert.equal(request.version, state.version);
+    assert.equal(request.options.testset, 'tests');
+    assert.equal(request.options.all_testsets, allSets);
+    assert.equal(request.options.prepare_mode, 'inputs');
+    assert.equal(request.options.auto_apply, false);
+    assert.equal(request.options.test_indices, undefined);
+    assert.match(request.options.name, /전체 테스트 검사/);
+    assert.ok(
+      host.querySelector(
+        '.notice a[href="/problems/p/invocations?job=new-prepare"]',
+      ),
+    );
+  });
+}
 for (const [tab, button, kind] of [
   ['tests', '입력·정답 생성', 'prepare'],
   ['validator', '테스트 실행', 'validator-tests'],

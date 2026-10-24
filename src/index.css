@@ -3729,6 +3729,17 @@ svg {
   color: #64748b;
   font-weight: 400;
 }
+.test-validation-toolbar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+.test-validation-toolbar label {
+  flex: 1 1 220px;
+  max-width: 360px;
+}
 .test-content-button {
   margin-top: 8px;
   white-space: nowrap;
