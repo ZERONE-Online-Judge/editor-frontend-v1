@@ -360,6 +360,7 @@ export type StressConfiguration = {
   minimize_seconds?: number;
 };
 export type Job = {
+  discarded_at?: number | null;
   application?: {
     applied_at: number;
     workspace_version: number;
