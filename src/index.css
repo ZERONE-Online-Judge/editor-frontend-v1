@@ -2279,6 +2279,39 @@ svg {
   margin-top: 5px;
   line-height: 1.7;
 }
+.validation-results {
+  display: grid;
+  gap: 14px;
+  margin: 16px 0;
+}
+.validation-results .verification-summary.pending {
+  background: var(--zoj-surface);
+  border-color: var(--zoj-border);
+  color: var(--zoj-muted);
+}
+.validation-totals {
+  font-weight: 650;
+}
+.validation-diagnostic {
+  margin-top: 8px;
+}
+.validation-diagnostic summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+.validation-message {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 8px 0 0;
+}
+.generated-preview-grid:has(> :only-child) {
+  grid-template-columns: minmax(0, 1fr);
+}
 .solution-result {
   border: 1px solid var(--zoj-border);
   border-radius: 10px;

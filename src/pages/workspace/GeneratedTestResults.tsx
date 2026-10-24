@@ -8,6 +8,7 @@ import { Badge, CodeEditor, Notice } from '../../components/ui';
 import { BlobDownload } from '../../components/Downloads';
 import { DownloadActions } from '../../components/Downloads';
 import { testDownloads } from '../../lib/downloads';
+import { isInputCheck } from '../../lib/validationResults';
 
 type Preview = {
   text: string;
@@ -110,6 +111,7 @@ export default function GeneratedTestResults({
   problemId: string;
 }) {
   const sets = Object.keys(job.result.testsets || {});
+  const inputsOnly = isInputCheck(job);
   const [chosenSet, setSet] = useState('');
   const setName = sets.includes(chosenSet) ? chosenSet : sets[0] || '';
   const tests = job.result.testsets?.[setName] || [];
@@ -123,13 +125,17 @@ export default function GeneratedTestResults({
   return (
     <section
       className="generated-results"
-      aria-label="생성된 입력·정답 미리보기"
+      aria-label={
+        inputsOnly ? '검사한 입력 미리보기' : '생성된 입력·정답 미리보기'
+      }
     >
       <div className="section-heading">
         <div>
-          <h3>생성된 입력·정답</h3>
+          <h3>{inputsOnly ? '검사한 입력' : '생성된 입력·정답'}</h3>
           <p>
-            작업 사본에 반영하기 전에도 실제 생성된 값을 확인할 수 있습니다.
+            {inputsOnly
+              ? '입력 내용을 확인할 수 있습니다. 이번 작업에서는 Main 정답을 생성하거나 검사하지 않았습니다.'
+              : '작업 사본에 반영하기 전에도 실제 생성된 값을 확인할 수 있습니다.'}
           </p>
         </div>
         <Badge>{tests.length}개 테스트</Badge>
@@ -174,8 +180,11 @@ export default function GeneratedTestResults({
             <strong>
               {setName} · 테스트 #{selected.index}
             </strong>
+            {selected.validator === 'VALID' && (
+              <Badge tone="success">입력 조건 통과</Badge>
+            )}
             {selected.command && <span>{selected.command}</span>}
-            {selected.main_cpu_ms != null && (
+            {!inputsOnly && selected.main_cpu_ms != null && (
               <span>Main CPU {selected.main_cpu_ms}ms</span>
             )}
           </p>
@@ -186,20 +195,27 @@ export default function GeneratedTestResults({
               label="입력"
               filename={`${selected.index}.in`}
             />
-            <GeneratedFile
-              problemId={problemId}
-              sha={selected.answer_sha}
-              label="정답"
-              filename={`${selected.index}.out`}
-            />
+            {!inputsOnly && (
+              <GeneratedFile
+                problemId={problemId}
+                sha={selected.answer_sha}
+                label="정답"
+                filename={`${selected.index}.out`}
+              />
+            )}
           </div>
         </>
       )}
       <DownloadActions
         problemId={problemId}
-        files={testDownloads(setName, tests)}
+        files={testDownloads(
+          setName,
+          inputsOnly
+            ? tests.map((test) => ({ ...test, answer_sha: null }))
+            : tests,
+        )}
         filename={`${setName.slice(0, 85)}-tests.zip`}
-        allLabel={`${setName} 생성 파일 다운로드`}
+        allLabel={`${setName} ${inputsOnly ? '입력' : '생성 파일'} 다운로드`}
         selectable={false}
       />
     </section>

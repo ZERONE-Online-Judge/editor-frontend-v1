@@ -792,6 +792,224 @@ test('selected test preparation requests only the chosen indices and operation',
   assert.deepEqual(requests[0].body.options.test_indices, [1]);
   assert.equal(requests[0].body.options.prepare_mode, 'answers');
 });
+
+function validatorResult(status = 'completed', rows = []) {
+  const result = job(
+    'validator-feedback',
+    'validator-tests',
+    '구성요소 자체 테스트 완료',
+  );
+  result.status = status;
+  result.result.unit_tests = rows;
+  result.result.verified = rows.length > 0 && rows.every((row) => row.matched);
+  jobs.unshift(result);
+  return result;
+}
+
+test('validator self-tests explain that rejecting invalid input is a passing result', async () => {
+  validatorResult('completed', [
+    {
+      id: 'good',
+      expected: 'VALID',
+      actual: 'VALID',
+      matched: true,
+      comment: '',
+    },
+    {
+      id: 'bad',
+      expected: 'INVALID',
+      actual: 'INVALID',
+      matched: true,
+      comment: 'n must be positive',
+    },
+  ]);
+  await mount('invocations?job=validator-feedback');
+  const feedback = host.querySelector('.validation-results');
+  assert.match(feedback.textContent, /2개 테스트가 모두 예상대로 동작/);
+  assert.match(feedback.textContent, /입력 허용/);
+  assert.match(feedback.textContent, /입력 거부/);
+  assert.match(feedback.textContent, /조건을 위반한 입력을 올바르게 거부/);
+  assert.match(
+    feedback.querySelector('.validation-totals').textContent,
+    /전체 2개.*예상대로 동작 2개.*예상과 다름 0개/,
+  );
+  assert.match(
+    feedback.querySelector('.validation-diagnostic').textContent,
+    /n must be positive/,
+  );
+  assert.ok(feedback.querySelector('.verification-summary.passed'));
+});
+
+test('validator mismatches explain both rejecting valid inputs and accepting invalid inputs', async () => {
+  validatorResult('completed', [
+    {
+      id: 'good',
+      expected: 'VALID',
+      actual: 'INVALID',
+      matched: false,
+      comment: '',
+    },
+    {
+      id: 'bad',
+      expected: 'INVALID',
+      actual: 'VALID',
+      matched: false,
+      comment: '',
+    },
+  ]);
+  await mount('invocations?job=validator-feedback');
+  const feedback = host.querySelector('.validation-results');
+  assert.match(feedback.textContent, /예상과 다른 검사 결과/);
+  assert.match(feedback.textContent, /정상 입력을 거부했습니다/);
+  assert.match(feedback.textContent, /조건을 위반한 입력을 허용했습니다/);
+  assert.match(
+    feedback.querySelector('.validation-totals').textContent,
+    /예상과 다름 2개/,
+  );
+  assert.equal(feedback.querySelectorAll('.badge.danger').length, 2);
+  assert.equal(feedback.querySelector('.passed'), null);
+});
+
+for (const status of ['running', 'cancelled', 'failed']) {
+  test(`${status} validation with passing partial evidence never claims all tests passed`, async () => {
+    const result = validatorResult(status, [
+      {
+        id: 'first',
+        expected: 'VALID',
+        actual: 'VALID',
+        matched: true,
+        comment: '',
+      },
+    ]);
+    if (status === 'failed') result.result.error = 'Validator 컴파일 실패';
+    await mount('invocations?job=validator-feedback');
+    const feedback = host.querySelector('.validation-results');
+    assert.equal(feedback.querySelector('.passed'), null);
+    assert.doesNotMatch(feedback.textContent, /모두 예상대로/);
+    assert.match(
+      feedback.querySelector('.validation-totals').textContent,
+      /확인된 결과 1개/,
+    );
+    if (status === 'failed')
+      assert.match(
+        feedback.querySelector('.validation-message').textContent,
+        /컴파일 실패/,
+      );
+  });
+}
+
+test('an empty saved validator result is unknown even when the saved verified flag is true', async () => {
+  const result = validatorResult();
+  result.result.verified = true;
+  await mount('invocations?job=validator-feedback');
+  const feedback = host.querySelector('.validation-results');
+  assert.match(feedback.textContent, /확인할 수 있는 검사 결과가 없습니다/);
+  assert.equal(feedback.querySelector('.passed'), null);
+});
+
+test('validator runtime errors remain distinct from an invalid input verdict', async () => {
+  validatorResult('completed', [
+    {
+      id: 'crash',
+      expected: 'VALID',
+      actual: 'CRASHED',
+      matched: false,
+      comment: '<script>failure</script>',
+    },
+  ]);
+  await mount('invocations?job=validator-feedback');
+  const feedback = host.querySelector('.validation-results');
+  assert.match(feedback.textContent, /프로그램 실행 오류/);
+  assert.doesNotMatch(feedback.textContent, /입력 거부/);
+  assert.equal(feedback.querySelector('script'), null);
+  assert.match(
+    feedback.querySelector('.validation-message').textContent,
+    /<script>failure<\/script>/,
+  );
+});
+
+test('validation totals include every page and retain the late mismatching case', async () => {
+  validatorResult(
+    'completed',
+    Array.from({ length: 24 }, (_, index) => ({
+      id: `case-${index}`,
+      expected: 'INVALID',
+      actual: index === 23 ? 'VALID' : 'INVALID',
+      matched: index !== 23,
+      comment: '',
+    })),
+  );
+  await mount('invocations?job=validator-feedback');
+  const feedback = host.querySelector('.validation-results');
+  assert.equal(feedback.querySelectorAll('tbody tr').length, 20);
+  assert.match(
+    feedback.querySelector('.validation-totals').textContent,
+    /전체 24개.*예상대로 동작 23개.*예상과 다름 1개/,
+  );
+  await act(() =>
+    feedback
+      .querySelector('[aria-label="자체 테스트 결과 다음 페이지"]')
+      .click(),
+  );
+  await flush();
+  assert.equal(feedback.querySelectorAll('tbody tr').length, 4);
+  assert.match(feedback.textContent, /조건을 위반한 입력을 허용했습니다/);
+});
+
+test('input-only checks show their validator verdicts without claiming answer generation', async () => {
+  const result = job('input-feedback', 'prepare', '테스트 자료 준비 완료');
+  result.options.prepare_mode = 'inputs';
+  result.result.testsets = {
+    tests: [
+      {
+        index: 1,
+        input_sha: 'input',
+        answer_sha: 'old-answer',
+        validator: 'VALID',
+      },
+    ],
+  };
+  jobs.unshift(result);
+  await mount('invocations?job=input-feedback');
+  const detail = host.querySelector('.execution-detail');
+  assert.match(
+    detail.querySelector('.validation-results').textContent,
+    /입력 1개가 검사에 통과/,
+  );
+  assert.match(
+    detail.querySelector('.result-action').textContent,
+    /1개 입력 검사 완료/,
+  );
+  assert.doesNotMatch(
+    detail.querySelector('.result-action').textContent,
+    /정답 생성 완료/,
+  );
+  assert.ok(detail.querySelector('[aria-label="검사한 입력 미리보기"]'));
+  assert.equal(detail.querySelector('[aria-label="정답 미리보기"]'), null);
+});
+
+test('a failed input check shows the exact failing set and test without claiming success from prior sets', async () => {
+  const result = job(
+    'input-feedback',
+    'prepare',
+    '작업을 완료하지 못했습니다.',
+  );
+  result.status = 'failed';
+  result.result.prepare_mode = 'inputs';
+  result.result.testsets = {
+    samples: [{ index: 1, input_sha: 'input', validator: 'VALID' }],
+  };
+  result.result.error = 'tests #7: 입력 조건 위반\nn must be positive';
+  jobs.unshift(result);
+  await mount('invocations?job=input-feedback');
+  const feedback = host.querySelector('.validation-results');
+  assert.match(feedback.textContent, /입력 조건을 위반한 테스트가 있습니다/);
+  assert.match(
+    feedback.querySelector('.validation-message').textContent,
+    /tests #7: 입력 조건 위반/,
+  );
+  assert.equal(feedback.querySelector('.passed'), null);
+});
 for (const allSets of [false, true]) {
   test(`whole input check saves the script and checks ${allSets ? 'all sets' : 'the current set'} without generating answers or auto-applying`, async () => {
     saveEnabled = true;
