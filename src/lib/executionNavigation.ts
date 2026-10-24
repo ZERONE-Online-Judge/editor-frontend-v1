@@ -6,11 +6,6 @@ export function matchesExecutionView(kind: JobKind, view: ExecutionView) {
   return view === 'all' || kind === view;
 }
 
-export function executionResultPath(
-  problemId: string,
-  kind: JobKind,
-  jobId: string,
-) {
-  const tab = kind === 'verify' ? 'verification' : 'invocations';
-  return `/problems/${encodeURIComponent(problemId)}/${tab}?job=${encodeURIComponent(jobId)}`;
+export function executionResultPath(problemId: string, jobId: string) {
+  return `/problems/${encodeURIComponent(problemId)}/invocations?job=${encodeURIComponent(jobId)}`;
 }

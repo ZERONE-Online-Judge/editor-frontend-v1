@@ -231,7 +231,6 @@ export default function Executions({
           if (!matchesExecutionView(value.kind, mode)) {
             const destination = executionResultPath(
               data.problem.id,
-              value.kind,
               value.id,
             ).split('?')[0];
             navigate(
@@ -271,15 +270,12 @@ export default function Executions({
     setBusy(true);
     setStartError(null);
     try {
-      const result = await run(kind, {
+      await run(kind, {
         ...options,
         ...(['verify', 'package', 'stress'].includes(kind)
           ? { execution_backend: 'zoj' }
           : {}),
       });
-      selectJob(result.id);
-      setJob(result);
-      await fetchRows();
     } catch (e) {
       if (e instanceof ApiError && e.code === 'judge_incompatible')
         setStartError({

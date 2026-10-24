@@ -30,6 +30,7 @@ export default function Tests() {
   const [groups, setGroups] = useState(false);
   const [busy, setBusy] = useState(false);
   const [autoApply, setAutoApply] = useState(false);
+  const [checkAllSets, setCheckAllSets] = useState(false);
   const [selection, setSelection] = useState<{
     name: string;
     indices: number[];
@@ -44,6 +45,22 @@ export default function Tests() {
     selection.name === selected
       ? selection.indices.filter((index) => availableIndices.has(index))
       : [];
+  async function checkTests() {
+    setBusy(true);
+    try {
+      await run('prepare', {
+        testset: selected,
+        all_testsets: checkAllSets,
+        prepare_mode: 'inputs',
+        auto_apply: false,
+        name: `전체 테스트 검사 · ${checkAllSets ? '모든 세트' : selected}`,
+      });
+    } catch (e) {
+      notify((e as Error).message, true);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function importFiles(files: File[]) {
     setBusy(true);
     try {
@@ -230,6 +247,34 @@ export default function Tests() {
               파일에 등록한 생성기를 사용하세요. 이 스크립트는 셸 명령이 아닌
               테스트 생성 규칙으로 처리합니다. repeat seed in 1..100 / end로
               반복하고 group 그룹명으로 생성할 그룹을 지정할 수 있습니다.
+            </p>
+            <div className="test-validation-toolbar">
+              <label>
+                검사 범위
+                <Select
+                  value={checkAllSets ? 'all' : 'current'}
+                  disabled={busy}
+                  onChange={(e) => setCheckAllSets(e.target.value === 'all')}
+                >
+                  <option value="current">현재 세트 · {selected}</option>
+                  {Object.keys(doc.testsets).length > 1 && (
+                    <option value="all">모든 테스트 세트</option>
+                  )}
+                </Select>
+              </label>
+              <button
+                className="button"
+                disabled={!can(data.problem, 'prepare') || busy}
+                onClick={() => void checkTests()}
+              >
+                <Icon name="play" />
+                전체 테스트 검사
+              </button>
+            </div>
+            <p className="muted small">
+              선택한 범위의 등록 입력과 스크립트 생성 입력을 Validator로
+              검사합니다. 정답 생성과 자동 반영 없이 실행하며, 검사한 입력은
+              실행 결과에서 확인할 수 있습니다.
             </p>
           </section>
           <section className="card no-padding">

@@ -10,7 +10,7 @@ import {
   lazy,
   Suspense,
 } from 'react';
-import { Link, useBlocker, useParams } from 'react-router-dom';
+import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { api, post, put, ApiError, jobLabels } from '../lib/api';
 import type {
   Job,
@@ -40,6 +40,7 @@ import Review from './workspace/Review';
 import Materials from './workspace/Materials';
 export default function ProblemWorkspace() {
   const { problemId = '', tab = 'overview' } = useParams();
+  const navigate = useNavigate();
   const [data, setData] = useState<WorkspaceData | null>(null);
   const [doc, setDoc] = useState<ProblemDocument | null>(null);
   const revisionHead = useRevisionUpdates(
@@ -58,6 +59,12 @@ export default function ProblemWorkspace() {
   const dirtyRef = useRef(false);
   const activeProblem = useRef(problemId);
   const [busy, setBusy] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const requestInFlight = useRef<{
+    problemId: string;
+    promise: Promise<Job>;
+  } | null>(null);
+  const pending = busy || requesting;
   const [message, setMessage] = useState('');
   const [messageAction, setMessageAction] = useState<NoticeAction | null>(null);
   const [isError, setIsError] = useState(false);
@@ -220,37 +227,47 @@ export default function ProblemWorkspace() {
     }
   }, [problemId, notify, data, doc]);
   const run = useCallback(
-    async (kind: JobKind, options: Record<string, unknown> = {}) => {
-      const committed =
-        options.snapshot === 'committed' ||
-        (data &&
-          (!canEdit(data.problem) ||
-            (kind === 'render' &&
-              !can(data.problem, 'edit_statements') &&
-              !can(data.problem, 'translate'))));
-      const version = committed ? data!.version : await save();
-      const result = await post<Job>(`/problems/${problemId}/jobs`, {
-        kind,
-        version,
-        ...(committed ? { revision: data!.problem.revision } : {}),
-        options: {
-          ...options,
-          ...(committed ? { snapshot: 'committed' } : {}),
-        },
-        reuse: false,
-      });
-      if (activeProblem.current === problemId)
-        notify(
-          `${jobLabels[kind]} 작업을 요청했습니다. 요청한 작업의 진행 상황과 결과를 확인하세요.`,
-          false,
-          {
-            label: kind === 'verify' ? '검증 결과로 이동' : '실행 결과로 이동',
-            to: executionResultPath(problemId, kind, result.id),
+    (kind: JobKind, options: Record<string, unknown> = {}) => {
+      if (requestInFlight.current?.problemId === problemId)
+        return requestInFlight.current.promise;
+      setRequesting(true);
+      const submission = (async () => {
+        const committed =
+          options.snapshot === 'committed' ||
+          (data &&
+            (!canEdit(data.problem) ||
+              (kind === 'render' &&
+                !can(data.problem, 'edit_statements') &&
+                !can(data.problem, 'translate'))));
+        const version = committed ? data!.version : await save();
+        const result = await post<Job>(`/problems/${problemId}/jobs`, {
+          kind,
+          version,
+          ...(committed ? { revision: data!.problem.revision } : {}),
+          options: {
+            ...options,
+            ...(committed ? { snapshot: 'committed' } : {}),
           },
-        );
-      return result;
+          reuse: false,
+        });
+        if (activeProblem.current === problemId) {
+          notify(
+            `${jobLabels[kind]} 요청을 접수했습니다. 아래에서 진행 상황과 결과를 확인하세요.`,
+          );
+          navigate(executionResultPath(problemId, result.id));
+        }
+        return result;
+      })();
+      const request = submission.finally(() => {
+        if (requestInFlight.current?.promise === request) {
+          requestInFlight.current = null;
+          setRequesting(false);
+        }
+      });
+      requestInFlight.current = { problemId, promise: request };
+      return request;
     },
-    [problemId, save, notify, data],
+    [problemId, save, notify, data, navigate],
   );
   async function openResolution() {
     try {
@@ -299,7 +316,7 @@ export default function ProblemWorkspace() {
             data,
             document: doc,
             dirty,
-            busy,
+            busy: pending,
             editable: tabEditable(data.problem, tab),
             mutate,
             save,
@@ -308,7 +325,7 @@ export default function ProblemWorkspace() {
             notify,
           }
         : null,
-    [data, doc, dirty, busy, mutate, save, reload, run, notify, tab],
+    [data, doc, dirty, pending, mutate, save, reload, run, notify, tab],
   );
   async function workingAction(
     action: string,
@@ -418,7 +435,7 @@ export default function ProblemWorkspace() {
           <div className="actions">
             <button
               className="button"
-              disabled={busy}
+              disabled={pending}
               onClick={() => void workingAction('update')}
             >
               <Icon name="download" />
@@ -428,7 +445,7 @@ export default function ProblemWorkspace() {
               <>
                 <button
                   className="button"
-                  disabled={busy || !dirty}
+                  disabled={pending || !dirty}
                   onClick={() => void save().catch(() => {})}
                 >
                   <Icon name="save" />
@@ -436,7 +453,7 @@ export default function ProblemWorkspace() {
                 </button>
                 <button
                   className="button primary"
-                  disabled={busy}
+                  disabled={pending}
                   onClick={() => {
                     setCommitPreview(null);
                     setPreviewError('');
@@ -456,7 +473,7 @@ export default function ProblemWorkspace() {
           baseRevision={displayedRevision}
           head={revisionHead}
           dirty={dirty}
-          busy={busy}
+          busy={pending}
           onUpdate={() => void workingAction('update')}
         />
         <div className="workspace-layout">
@@ -469,11 +486,18 @@ export default function ProblemWorkspace() {
             pendingPreparations={
               data.pending_preparations?.filter((r) => !r.stale).length ?? 0
             }
-            busy={busy}
+            busy={pending}
             onDiscard={() => setDiscardModal(true)}
           />
           <div className="workspace-main">
             <PreparationNotice onPendingChange={updatePreparations} />
+            {requesting && (
+              <Notice>
+                <span role="status">
+                  요청을 접수하고 있습니다. 접수되면 실행 결과로 이동합니다.
+                </span>
+              </Notice>
+            )}
             {message && (
               <Notice tone={isError ? 'error' : 'success'}>
                 {message}
@@ -514,7 +538,11 @@ export default function ProblemWorkspace() {
                 </button>
               </Notice>
             )}
-            <fieldset disabled={busy} className="workspace-content">
+            <fieldset
+              disabled={pending}
+              aria-busy={requesting}
+              className="workspace-content"
+            >
               <Suspense
                 fallback={
                   <div className="loading">화면을 불러오고 있습니다.</div>
