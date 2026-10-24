@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Modal } from '../../components/ui';
 import { useWorkspace } from '../../lib/workspace';
 import { bulkTests, type BulkAction } from '../../lib/bulkTests';
+import { executionCategories } from '../../lib/executionCategories';
 
 export default function BulkTests({
   setName,
@@ -55,7 +56,7 @@ export default function BulkTests({
         testset: setName,
         test_indices: indices,
         prepare_mode: mode,
-        name: `선택 ${indices.length}개 · ${mode}`,
+        name: `${executionCategories.find((category) => category.id === `prepare-${mode}`)?.label} · 선택 ${indices.length}개`,
       });
     } catch (e) {
       notify((e as Error).message, true);

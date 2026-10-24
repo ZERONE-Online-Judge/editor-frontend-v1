@@ -5,20 +5,20 @@ import Select from '../../components/Select';
 import Pagination, { PaginatedList } from '../../components/Pagination';
 import { useRemotePage } from '../../lib/useRemotePage';
 import { jobRelation, requesterName } from '../../lib/jobHistory';
+import {
+  executionCategories,
+  isExecutionCategory,
+  jobCategory,
+} from '../../lib/executionCategories';
 import JudgeCompatibilityNotice from './JudgeCompatibilityNotice';
 import { can, canEdit } from '../../lib/permissions';
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  executionResultPath,
-  matchesExecutionView,
-  type ExecutionView,
-} from '../../lib/executionNavigation';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import type { ExecutionView } from '../../lib/executionNavigation';
 import {
   api,
   ApiError,
   blobPreview,
-  jobLabels,
   post,
   statusLabels,
   time,
@@ -89,6 +89,17 @@ export default function Executions({
       : verification
         ? 'verify'
         : 'all';
+  const showResults = mode === 'all';
+  useEffect(() => {
+    if (!showResults && requestedJob)
+      navigate(
+        {
+          pathname: `/problems/${data.problem.id}/invocations`,
+          search: `?${search}`,
+        },
+        { replace: true },
+      );
+  }, [showResults, requestedJob, data.problem.id, search, navigate]);
   const historyPage = Math.max(
     1,
     Math.min(
@@ -101,13 +112,16 @@ export default function Executions({
   )
     ? searchParams.get('history_relation')!
     : 'all';
-  const chosenKind = searchParams.get('history_kind') || 'all';
-  const historyKind =
-    mode === 'all' && Object.hasOwn(jobLabels, chosenKind) ? chosenKind : mode;
+  const chosenKind =
+    searchParams.get('history_category') ||
+    searchParams.get('history_kind') ||
+    'all';
+  const historyKind = isExecutionCategory(chosenKind) ? chosenKind : 'all';
   const historyQuery = new URLSearchParams({
     page: String(historyPage),
     page_size: '20',
-    kind: historyKind,
+    kind: 'all',
+    category: historyKind,
     relation,
     current_hash: data.document_hash,
   });
@@ -122,22 +136,29 @@ export default function Executions({
     (values) =>
       values.filter(
         (row) =>
-          (historyKind === 'all' || row.kind === historyKind) &&
+          (historyKind === 'all' ||
+            jobCategory(row).id === historyKind ||
+            (historyKind === 'prepare' && row.kind === 'prepare')) &&
           (relation === 'all' ||
             (jobRelation(row, data.document_hash) === 'other') ===
               (relation === 'other')),
       ),
+    showResults,
   );
   const visible = history?.items || [];
   function changeHistory(key: string, value: string) {
     setSearchParams((previous) => {
       const next = new URLSearchParams(previous);
       next.set(key, value);
+      if (key === 'history_category') {
+        next.delete('history_kind');
+        next.delete('job');
+      }
       if (key !== 'history_page') next.delete('history_page');
       return next;
     });
   }
-  const selected = requestedJob || visible[0]?.id || '';
+  const selected = showResults ? requestedJob || visible[0]?.id || '' : '';
   // Pin the initial result so polling and page changes preserve the detail view.
   useEffect(() => {
     if (!requestedJob && selected)
@@ -221,7 +242,7 @@ export default function Executions({
     };
   }, [notify]);
   useEffect(() => {
-    if (!selected) return;
+    if (!showResults || !selected) return;
     let active = true;
     let timer: number | undefined;
     async function refresh() {
@@ -230,17 +251,6 @@ export default function Executions({
           `/problems/${data.problem.id}/jobs/${encodeURIComponent(selected)}`,
         );
         if (active) {
-          if (!matchesExecutionView(value.kind, mode)) {
-            const destination = executionResultPath(
-              data.problem.id,
-              value.id,
-            ).split('?')[0];
-            navigate(
-              { pathname: destination, search: `?${search}` },
-              { replace: true },
-            );
-            return;
-          }
           setJobError(null);
           setJob(value);
           if (
@@ -264,7 +274,7 @@ export default function Executions({
       active = false;
       if (timer) window.clearTimeout(timer);
     };
-  }, [selected, data.problem.id, notify, mode, navigate, search]);
+  }, [selected, data.problem.id, notify, mode, navigate, search, showResults]);
   async function start(
     kind: Job['kind'],
     options: Record<string, unknown> = {},
@@ -367,32 +377,47 @@ export default function Executions({
             : stress
               ? '생성기와 기준 풀이를 사용해 비교할 풀이의 유효한 반례를 찾습니다.'
               : verification
-                ? '풀이와 테스트 범위를 선택해 검증하고, 진행 상황과 저장된 검증 결과를 확인합니다.'
+                ? '풀이와 테스트 범위를 선택해 검증을 요청합니다. 진행 상황과 기록은 실행 결과에서 확인합니다.'
                 : '각 탭에서 요청한 작업의 진행 상황과 완료 결과를 확인합니다. 아래 작업 기록에서 확인할 실행을 선택하세요.'
         }
         actions={
-          packages && (
-            <button
-              className="button primary"
-              disabled={
-                !canPackage ||
-                busy ||
-                (exportFormat === 'zoj' && !packageSets.length)
-              }
-              onClick={() =>
-                void start('package', {
-                  testset: packageSets[0] || Object.keys(doc.testsets)[0],
-                  ...(exportFormat === 'zoj' ? { testsets: packageSets } : {}),
-                  verify: verifyPackage,
-                  export_format: exportFormat,
-                  statement_language: statementLanguage,
-                })
-              }
-            >
-              <Icon name="play" />
-              {verifyPackage ? '검증 후 패키지 생성' : '검증 없이 패키지 생성'}
-            </button>
-          )
+          <>
+            {!showResults && (
+              <Link
+                className="button"
+                to={`/problems/${data.problem.id}/invocations?history_category=${mode}`}
+              >
+                <Icon name="history" />
+                실행 결과에서 기록 보기
+              </Link>
+            )}
+            {packages && (
+              <button
+                className="button primary"
+                disabled={
+                  !canPackage ||
+                  busy ||
+                  (exportFormat === 'zoj' && !packageSets.length)
+                }
+                onClick={() =>
+                  void start('package', {
+                    testset: packageSets[0] || Object.keys(doc.testsets)[0],
+                    ...(exportFormat === 'zoj'
+                      ? { testsets: packageSets }
+                      : {}),
+                    verify: verifyPackage,
+                    export_format: exportFormat,
+                    statement_language: statementLanguage,
+                  })
+                }
+              >
+                <Icon name="play" />
+                {verifyPackage
+                  ? '검증 후 패키지 생성'
+                  : '검증 없이 패키지 생성'}
+              </button>
+            )}
+          </>
         }
       />
       {startError?.problemId === data.problem.id &&
@@ -402,7 +427,9 @@ export default function Executions({
             problemId={data.problem.id}
           />
         )}
-      <ExecutionLimitsInfo environment={environment} stress={stress} />
+      {!showResults && (
+        <ExecutionLimitsInfo environment={environment} stress={stress} />
+      )}
       {((packages && verifyPackage) || stress) && environmentPanel}
       {verification && (
         <section
@@ -520,854 +547,881 @@ export default function Executions({
               내보냅니다.
             </p>
           </div>
-          <ZojPublishing
-            problemId={data.problem.id}
-            editable={can(data.problem, 'publish')}
-            job={job}
-            stale={stale || dirty}
-          />
         </>
       ) : null}
-      <div className="execution-history-heading">
-        <Icon name="history" />
-        <div>
-          <h3>
-            {verification ? '검증 기록 · 결과 보기' : '작업 기록 · 결과 보기'}
-          </h3>
-          <p>기록을 선택하면 해당 작업의 진행 상황과 결과가 표시됩니다.</p>
-        </div>
-      </div>
-      <div className="history-filters">
-        <div
-          className="history-relations"
-          role="group"
-          aria-label="실행 자료 기준"
-        >
-          {(
-            [
-              ['all', '전체 기록'],
-              ['current', '현재 저장본'],
-              ['other', '다른 자료'],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              type="button"
-              key={value}
-              className={`button small ${relation === value ? 'primary' : ''}`}
-              aria-pressed={relation === value}
-              onClick={() => changeHistory('history_relation', value)}
-            >
-              {label}
-              {history?.counts ? ` ${history.counts[value]}` : ''}
-            </button>
-          ))}
-        </div>
-        {mode === 'all' && (
-          <label>
-            작업 종류
-            <Select
-              aria-label="기록 작업 종류"
-              value={historyKind}
-              onChange={(event) =>
-                changeHistory('history_kind', event.target.value)
-              }
-            >
-              <option value="all">모든 작업</option>
-              {Object.entries(jobLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </label>
-        )}
-      </div>
-      {dirty && (
-        <Notice>
-          저장하지 않은 변경이 있습니다. 자료 기준 표시는 마지막으로 저장한 작업
-          사본과 비교합니다.
-        </Notice>
-      )}
-      {historyError && (
-        <Notice tone="error">
-          기록을 불러오지 못했습니다. {historyError}
-          <button className="button small" onClick={() => void fetchRows()}>
-            다시 불러오기
-          </button>
-        </Notice>
-      )}
-      <section
-        className="execution-layout execution-history"
-        aria-label={verification ? '저장된 검증 기록' : '저장된 실행 기록'}
-      >
-        <section className="card execution-list no-padding">
-          <div className="card-heading">
-            <h3>
-              {verification ? '검증 기록' : '작업 기록'}{' '}
-              <span className="count">{history?.total ?? '…'}</span>
-            </h3>
+      {showResults && (
+        <>
+          <div className="execution-history-heading">
+            <Icon name="history" />
+            <div>
+              <h3>작업 기록 · 결과 보기</h3>
+              <p>기록을 선택하면 해당 작업의 진행 상황과 결과가 표시됩니다.</p>
+            </div>
           </div>
-          {history && (
-            <Pagination
-              {...history}
-              label={verification ? '검증 기록' : '작업 기록'}
-              onPageChange={(page) =>
-                changeHistory('history_page', String(page))
-              }
-            />
+          <div className="history-filters">
+            <div
+              className="history-relations"
+              role="group"
+              aria-label="실행 자료 기준"
+            >
+              {(
+                [
+                  ['all', '전체 기록'],
+                  ['current', '현재 저장본'],
+                  ['other', '다른 자료'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  type="button"
+                  key={value}
+                  className={`button small ${relation === value ? 'primary' : ''}`}
+                  aria-pressed={relation === value}
+                  onClick={() => changeHistory('history_relation', value)}
+                >
+                  {label}
+                  {history?.counts ? ` ${history.counts[value]}` : ''}
+                </button>
+              ))}
+            </div>
+            {mode === 'all' && (
+              <label>
+                작업 종류
+                <Select
+                  aria-label="기록 작업 종류"
+                  value={historyKind}
+                  onChange={(event) =>
+                    changeHistory('history_category', event.target.value)
+                  }
+                >
+                  {executionCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            )}
+          </div>
+          <p className="muted small" aria-live="polite">
+            {
+              executionCategories.find(
+                (category) => category.id === historyKind,
+              )?.description
+            }
+          </p>
+          {dirty && (
+            <Notice>
+              저장하지 않은 변경이 있습니다. 자료 기준 표시는 마지막으로 저장한
+              작업 사본과 비교합니다.
+            </Notice>
           )}
-          {visible.length ? (
-            visible.map((row) => (
-              <button
-                className={row.id === selected ? 'job-row selected' : 'job-row'}
-                key={row.id}
-                aria-pressed={row.id === selected}
-                onClick={() => selectJob(row.id)}
-              >
-                <div>
-                  <strong>
-                    {typeof row.options.name === 'string' && row.options.name
-                      ? row.options.name
-                      : isInputCheck(row)
-                        ? '입력 검사'
-                        : jobLabels[row.kind]}
-                  </strong>
-                  <Badge
-                    tone={
-                      jobRelation(row, data.document_hash) === 'other'
-                        ? 'warning'
-                        : 'accent'
+          {historyError && (
+            <Notice tone="error">
+              기록을 불러오지 못했습니다. {historyError}
+              <button className="button small" onClick={() => void fetchRows()}>
+                다시 불러오기
+              </button>
+            </Notice>
+          )}
+          <section
+            className="execution-layout execution-history"
+            aria-label={verification ? '저장된 검증 기록' : '저장된 실행 기록'}
+          >
+            <section className="card execution-list no-padding">
+              <div className="card-heading">
+                <h3>
+                  {verification ? '검증 기록' : '작업 기록'}{' '}
+                  <span className="count">{history?.total ?? '…'}</span>
+                </h3>
+              </div>
+              {history && (
+                <Pagination
+                  {...history}
+                  label={verification ? '검증 기록' : '작업 기록'}
+                  onPageChange={(page) =>
+                    changeHistory('history_page', String(page))
+                  }
+                />
+              )}
+              {visible.length ? (
+                visible.map((row) => (
+                  <button
+                    className={
+                      row.id === selected ? 'job-row selected' : 'job-row'
                     }
+                    key={row.id}
+                    aria-pressed={row.id === selected}
+                    onClick={() => selectJob(row.id)}
                   >
-                    {jobRelation(row, data.document_hash) === 'other'
-                      ? '다른 자료'
-                      : jobRelation(row, data.document_hash) === 'applied'
-                        ? '결과 반영본'
-                        : '현재 저장본'}
-                  </Badge>
-                  {row.kind === 'prepare' && row.status === 'completed' && (
+                    <div>
+                      <strong>{jobCategory(row).label}</strong>
+                      <Badge
+                        tone={
+                          jobRelation(row, data.document_hash) === 'other'
+                            ? 'warning'
+                            : 'accent'
+                        }
+                      >
+                        {jobRelation(row, data.document_hash) === 'other'
+                          ? '다른 자료'
+                          : jobRelation(row, data.document_hash) === 'applied'
+                            ? '결과 반영본'
+                            : '현재 저장본'}
+                      </Badge>
+                      {row.kind === 'prepare' && row.status === 'completed' && (
+                        <Badge
+                          tone={
+                            row.application
+                              ? 'success'
+                              : row.document_hash === data.document_hash
+                                ? 'warning'
+                                : 'neutral'
+                          }
+                        >
+                          {row.discarded_at
+                            ? '반영하지 않고 버림'
+                            : row.application
+                              ? '내 사본에 반영됨'
+                              : row.document_hash === data.document_hash
+                                ? '미반영'
+                                : '이전 자료'}
+                        </Badge>
+                      )}
+                      <Badge
+                        tone={
+                          row.status === 'failed'
+                            ? 'danger'
+                            : row.status === 'completed'
+                              ? 'success'
+                              : 'neutral'
+                        }
+                      >
+                        {statusLabels[row.status]}
+                      </Badge>
+                    </div>
+                    <div
+                      className="job-requester"
+                      title={
+                        row.requester ? `@${row.requester.handle}` : undefined
+                      }
+                    >
+                      <Icon name="users" size={14} />
+                      <span>{requesterName(row, user?.id)} 요청</span>
+                    </div>
+                    <small>
+                      r{row.revision} · {time(row.created_at)}
+                    </small>
+                    {typeof row.options.name === 'string' &&
+                      row.options.name && (
+                        <small>요청 이름: {row.options.name}</small>
+                      )}
+                    <span>{row.result.summary || '검증 워커 배정 대기'}</span>
+                    {row.kind === 'stress' && (
+                      <StressHistorySummary job={row} />
+                    )}
+                  </button>
+                ))
+              ) : !history && !historyError ? (
+                <p className="history-loading" role="status">
+                  기록을 불러오고 있습니다.
+                </p>
+              ) : (
+                <Empty
+                  icon="play"
+                  title={
+                    verification
+                      ? '검증 기록이 없습니다.'
+                      : '실행 기록이 없습니다.'
+                  }
+                  description={
+                    relation !== 'all' || historyKind !== 'all'
+                      ? '필터를 변경해 다른 기록을 확인하세요.'
+                      : '작업을 요청하면 여기에 기록됩니다.'
+                  }
+                />
+              )}
+              {history && (
+                <Pagination
+                  {...history}
+                  label={verification ? '검증 기록' : '작업 기록'}
+                  onPageChange={(page) =>
+                    changeHistory('history_page', String(page))
+                  }
+                />
+              )}
+            </section>
+            <section className="card execution-detail">
+              {job ? (
+                <>
+                  <div className="section-heading">
+                    <div>
+                      <h3>{jobCategory(job).label}</h3>
+                      <p>{jobCategory(job).description}</p>
+                      {typeof job.options.name === 'string' &&
+                        job.options.name && (
+                          <p>요청 이름: {job.options.name}</p>
+                        )}
+                      <p>
+                        {time(job.created_at)} · r{job.revision}
+                      </p>
+                    </div>
                     <Badge
                       tone={
-                        row.application
-                          ? 'success'
-                          : row.document_hash === data.document_hash
-                            ? 'warning'
-                            : 'neutral'
+                        job.status === 'failed'
+                          ? 'danger'
+                          : job.status === 'completed'
+                            ? 'success'
+                            : 'accent'
                       }
                     >
-                      {row.discarded_at
-                        ? '반영하지 않고 버림'
-                        : row.application
-                          ? '내 사본에 반영됨'
-                          : row.document_hash === data.document_hash
-                            ? '미반영'
-                            : '이전 자료'}
+                      {statusLabels[job.status]}
                     </Badge>
+                  </div>
+                  {validationFeedback && (
+                    <ValidationResults key={job.id} job={job} />
                   )}
-                  <Badge
-                    tone={
-                      row.status === 'failed'
-                        ? 'danger'
-                        : row.status === 'completed'
-                          ? 'success'
-                          : 'neutral'
-                    }
+                  <section
+                    className={`execution-source-summary ${sourceRelation === 'other' ? 'different' : 'matching'}`}
+                    aria-label="실행 자료와 요청자"
                   >
-                    {statusLabels[row.status]}
-                  </Badge>
-                </div>
-                <div
-                  className="job-requester"
-                  title={row.requester ? `@${row.requester.handle}` : undefined}
-                >
-                  <Icon name="users" size={14} />
-                  <span>{requesterName(row, user?.id)} 요청</span>
-                </div>
-                <small>
-                  {isInputCheck(row) ? '입력 검사' : jobLabels[row.kind]} · r
-                  {row.revision} · {time(row.created_at)}
-                </small>
-                <span>{row.result.summary || '검증 워커 배정 대기'}</span>
-                {row.kind === 'stress' && <StressHistorySummary job={row} />}
-              </button>
-            ))
-          ) : !history && !historyError ? (
-            <p className="history-loading" role="status">
-              기록을 불러오고 있습니다.
-            </p>
-          ) : (
-            <Empty
-              icon="play"
-              title={
-                verification ? '검증 기록이 없습니다.' : '실행 기록이 없습니다.'
-              }
-              description={
-                relation !== 'all' || historyKind !== 'all'
-                  ? '필터를 변경해 다른 기록을 확인하세요.'
-                  : '작업을 요청하면 여기에 기록됩니다.'
-              }
-            />
-          )}
-          {history && (
-            <Pagination
-              {...history}
-              label={verification ? '검증 기록' : '작업 기록'}
-              onPageChange={(page) =>
-                changeHistory('history_page', String(page))
-              }
-            />
-          )}
-        </section>
-        <section className="card execution-detail">
-          {job ? (
-            <>
-              <div className="section-heading">
-                <div>
-                  <h3>
-                    {typeof job.options.name === 'string' && job.options.name
-                      ? job.options.name
-                      : isInputCheck(job)
-                        ? '입력 검사'
-                        : jobLabels[job.kind]}
-                  </h3>
-                  <p>
-                    {time(job.created_at)} · r{job.revision}
-                  </p>
-                </div>
-                <Badge
-                  tone={
-                    job.status === 'failed'
-                      ? 'danger'
-                      : job.status === 'completed'
-                        ? 'success'
-                        : 'accent'
-                  }
-                >
-                  {statusLabels[job.status]}
-                </Badge>
-              </div>
-              {validationFeedback && (
-                <ValidationResults key={job.id} job={job} />
-              )}
-              <section
-                className={`execution-source-summary ${sourceRelation === 'other' ? 'different' : 'matching'}`}
-                aria-label="실행 자료와 요청자"
-              >
-                <div className="execution-source-heading">
-                  <Icon
-                    name={sourceRelation === 'other' ? 'branch' : 'check'}
-                  />
-                  <div>
-                    <strong>
-                      {sourceRelation === 'other'
-                        ? '현재 작업 사본과 다른 자료'
-                        : sourceRelation === 'applied'
-                          ? '이 작업의 결과가 현재 저장본에 반영됨'
-                          : '현재 저장본과 같은 자료'}
-                    </strong>
-                    <p>
-                      {sourceRelation === 'other'
-                        ? '이 결과는 요청 당시 자료에 해당합니다. 현재 자료의 검증 결과로 사용할 수 없습니다.'
-                        : sourceRelation === 'applied'
-                          ? '실행 당시 원본과 결과를 반영한 저장본을 구분해 보관합니다.'
-                          : '마지막으로 저장한 작업 사본을 기준으로 실행한 기록입니다.'}
-                    </p>
-                  </div>
-                </div>
-                <dl>
-                  <div>
-                    <dt>요청자</dt>
-                    <dd
-                      title={
-                        job.requester ? `@${job.requester.handle}` : undefined
-                      }
-                    >
-                      {requesterName(job, user?.id)}
-                      {job.requester && <small>@{job.requester.handle}</small>}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>작업</dt>
-                    <dd>
-                      {isInputCheck(job) ? '입력 검사' : jobLabels[job.kind]}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>자료 기준</dt>
-                    <dd>
-                      {job.options.snapshot === 'committed'
-                        ? `커밋 r${job.revision}`
-                        : `요청 당시 작업 사본 · r${job.revision}`}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>요청 시각</dt>
-                    <dd>{time(job.created_at)}</dd>
-                  </div>
-                </dl>
-              </section>
-              <p className="muted small">
-                {job.result.runtime?.backend === 'archive'
-                  ? '저장된 자료로 ZIP 생성 · 코드 실행 없음'
-                  : '저장된 검증 환경 · '}
-                {job.result.runtime?.backend === 'archive'
-                  ? ''
-                  : (job.result.runtime?.backend ??
-                        job.options.execution_backend) === 'zoj'
-                    ? 'ZOJ 실제 채점기'
-                    : job.result.runtime?.backend === 'agent' ||
-                        job.options.execution_transport === 'agent'
-                      ? 'ZOJ 에이전트 · 제작 작업'
-                      : '이전 Editor 실행 기록'}
-              </p>
-              <p className="muted small">
-                자료 기준:{' '}
-                {job.options.snapshot === 'committed'
-                  ? `커밋된 리비전 r${job.revision}`
-                  : '요청 당시 작업 사본'}
-              </p>
-              {scope && (
-                <p className="muted small">
-                  요청 범위:{' '}
-                  {scope.all_testsets
-                    ? `전체 세트 (${scope.testsets?.join(', ') || scope.testset})`
-                    : scope.testsets && scope.testsets.length > 1
-                      ? `선택 세트 (${scope.testsets.join(', ')})`
-                      : scope.testset}{' '}
-                  · 풀이 {scope.solutions.length}개 · 테스트 {scope.test_count}
-                  개
-                  {scope.test_indices.length
-                    ? ` (#${scope.test_indices.join(', #')})`
-                    : scope.testsets && scope.testsets.length > 1
-                      ? ' (선택 세트의 전체 테스트)'
-                      : scope.all_testsets
-                        ? ' (모든 세트 전체)'
-                        : ' (세트 전체)'}
-                </p>
-              )}
-              {typeof job.options.note === 'string' && job.options.note && (
-                <p
-                  className="notice neutral"
-                  style={{ whiteSpace: 'pre-wrap' }}
-                >
-                  {job.options.note}
-                </p>
-              )}
-              {job.kind === 'stress' && <StressRunConditions job={job} />}
-              <VerificationProgress job={job} />
-              {job.status !== 'queued' &&
-                job.status !== 'running' &&
-                job.result.summary && (
-                  <p className="execution-result-summary">
-                    {job.result.summary}
-                  </p>
-                )}
-              {job.result.processed_testsets?.length ? (
-                <p className="muted small">
-                  실제 처리한 테스트 세트:{' '}
-                  {job.result.processed_testsets.join(', ')}
-                </p>
-              ) : null}
-              {job.result.execution_runs?.length ? (
-                <details className="notice neutral agent-execution-log">
-                  <summary>
-                    에이전트 실행 기록 · {job.result.execution_runs.length}회
-                  </summary>
-                  <p className="muted small">
-                    컴파일·생성·검증·PDF 실행을 담당한 실제 노드와 실행 자원을
-                    확인합니다.
-                  </p>
-                  <PaginatedList
-                    items={job.result.execution_runs}
-                    resetKey={job.id}
-                    label="에이전트 실행 기록"
-                  >
-                    {(runs) => (
-                      <div
-                        className="table-scroll"
-                        role="region"
-                        aria-label="에이전트 실행 기록 표"
-                        tabIndex={0}
-                      >
-                        <table className="data-table">
-                          <thead>
-                            <tr>
-                              <th>채점 노드</th>
-                              <th>환경</th>
-                              <th>실행 결과</th>
-                              <th>CPU 시간</th>
-                              <th>메모리</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {runs.map((run) => (
-                              <tr key={run.task_id}>
-                                <td>
-                                  <span
-                                    className="agent-execution-node"
-                                    title={run.node_name || '채점 노드'}
-                                  >
-                                    {run.node_name || '채점 노드'}
-                                  </span>
-                                </td>
-                                <td>
-                                  {run.runtime === 'renderer'
-                                    ? 'PDF 렌더링'
-                                    : run.runtime === 'reference'
-                                      ? 'Main 정답 생성 · ZOJ 채점기'
-                                      : '제작용 실행'}
-                                </td>
-                                <td>
-                                  {{
-                                    ok: '실행 완료',
-                                    'time-limit': '시간 초과',
-                                    'memory-limit': '메모리 초과',
-                                    'output-limit': '출력 초과',
-                                    'wall-limit': '실행 응답 시간 초과',
-                                  }[run.status] || run.status}
-                                </td>
-                                <td>
-                                  {run.cpu_ms == null
-                                    ? '미제공'
-                                    : `${run.cpu_ms}ms`}
-                                </td>
-                                <td>
-                                  {run.memory_kb == null
-                                    ? '미제공'
-                                    : `${(run.memory_kb / 1024).toFixed(1)}MiB`}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </PaginatedList>
-                </details>
-              ) : null}
-              {dirty && (
-                <div className="muted small">
-                  저장하지 않은 변경은 이 실행 기록에 포함되지 않습니다.
-                </div>
-              )}
-              {(job.status === 'queued' || job.status === 'running') && (
-                <div className="run-progress">
-                  <span className="spinner" />
-                  <strong>
-                    {job.result.summary || '실행 자리를 기다리고 있습니다.'}
-                  </strong>
-                  {(draft || job.requested_by === user?.id) &&
-                    can(
-                      data.problem,
-                      job.kind === 'package'
-                        ? 'package'
-                        : job.kind === 'prepare'
-                          ? 'prepare'
-                          : job.kind === 'render'
-                            ? 'render'
-                            : 'execute',
-                    ) && (
-                      <button
-                        className="text-button"
-                        onClick={() =>
-                          void post(
-                            `/problems/${data.problem.id}/jobs/${job.id}/cancel`,
-                          )
-                            .then(fetchRows)
-                            .catch((e) => notify(e.message, true))
-                        }
-                      >
-                        작업 취소
-                      </button>
-                    )}
-                </div>
-              )}
-              {job.result.error && !validationFeedback && (
-                <Notice tone="error">
-                  {job.result.error_code ? (
-                    <div className="execution-error-message">
-                      <strong>
-                        {['invalid_script', 'invalid_script_group'].includes(
-                          job.result.error_code,
-                        )
-                          ? '생성 스크립트를 확인해 주세요.'
-                          : '작업을 진행할 수 없습니다.'}
-                      </strong>
-                      <p>{job.result.error}</p>
-                    </div>
-                  ) : (
-                    <CodeEditor
-                      readOnly
-                      rows={6}
-                      label="실행 오류"
-                      value={job.result.error}
-                    />
-                  )}
-                </Notice>
-              )}
-              {job.result.verified !== undefined && !validationFeedback && (
-                <div
-                  className={`verification-summary ${job.kind === 'package' && job.options.verify === false ? '' : job.result.verified ? 'passed' : 'mismatch'}`}
-                >
-                  <Icon name={job.result.verified ? 'check' : 'issue'} />
-                  <div>
-                    <strong>
-                      {job.kind === 'package' && job.options.verify === false
-                        ? '검증 없이 생성한 패키지입니다.'
-                        : job.result.verified
-                          ? '기대 판정과 일치합니다.'
-                          : '기대 판정 또는 자체 테스트 확인이 필요합니다.'}
-                    </strong>
-                    <p>
-                      {job.kind === 'package' && job.options.verify === false
-                        ? '저장된 자료를 내보냈습니다. 대회 사용 전 검증을 권장합니다.'
-                        : job.result.mismatches?.length
-                          ? job.result.mismatches.join(', ')
-                          : '아래 실제 실행 범위와 판정을 확인하세요.'}
-                    </p>
-                  </div>
-                </div>
-              )}
-              {job.kind === 'prepare' && job.status === 'completed' && (
-                <div className="result-action">
-                  <span>
-                    {Object.values(job.result.testsets || {}).reduce(
-                      (n, t) => n + t.length,
-                      0,
-                    )}
-                    {isInputCheck(job)
-                      ? '개 입력 검사 완료'
-                      : '개 입력·정답 생성 완료'}
-                    {job.application && (
-                      <small className="block">
-                        내 작업 사본에 반영됨 ·{' '}
-                        {time(job.application.applied_at)} · 작업 사본 v
-                        {job.application.workspace_version}
-                      </small>
-                    )}
-                  </span>
-                  {job.discarded_at && (
-                    <small>반영하지 않고 버림 · {time(job.discarded_at)}</small>
-                  )}
-                  {!job.application && !job.discarded_at && (
-                    <div className="actions">
-                      <button
-                        className="button"
-                        disabled={!canApply || deciding}
-                        onClick={() => void discardGenerated()}
-                      >
-                        반영하지 않고 버리기
-                      </button>
-                      <button
-                        className="button primary"
-                        disabled={!canApply || stale || dirty || deciding}
-                        onClick={() => void apply()}
-                      >
-                        작업 사본에 반영
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-              {job.result.auto_apply?.status === 'blocked' && (
-                <Notice>
-                  {job.result.auto_apply.message ||
-                    '자동 반영되지 않았습니다. 실행 당시 자료와 작업 사본을 확인하세요.'}
-                </Notice>
-              )}
-              {job.kind === 'prepare' && (
-                <GeneratedTestResults
-                  key={job.id}
-                  job={job}
-                  problemId={data.problem.id}
-                />
-              )}
-              {job.kind === 'stress' && (
-                <StressTestResults
-                  job={job}
-                  onSelect={(row, name) =>
-                    setCaseResult({ ...row, solution_name: name })
-                  }
-                />
-              )}
-              <TestVerdictMatrix job={job} />
-              <PaginatedList
-                items={job.result.solutions || []}
-                resetKey={job.id}
-                label="풀이 검증 결과"
-              >
-                {(solutions) =>
-                  solutions.map((solution) => (
-                    <SolutionResultPanel
-                      key={`${job.id}/${solution.name}`}
-                      solution={solution}
-                      jobStatus={job.status}
-                    >
-                      {solution.expectations?.length ? (
-                        <div className="table-scroll">
-                          <table className="data-table">
-                            <thead>
-                              <tr>
-                                <th>기대 판정 범위</th>
-                                <th>기대</th>
-                                <th>실행 / 전체</th>
-                                <th>관측</th>
-                                <th>검증</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {solution.expectations.map((scope) => (
-                                <tr
-                                  key={`${scope.origin}/${scope.testset}/${scope.group}`}
-                                >
-                                  <td>
-                                    <ExpectationScopeLabel scope={scope} />
-                                  </td>
-                                  <td>{scope.tag}</td>
-                                  <td>
-                                    {scope.tested} / {scope.total}
-                                  </td>
-                                  <td>
-                                    {scope.verdicts.join(' · ') || '미실행'}
-                                  </td>
-                                  <td>
-                                    {scope.skipped
-                                      ? '실행 제외'
-                                      : scope.matched === false
-                                        ? '불일치'
-                                        : !scope.complete
-                                          ? '부분 실행 · 미확인'
-                                          : '일치'}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : null}
-                      {solution.total_score != null && (
-                        <p>점수 {solution.total_score.toLocaleString()}</p>
-                      )}
-                      {solution.score_scope_complete === false && (
-                        <p className="muted small">
-                          일부 테스트만 실행했으므로 세트 전체 점수는 계산하지
-                          않았습니다.
+                    <div className="execution-source-heading">
+                      <Icon
+                        name={sourceRelation === 'other' ? 'branch' : 'check'}
+                      />
+                      <div>
+                        <strong>
+                          {sourceRelation === 'other'
+                            ? '현재 작업 사본과 다른 자료'
+                            : sourceRelation === 'applied'
+                              ? '이 작업의 결과가 현재 저장본에 반영됨'
+                              : '현재 저장본과 같은 자료'}
+                        </strong>
+                        <p>
+                          {sourceRelation === 'other'
+                            ? '이 결과는 요청 당시 자료에 해당합니다. 현재 자료의 검증 결과로 사용할 수 없습니다.'
+                            : sourceRelation === 'applied'
+                              ? '실행 당시 원본과 결과를 반영한 저장본을 구분해 보관합니다.'
+                              : '마지막으로 저장한 작업 사본을 기준으로 실행한 기록입니다.'}
                         </p>
-                      )}
-                      <SolutionJudgeSummary solution={solution} />
-                      {solution.groups?.length ? (
-                        <div className="inline-tags">
-                          {solution.groups.map((g) => (
-                            <Badge
-                              key={`${g.testset}-${g.name}`}
-                              tone={g.passed ? 'success' : 'warning'}
-                            >
-                              {g.name} · {g.score}점
-                              {g.blocked
-                                ? ' · 의존 그룹 미통과'
-                                : !g.complete
-                                  ? ' · 전체 실행 필요'
-                                  : ''}
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : null}
-                      <div className="solution-testsets">
-                        {[
-                          ...new Set(solution.cases.map((row) => row.testset)),
-                        ].map((setName) => (
-                          <section
-                            key={setName}
-                            className="solution-testset-cases"
-                            aria-label={`${setName} 테스트 결과`}
-                          >
-                            {(scope?.all_testsets ||
-                              new Set(solution.cases.map((row) => row.testset))
-                                .size > 1) && (
-                              <h4 className="muted small">{setName}</h4>
-                            )}
-                            <CaseResultGrid
-                              key={`${job.id}/${solution.name}/${setName}`}
-                              cases={solution.cases.filter(
-                                (row) => row.testset === setName,
-                              )}
-                              solutionName={solution.name}
-                              onSelect={(row) =>
-                                setCaseResult({
-                                  ...row,
-                                  solution_name: solution.name,
-                                })
-                              }
-                            />
-                          </section>
-                        ))}
                       </div>
-                      {solution.skipped && (
-                        <p className="muted">NR 태그로 실행하지 않았습니다.</p>
-                      )}
-                    </SolutionResultPanel>
-                  ))
-                }
-              </PaginatedList>
-              {!validationFeedback && job.result.unit_tests?.length ? (
-                <ValidationResults key={job.id} job={job} />
-              ) : null}
-              {job.kind === 'stress' && (
-                <StressCounterexamples
-                  job={job}
-                  problemId={data.problem.id}
-                  testsets={Object.keys(doc.testsets)}
-                  testsetGroups={Object.fromEntries(
-                    Object.entries(doc.testsets).map(([name, set]) => [
-                      name,
-                      set.groups_enabled ? Object.keys(set.groups) : [],
-                    ]),
-                  )}
-                  advanced={Boolean(environment?.limits?.stress_patterns)}
-                  retryBusy={busy}
-                  retryUncovered={
-                    canInvoke && environment?.limits?.stress_patterns
-                      ? (names) => {
-                          try {
-                            const options = retryStressOptions(job, names);
-                            if (
-                              names.some((name) => !doc.solutions[name]) ||
-                              (typeof options.reference === 'string' &&
-                                options.reference &&
-                                !doc.solutions[options.reference])
-                            )
-                              throw new Error(
-                                '현재 문제에서 사라진 풀이가 있습니다. 실행 조건을 새로 선택하세요.',
-                              );
-                            void start('stress', options);
-                          } catch (error) {
-                            notify((error as Error).message, true);
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>요청자</dt>
+                        <dd
+                          title={
+                            job.requester
+                              ? `@${job.requester.handle}`
+                              : undefined
                           }
-                        }
-                      : undefined
-                  }
-                  allowed={
-                    canApply &&
-                    !dirty &&
-                    (!stale ||
-                      job.application?.document_hash === data.document_hash)
-                  }
-                  save={save}
-                  applied={async () => {
-                    await reload(true);
-                    setJob(
-                      await api<Job>(
-                        `/problems/${data.problem.id}/jobs/${job.id}`,
-                      ),
-                    );
-                    await fetchRows();
-                  }}
-                  evidence={(example, finding) => (
-                    <CodeEvidence
+                        >
+                          {requesterName(job, user?.id)}
+                          {job.requester && (
+                            <small>@{job.requester.handle}</small>
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>작업</dt>
+                        <dd>{jobCategory(job).label}</dd>
+                      </div>
+                      <div>
+                        <dt>자료 기준</dt>
+                        <dd>
+                          {job.options.snapshot === 'committed'
+                            ? `커밋 r${job.revision}`
+                            : `요청 당시 작업 사본 · r${job.revision}`}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>요청 시각</dt>
+                        <dd>{time(job.created_at)}</dd>
+                      </div>
+                    </dl>
+                  </section>
+                  <p className="muted small">
+                    {job.result.runtime?.backend === 'archive'
+                      ? '저장된 자료로 ZIP 생성 · 코드 실행 없음'
+                      : '저장된 검증 환경 · '}
+                    {job.result.runtime?.backend === 'archive'
+                      ? ''
+                      : (job.result.runtime?.backend ??
+                            job.options.execution_backend) === 'zoj'
+                        ? 'ZOJ 실제 채점기'
+                        : job.result.runtime?.backend === 'agent' ||
+                            job.options.execution_transport === 'agent'
+                          ? 'ZOJ 에이전트 · 제작 작업'
+                          : '이전 Editor 실행 기록'}
+                  </p>
+                  <p className="muted small">
+                    자료 기준:{' '}
+                    {job.options.snapshot === 'committed'
+                      ? `커밋된 리비전 r${job.revision}`
+                      : '요청 당시 작업 사본'}
+                  </p>
+                  {scope && (
+                    <p className="muted small">
+                      요청 범위:{' '}
+                      {scope.all_testsets
+                        ? `전체 세트 (${scope.testsets?.join(', ') || scope.testset})`
+                        : scope.testsets && scope.testsets.length > 1
+                          ? `선택 세트 (${scope.testsets.join(', ')})`
+                          : scope.testset}{' '}
+                      · 풀이 {scope.solutions.length}개 · 테스트{' '}
+                      {scope.test_count}개
+                      {scope.test_indices.length
+                        ? ` (#${scope.test_indices.join(', #')})`
+                        : scope.testsets && scope.testsets.length > 1
+                          ? ' (선택 세트의 전체 테스트)'
+                          : scope.all_testsets
+                            ? ' (모든 세트 전체)'
+                            : ' (세트 전체)'}
+                    </p>
+                  )}
+                  {typeof job.options.note === 'string' && job.options.note && (
+                    <p
+                      className="notice neutral"
+                      style={{ whiteSpace: 'pre-wrap' }}
+                    >
+                      {job.options.note}
+                    </p>
+                  )}
+                  {job.kind === 'stress' && <StressRunConditions job={job} />}
+                  <VerificationProgress job={job} />
+                  {job.status !== 'queued' &&
+                    job.status !== 'running' &&
+                    job.result.summary && (
+                      <p className="execution-result-summary">
+                        {job.result.summary}
+                      </p>
+                    )}
+                  {job.result.processed_testsets?.length ? (
+                    <p className="muted small">
+                      실제 처리한 테스트 세트:{' '}
+                      {job.result.processed_testsets.join(', ')}
+                    </p>
+                  ) : null}
+                  {job.result.execution_runs?.length ? (
+                    <details className="notice neutral agent-execution-log">
+                      <summary>
+                        에이전트 실행 기록 · {job.result.execution_runs.length}
+                        회
+                      </summary>
+                      <p className="muted small">
+                        컴파일·생성·검증·PDF 실행을 담당한 실제 노드와 실행
+                        자원을 확인합니다.
+                      </p>
+                      <PaginatedList
+                        items={job.result.execution_runs}
+                        resetKey={job.id}
+                        label="에이전트 실행 기록"
+                      >
+                        {(runs) => (
+                          <div
+                            className="table-scroll"
+                            role="region"
+                            aria-label="에이전트 실행 기록 표"
+                            tabIndex={0}
+                          >
+                            <table className="data-table">
+                              <thead>
+                                <tr>
+                                  <th>채점 노드</th>
+                                  <th>환경</th>
+                                  <th>실행 결과</th>
+                                  <th>CPU 시간</th>
+                                  <th>메모리</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {runs.map((run) => (
+                                  <tr key={run.task_id}>
+                                    <td>
+                                      <span
+                                        className="agent-execution-node"
+                                        title={run.node_name || '채점 노드'}
+                                      >
+                                        {run.node_name || '채점 노드'}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      {run.runtime === 'renderer'
+                                        ? 'PDF 렌더링'
+                                        : run.runtime === 'reference'
+                                          ? 'Main 정답 생성 · ZOJ 채점기'
+                                          : '제작용 실행'}
+                                    </td>
+                                    <td>
+                                      {{
+                                        ok: '실행 완료',
+                                        'time-limit': '시간 초과',
+                                        'memory-limit': '메모리 초과',
+                                        'output-limit': '출력 초과',
+                                        'wall-limit': '실행 응답 시간 초과',
+                                      }[run.status] || run.status}
+                                    </td>
+                                    <td>
+                                      {run.cpu_ms == null
+                                        ? '미제공'
+                                        : `${run.cpu_ms}ms`}
+                                    </td>
+                                    <td>
+                                      {run.memory_kb == null
+                                        ? '미제공'
+                                        : `${(run.memory_kb / 1024).toFixed(1)}MiB`}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </PaginatedList>
+                    </details>
+                  ) : null}
+                  {dirty && (
+                    <div className="muted small">
+                      저장하지 않은 변경은 이 실행 기록에 포함되지 않습니다.
+                    </div>
+                  )}
+                  {(job.status === 'queued' || job.status === 'running') && (
+                    <div className="run-progress">
+                      <span className="spinner" />
+                      <strong>
+                        {job.result.summary || '실행 자리를 기다리고 있습니다.'}
+                      </strong>
+                      {(draft || job.requested_by === user?.id) &&
+                        can(
+                          data.problem,
+                          job.kind === 'package'
+                            ? 'package'
+                            : job.kind === 'prepare'
+                              ? 'prepare'
+                              : job.kind === 'render'
+                                ? 'render'
+                                : 'execute',
+                        ) && (
+                          <button
+                            className="text-button"
+                            onClick={() =>
+                              void post(
+                                `/problems/${data.problem.id}/jobs/${job.id}/cancel`,
+                              )
+                                .then(fetchRows)
+                                .catch((e) => notify(e.message, true))
+                            }
+                          >
+                            작업 취소
+                          </button>
+                        )}
+                    </div>
+                  )}
+                  {job.result.error && !validationFeedback && (
+                    <Notice tone="error">
+                      {job.result.error_code ? (
+                        <div className="execution-error-message">
+                          <strong>
+                            {[
+                              'invalid_script',
+                              'invalid_script_group',
+                            ].includes(job.result.error_code)
+                              ? '생성 스크립트를 확인해 주세요.'
+                              : '작업을 진행할 수 없습니다.'}
+                          </strong>
+                          <p>{job.result.error}</p>
+                        </div>
+                      ) : (
+                        <CodeEditor
+                          readOnly
+                          rows={6}
+                          label="실행 오류"
+                          value={job.result.error}
+                        />
+                      )}
+                    </Notice>
+                  )}
+                  {job.result.verified !== undefined && !validationFeedback && (
+                    <div
+                      className={`verification-summary ${job.kind === 'package' && job.options.verify === false ? '' : job.result.verified ? 'passed' : 'mismatch'}`}
+                    >
+                      <Icon name={job.result.verified ? 'check' : 'issue'} />
+                      <div>
+                        <strong>
+                          {job.kind === 'package' &&
+                          job.options.verify === false
+                            ? '검증 없이 생성한 패키지입니다.'
+                            : job.result.verified
+                              ? '기대 판정과 일치합니다.'
+                              : '기대 판정 또는 자체 테스트 확인이 필요합니다.'}
+                        </strong>
+                        <p>
+                          {job.kind === 'package' &&
+                          job.options.verify === false
+                            ? '저장된 자료를 내보냈습니다. 대회 사용 전 검증을 권장합니다.'
+                            : job.result.mismatches?.length
+                              ? job.result.mismatches.join(', ')
+                              : '아래 실제 실행 범위와 판정을 확인하세요.'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {job.kind === 'prepare' && job.status === 'completed' && (
+                    <div className="result-action">
+                      <span>
+                        {Object.values(job.result.testsets || {}).reduce(
+                          (n, t) => n + t.length,
+                          0,
+                        )}
+                        {isInputCheck(job)
+                          ? '개 입력 검사 완료'
+                          : '개 입력·정답 생성 완료'}
+                        {job.application && (
+                          <small className="block">
+                            내 작업 사본에 반영됨 ·{' '}
+                            {time(job.application.applied_at)} · 작업 사본 v
+                            {job.application.workspace_version}
+                          </small>
+                        )}
+                      </span>
+                      {job.discarded_at && (
+                        <small>
+                          반영하지 않고 버림 · {time(job.discarded_at)}
+                        </small>
+                      )}
+                      {!job.application && !job.discarded_at && (
+                        <div className="actions">
+                          <button
+                            className="button"
+                            disabled={!canApply || deciding}
+                            onClick={() => void discardGenerated()}
+                          >
+                            반영하지 않고 버리기
+                          </button>
+                          <button
+                            className="button primary"
+                            disabled={!canApply || stale || dirty || deciding}
+                            onClick={() => void apply()}
+                          >
+                            작업 사본에 반영
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {job.result.auto_apply?.status === 'blocked' && (
+                    <Notice>
+                      {job.result.auto_apply.message ||
+                        '자동 반영되지 않았습니다. 실행 당시 자료와 작업 사본을 확인하세요.'}
+                    </Notice>
+                  )}
+                  {job.kind === 'prepare' && (
+                    <GeneratedTestResults
+                      key={job.id}
+                      job={job}
                       problemId={data.problem.id}
-                      input={example.input_sha}
-                      answer={example.answer_sha}
-                      actual={finding.actual_sha}
-                      outputTruncated={finding.output_truncated}
-                      outputTotalBytes={finding.output_total_bytes}
                     />
                   )}
-                />
-              )}
-              {job.result.package && job.status === 'completed' && (
-                <div className="package-download">
-                  <Icon name="box" size={34} />
-                  <div>
-                    <strong>{job.result.package.filename}</strong>
-                    <p>
-                      {bytes(job.result.package.size)} ·{' '}
-                      {job.result.package.verified ? '검증된' : '미검증'} 리비전
-                      r{job.revision}
-                    </p>
-                  </div>
-                  <a
-                    className="button primary"
-                    href={`/api/problems/${data.problem.id}/packages/${job.id}`}
-                    download
+                  {job.kind === 'stress' && (
+                    <StressTestResults
+                      job={job}
+                      onSelect={(row, name) =>
+                        setCaseResult({ ...row, solution_name: name })
+                      }
+                    />
+                  )}
+                  <TestVerdictMatrix job={job} />
+                  <PaginatedList
+                    items={job.result.solutions || []}
+                    resetKey={job.id}
+                    label="풀이 검증 결과"
                   >
-                    <Icon name="download" />
-                    ZIP 다운로드
-                  </a>
-                </div>
-              )}
-              {job.result.statements &&
-                Object.entries(job.result.statements).map(
-                  ([language, result]) => (
-                    <div className="render-row" key={language}>
-                      <strong>{language}</strong>
+                    {(solutions) =>
+                      solutions.map((solution) => (
+                        <SolutionResultPanel
+                          key={`${job.id}/${solution.name}`}
+                          solution={solution}
+                          jobStatus={job.status}
+                        >
+                          {solution.expectations?.length ? (
+                            <div className="table-scroll">
+                              <table className="data-table">
+                                <thead>
+                                  <tr>
+                                    <th>기대 판정 범위</th>
+                                    <th>기대</th>
+                                    <th>실행 / 전체</th>
+                                    <th>관측</th>
+                                    <th>검증</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {solution.expectations.map((scope) => (
+                                    <tr
+                                      key={`${scope.origin}/${scope.testset}/${scope.group}`}
+                                    >
+                                      <td>
+                                        <ExpectationScopeLabel scope={scope} />
+                                      </td>
+                                      <td>{scope.tag}</td>
+                                      <td>
+                                        {scope.tested} / {scope.total}
+                                      </td>
+                                      <td>
+                                        {scope.verdicts.join(' · ') || '미실행'}
+                                      </td>
+                                      <td>
+                                        {scope.skipped
+                                          ? '실행 제외'
+                                          : scope.matched === false
+                                            ? '불일치'
+                                            : !scope.complete
+                                              ? '부분 실행 · 미확인'
+                                              : '일치'}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : null}
+                          {solution.total_score != null && (
+                            <p>점수 {solution.total_score.toLocaleString()}</p>
+                          )}
+                          {solution.score_scope_complete === false && (
+                            <p className="muted small">
+                              일부 테스트만 실행했으므로 세트 전체 점수는
+                              계산하지 않았습니다.
+                            </p>
+                          )}
+                          <SolutionJudgeSummary solution={solution} />
+                          {solution.groups?.length ? (
+                            <div className="inline-tags">
+                              {solution.groups.map((g) => (
+                                <Badge
+                                  key={`${g.testset}-${g.name}`}
+                                  tone={g.passed ? 'success' : 'warning'}
+                                >
+                                  {g.name} · {g.score}점
+                                  {g.blocked
+                                    ? ' · 의존 그룹 미통과'
+                                    : !g.complete
+                                      ? ' · 전체 실행 필요'
+                                      : ''}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : null}
+                          <div className="solution-testsets">
+                            {[
+                              ...new Set(
+                                solution.cases.map((row) => row.testset),
+                              ),
+                            ].map((setName) => (
+                              <section
+                                key={setName}
+                                className="solution-testset-cases"
+                                aria-label={`${setName} 테스트 결과`}
+                              >
+                                {(scope?.all_testsets ||
+                                  new Set(
+                                    solution.cases.map((row) => row.testset),
+                                  ).size > 1) && (
+                                  <h4 className="muted small">{setName}</h4>
+                                )}
+                                <CaseResultGrid
+                                  key={`${job.id}/${solution.name}/${setName}`}
+                                  cases={solution.cases.filter(
+                                    (row) => row.testset === setName,
+                                  )}
+                                  solutionName={solution.name}
+                                  onSelect={(row) =>
+                                    setCaseResult({
+                                      ...row,
+                                      solution_name: solution.name,
+                                    })
+                                  }
+                                />
+                              </section>
+                            ))}
+                          </div>
+                          {solution.skipped && (
+                            <p className="muted">
+                              NR 태그로 실행하지 않았습니다.
+                            </p>
+                          )}
+                        </SolutionResultPanel>
+                      ))
+                    }
+                  </PaginatedList>
+                  {!validationFeedback && job.result.unit_tests?.length ? (
+                    <ValidationResults key={job.id} job={job} />
+                  ) : null}
+                  {job.kind === 'stress' && (
+                    <StressCounterexamples
+                      job={job}
+                      problemId={data.problem.id}
+                      testsets={Object.keys(doc.testsets)}
+                      testsetGroups={Object.fromEntries(
+                        Object.entries(doc.testsets).map(([name, set]) => [
+                          name,
+                          set.groups_enabled ? Object.keys(set.groups) : [],
+                        ]),
+                      )}
+                      advanced={Boolean(environment?.limits?.stress_patterns)}
+                      retryBusy={busy}
+                      retryUncovered={
+                        canInvoke && environment?.limits?.stress_patterns
+                          ? (names) => {
+                              try {
+                                const options = retryStressOptions(job, names);
+                                if (
+                                  names.some((name) => !doc.solutions[name]) ||
+                                  (typeof options.reference === 'string' &&
+                                    options.reference &&
+                                    !doc.solutions[options.reference])
+                                )
+                                  throw new Error(
+                                    '현재 문제에서 사라진 풀이가 있습니다. 실행 조건을 새로 선택하세요.',
+                                  );
+                                void start('stress', options);
+                              } catch (error) {
+                                notify((error as Error).message, true);
+                              }
+                            }
+                          : undefined
+                      }
+                      allowed={
+                        canApply &&
+                        !dirty &&
+                        (!stale ||
+                          job.application?.document_hash === data.document_hash)
+                      }
+                      save={save}
+                      applied={async () => {
+                        await reload(true);
+                        setJob(
+                          await api<Job>(
+                            `/problems/${data.problem.id}/jobs/${job.id}`,
+                          ),
+                        );
+                        await fetchRows();
+                      }}
+                      evidence={(example, finding) => (
+                        <CodeEvidence
+                          problemId={data.problem.id}
+                          input={example.input_sha}
+                          answer={example.answer_sha}
+                          actual={finding.actual_sha}
+                          outputTruncated={finding.output_truncated}
+                          outputTotalBytes={finding.output_total_bytes}
+                        />
+                      )}
+                    />
+                  )}
+                  {job.result.package && job.status === 'completed' && (
+                    <div className="package-download">
+                      <Icon name="box" size={34} />
+                      <div>
+                        <strong>{job.result.package.filename}</strong>
+                        <p>
+                          {bytes(job.result.package.size)} ·{' '}
+                          {job.result.package.verified ? '검증된' : '미검증'}{' '}
+                          리비전 r{job.revision}
+                        </p>
+                      </div>
                       <a
-                        className="button small"
-                        href={`/api/problems/${data.problem.id}/rendered/${job.id}/${language}.html`}
+                        className="button primary"
+                        href={`/api/problems/${data.problem.id}/packages/${job.id}`}
                         download
                       >
-                        HTML
+                        <Icon name="download" />
+                        ZIP 다운로드
                       </a>
-                      {result.pdf === 'OK' ? (
-                        <a
-                          className="button small"
-                          href={`/api/problems/${data.problem.id}/rendered/${job.id}/${language}.pdf`}
-                          download
-                        >
-                          PDF
-                        </a>
-                      ) : (
-                        <details>
-                          <summary>PDF 오류 확인</summary>
-                          <CodeEditor
-                            value={result.message || ''}
-                            readOnly
-                            rows={5}
-                          />
-                        </details>
-                      )}
                     </div>
-                  ),
-                )}
-              {job.result.events?.length ? (
-                <details className="execution-log">
-                  <summary>
-                    <Icon name="history" size={16} />
-                    실행 과정 · {job.result.events.length}개 기록
-                    <Icon name="down" size={15} />
-                  </summary>
-                  <ol>
-                    {job.result.events.map((event, index) => (
-                      <li key={index}>{event.label}</li>
-                    ))}
-                  </ol>
-                </details>
-              ) : null}
-              <div className="run-footnote">
-                {job.result.runtime?.backend === 'archive'
-                  ? '패키지는 커밋된 자료 해시와 함께 보관됩니다. 코드 실행·판정·시간·메모리 측정은 하지 않았습니다.'
-                  : '결과는 실행 당시 자료 해시·검증 환경과 함께 보관됩니다. 시간·메모리는 해당 실행 환경에서 반환한 값입니다.'}
-              </div>
-              <InvocationComments
-                problemId={data.problem.id}
-                jobId={job.id}
-                allowed={can(data.problem, 'issues')}
-              />
-            </>
-          ) : jobError?.id === selected ? (
-            <Notice tone="error">{jobError.message}</Notice>
-          ) : (
-            <Empty
-              icon="play"
-              title={
-                selected
-                  ? '실행 결과를 불러오는 중입니다.'
-                  : '기록을 선택하세요.'
-              }
-              description="기록을 선택하면 저장된 결과를 표시합니다."
-            />
-          )}
-        </section>
-      </section>
+                  )}
+                  {job.kind === 'package' && (
+                    <ZojPublishing
+                      problemId={data.problem.id}
+                      editable={can(data.problem, 'publish')}
+                      job={job}
+                      stale={stale || dirty}
+                    />
+                  )}
+                  {job.result.statements &&
+                    Object.entries(job.result.statements).map(
+                      ([language, result]) => (
+                        <div className="render-row" key={language}>
+                          <strong>{language}</strong>
+                          <a
+                            className="button small"
+                            href={`/api/problems/${data.problem.id}/rendered/${job.id}/${language}.html`}
+                            download
+                          >
+                            HTML
+                          </a>
+                          {result.pdf === 'OK' ? (
+                            <a
+                              className="button small"
+                              href={`/api/problems/${data.problem.id}/rendered/${job.id}/${language}.pdf`}
+                              download
+                            >
+                              PDF
+                            </a>
+                          ) : (
+                            <details>
+                              <summary>PDF 오류 확인</summary>
+                              <CodeEditor
+                                value={result.message || ''}
+                                readOnly
+                                rows={5}
+                              />
+                            </details>
+                          )}
+                        </div>
+                      ),
+                    )}
+                  {job.result.events?.length ? (
+                    <details className="execution-log">
+                      <summary>
+                        <Icon name="history" size={16} />
+                        실행 과정 · {job.result.events.length}개 기록
+                        <Icon name="down" size={15} />
+                      </summary>
+                      <ol>
+                        {job.result.events.map((event, index) => (
+                          <li key={index}>{event.label}</li>
+                        ))}
+                      </ol>
+                    </details>
+                  ) : null}
+                  <div className="run-footnote">
+                    {job.result.runtime?.backend === 'archive'
+                      ? '패키지는 커밋된 자료 해시와 함께 보관됩니다. 코드 실행·판정·시간·메모리 측정은 하지 않았습니다.'
+                      : '결과는 실행 당시 자료 해시·검증 환경과 함께 보관됩니다. 시간·메모리는 해당 실행 환경에서 반환한 값입니다.'}
+                  </div>
+                  <InvocationComments
+                    problemId={data.problem.id}
+                    jobId={job.id}
+                    allowed={can(data.problem, 'issues')}
+                  />
+                </>
+              ) : jobError?.id === selected ? (
+                <Notice tone="error">{jobError.message}</Notice>
+              ) : (
+                <Empty
+                  icon="play"
+                  title={
+                    selected
+                      ? '실행 결과를 불러오는 중입니다.'
+                      : '기록을 선택하세요.'
+                  }
+                  description="기록을 선택하면 저장된 결과를 표시합니다."
+                />
+              )}
+            </section>
+          </section>
+        </>
+      )}
       {caseResult && (
         <Modal
           wide

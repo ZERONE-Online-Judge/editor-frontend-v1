@@ -53,7 +53,7 @@ export default function Tests() {
         all_testsets: checkAllSets,
         prepare_mode: 'inputs',
         auto_apply: false,
-        name: `전체 테스트 검사 · ${checkAllSets ? '모든 세트' : selected}`,
+        name: `입력 생성·검사 · ${checkAllSets ? '모든 세트' : selected}`,
       });
     } catch (e) {
       notify((e as Error).message, true);
