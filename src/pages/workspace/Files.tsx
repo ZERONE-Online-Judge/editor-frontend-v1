@@ -1,3 +1,5 @@
+import Pagination from '../../components/Pagination';
+import { usePagination } from '../../lib/pagination';
 import Select from '../../components/Select';
 import { can } from '../../lib/permissions';
 import { useEffect, useState } from 'react';
@@ -82,6 +84,10 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
       (category === 'solution'
         ? isSolution
         : !isSolution && file.kind === category),
+  );
+  const paging = usePagination(
+    items,
+    `${data.problem.id}/${solutions}/${category}`,
   );
   const fileKey = ({
     file,
@@ -269,8 +275,8 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
                       type="checkbox"
                       aria-label="표시된 파일 전체 선택"
                       checked={
-                        items.length > 0 &&
-                        items.every((item) =>
+                        paging.items.length > 0 &&
+                        paging.items.every((item) =>
                           selectedKeys.includes(fileKey(item)),
                         )
                       }
@@ -281,12 +287,14 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
                             ? [
                                 ...new Set([
                                   ...selectedKeys,
-                                  ...items.map(fileKey),
+                                  ...paging.items.map(fileKey),
                                 ]),
                               ]
                             : selectedKeys.filter(
                                 (key) =>
-                                  !items.some((item) => fileKey(item) === key),
+                                  !paging.items.some(
+                                    (item) => fileKey(item) === key,
+                                  ),
                               ),
                         })
                       }
@@ -300,7 +308,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
                 </tr>
               </thead>
               <tbody>
-                {items.map(({ file, isSolution }) => (
+                {paging.items.map(({ file, isSolution }) => (
                   <tr key={`${isSolution ? 'solution' : 'file'}:${file.name}`}>
                     <td>
                       <input
@@ -481,6 +489,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
           </Link>
         </div>
       )}
+      <Pagination {...paging} label={solutions ? '풀이 목록' : '파일 목록'} />
       {activeEditing !== false && (
         <FileEditor
           key={activeEditing?.name || 'new'}

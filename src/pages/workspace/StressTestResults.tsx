@@ -1,3 +1,4 @@
+import { PaginatedList } from '../../components/Pagination';
 import { useState } from 'react';
 import type { CaseResult, Job, StressSolutionResult } from '../../lib/types';
 import { bytes, tags } from '../../lib/api';
@@ -179,14 +180,22 @@ export default function StressTestResults({
           실제 실행한 풀이의 결과만 표시합니다.
         </p>
       )}
-      {solutions.map((solution) => (
-        <SolutionCases
-          key={`${job.id}/${solution.name}`}
-          solution={solution}
-          onSelect={onSelect}
-          active={active}
-        />
-      ))}
+      <PaginatedList
+        items={solutions}
+        resetKey={job.id}
+        label="스트레스 풀이 결과"
+      >
+        {(rows) =>
+          rows.map((solution) => (
+            <SolutionCases
+              key={`${job.id}/${solution.name}`}
+              solution={solution}
+              onSelect={onSelect}
+              active={active}
+            />
+          ))
+        }
+      </PaginatedList>
     </section>
   );
 }

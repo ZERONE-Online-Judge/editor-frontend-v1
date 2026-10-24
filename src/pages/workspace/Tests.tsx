@@ -1,3 +1,5 @@
+import Pagination from '../../components/Pagination';
+import { usePagination } from '../../lib/pagination';
 import Select from '../../components/Select';
 import { can } from '../../lib/permissions';
 import { useEffect, useState } from 'react';
@@ -36,6 +38,7 @@ export default function Tests() {
   const rows = Object.values(set?.tests || {}).sort(
     (a, b) => a.index - b.index,
   );
+  const paging = usePagination(rows, `${data.problem.id}/${selected}`, 50);
   const availableIndices = new Set(rows.map((test) => test.index));
   const selectedIndices =
     selection.name === selected
@@ -302,18 +305,30 @@ export default function Tests() {
                       <tr>
                         <th>
                           <input
-                            aria-label="등록 테스트 전체 선택"
+                            aria-label="현재 페이지 테스트 전체 선택"
                             type="checkbox"
                             checked={
-                              rows.length > 0 &&
-                              selectedIndices.length === rows.length
+                              paging.items.length > 0 &&
+                              paging.items.every((test) =>
+                                selectedIndices.includes(test.index),
+                              )
                             }
                             onChange={(e) =>
                               setSelection({
                                 name: selected,
                                 indices: e.target.checked
-                                  ? rows.map((t) => t.index)
-                                  : [],
+                                  ? [
+                                      ...new Set([
+                                        ...selectedIndices,
+                                        ...paging.items.map((t) => t.index),
+                                      ]),
+                                    ]
+                                  : selectedIndices.filter(
+                                      (index) =>
+                                        !paging.items.some(
+                                          (test) => test.index === index,
+                                        ),
+                                    ),
                               })
                             }
                           />
@@ -327,7 +342,7 @@ export default function Tests() {
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((test) => (
+                      {paging.items.map((test) => (
                         <tr key={test.index}>
                           <td>
                             <input
@@ -464,6 +479,7 @@ export default function Tests() {
                     </tbody>
                   </table>
                 </div>
+                <Pagination {...paging} label="등록 테스트" />
               </>
             ) : (
               <Empty

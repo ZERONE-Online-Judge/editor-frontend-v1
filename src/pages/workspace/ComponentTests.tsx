@@ -1,3 +1,5 @@
+import Pagination from '../../components/Pagination';
+import { usePagination } from '../../lib/pagination';
 import Select from '../../components/Select';
 import { can } from '../../lib/permissions';
 import { useState } from 'react';
@@ -30,6 +32,7 @@ export default function ComponentTests({
   );
   const unitKey = kind === 'checker' ? 'checker_tests' : 'validator_tests';
   const tests = Object.entries(doc[unitKey]);
+  const paging = usePagination(tests, `${data.problem.id}/${kind}`);
   const title = kind[0].toUpperCase() + kind.slice(1);
   return (
     <div className="section-stack">
@@ -157,45 +160,48 @@ export default function ComponentTests({
                 </tr>
               </thead>
               <tbody>
-                {tests.map(([id, test], index) => (
-                  <tr key={id}>
-                    <td>#{index + 1}</td>
-                    <td>
-                      <Badge
-                        tone={
-                          test.expected === 'VALID' || test.expected === 'OK'
-                            ? 'success'
-                            : 'warning'
-                        }
-                      >
-                        {test.expected}
-                      </Badge>
-                    </td>
-                    <td>
-                      <a
-                        className="text-link"
-                        href={`/api/problems/${data.problem.id}/blobs/${test.input_sha}`}
-                        download={`unit-${index + 1}.in`}
-                      >
-                        입력 다운로드
-                      </a>
-                    </td>
-                    <td>
-                      <button
-                        className="icon-button"
-                        disabled={!editable}
-                        aria-label={`자체 테스트 ${index + 1} 제거`}
-                        onClick={() =>
-                          mutate((d) => {
-                            delete d[unitKey][id];
-                          })
-                        }
-                      >
-                        <Icon name="trash" size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {paging.items.map(([id, test], position) => {
+                  const index = paging.offset + position;
+                  return (
+                    <tr key={id}>
+                      <td>#{index + 1}</td>
+                      <td>
+                        <Badge
+                          tone={
+                            test.expected === 'VALID' || test.expected === 'OK'
+                              ? 'success'
+                              : 'warning'
+                          }
+                        >
+                          {test.expected}
+                        </Badge>
+                      </td>
+                      <td>
+                        <a
+                          className="text-link"
+                          href={`/api/problems/${data.problem.id}/blobs/${test.input_sha}`}
+                          download={`unit-${index + 1}.in`}
+                        >
+                          입력 다운로드
+                        </a>
+                      </td>
+                      <td>
+                        <button
+                          className="icon-button"
+                          disabled={!editable}
+                          aria-label={`자체 테스트 ${index + 1} 제거`}
+                          onClick={() =>
+                            mutate((d) => {
+                              delete d[unitKey][id];
+                            })
+                          }
+                        >
+                          <Icon name="trash" size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           ) : (
@@ -211,6 +217,7 @@ export default function ComponentTests({
           )}
         </section>
       )}
+      <Pagination {...paging} label={`${title} 자체 테스트`} />
       {kind === 'interactor' && (
         <div className="workspace-guide">
           <Icon name="help" />

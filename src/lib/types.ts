@@ -368,6 +368,7 @@ export type Job = {
   id: string;
   problem_id: string;
   requested_by?: string;
+  requester?: { id: string; display_name: string; handle: string } | null;
   kind: JobKind;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
   document_hash: string;
@@ -604,13 +605,20 @@ export type ZojContest = {
   divisions: { id: string; name: string; code: string }[];
 };
 export type Publication = {
+  requester?: Job['requester'];
   operation_id: string;
   job_id: string;
   contest_id: string;
   division_id: string;
   problem_code: string;
   created_at: number;
-  result: { problem_id: string; title: string; revision: number; url: string };
+  result: {
+    problem_id: string;
+    title: string;
+    revision: number;
+    url: string;
+    kind?: 'update';
+  };
 };
 export type ZojPackageUpdatePreview = {
   contest_title: string;

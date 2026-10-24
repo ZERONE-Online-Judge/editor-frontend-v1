@@ -486,7 +486,9 @@ test('Read-only users can select tests and download available files without chan
   const { host, close } = await mount(
     source('pages/workspace/Tests.tsx').default,
   );
-  const selection = host.querySelector('[aria-label="등록 테스트 전체 선택"]');
+  const selection = host.querySelector(
+    '[aria-label="현재 페이지 테스트 전체 선택"]',
+  );
   assert.equal(selection.disabled, false);
   await act(async () => selection.click());
   assert.match(
@@ -499,6 +501,50 @@ test('Read-only users can select tests and download available files without chan
   assert.ok(host.querySelector('.test-download-actions button').disabled);
   assert.ok(host.querySelector('[aria-label="테스트 1 제거"]').disabled);
   assert.equal(Object.values(doc.testsets.tests.tests)[0].sample, true);
+  await close();
+});
+
+test('File selection is limited to the current page and survives page changes', async () => {
+  const doc = workspace();
+  doc.files = Object.fromEntries(
+    Array.from({ length: 25 }, (_, index) => [
+      `file-${index}.cpp`,
+      file(`file-${index}.cpp`),
+    ]),
+  );
+  const { host, close } = await mount(
+    source('pages/workspace/Files.tsx').default,
+  );
+  assert.equal(host.querySelectorAll('tbody tr').length, 20);
+  await act(async () =>
+    host.querySelector('[aria-label="표시된 파일 전체 선택"]').click(),
+  );
+  assert.match(
+    host.querySelector('.download-toolbar').textContent,
+    /선택 다운로드 \(20개\)/,
+  );
+  await act(async () =>
+    host.querySelector('[aria-label="파일 목록 다음 페이지"]').click(),
+  );
+  assert.equal(host.querySelectorAll('tbody tr').length, 5);
+  assert.equal(
+    host.querySelector('[aria-label="표시된 파일 전체 선택"]').checked,
+    false,
+  );
+  await act(async () =>
+    host.querySelector('[aria-label="표시된 파일 전체 선택"]').click(),
+  );
+  assert.match(
+    host.querySelector('.download-toolbar').textContent,
+    /선택 다운로드 \(25개\)/,
+  );
+  await act(async () =>
+    host.querySelector('[aria-label="표시된 파일 전체 선택"]').click(),
+  );
+  assert.match(
+    host.querySelector('.download-toolbar').textContent,
+    /선택 다운로드 \(20개\)/,
+  );
   await close();
 });
 test('Preparation recommendations do not count as missing required data', () => {

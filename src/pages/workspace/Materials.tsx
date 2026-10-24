@@ -1,11 +1,14 @@
+import Pagination from '../../components/Pagination';
+import { usePagination } from '../../lib/pagination';
 import Select from '../../components/Select';
 import { useState } from 'react';
 import { useWorkspace } from '../../lib/workspace';
 import { Badge, Empty, Icon, Modal, SectionHeading } from '../../components/ui';
 export default function Materials() {
-  const { document: doc, editable, mutate } = useWorkspace();
+  const { data, document: doc, editable, mutate } = useWorkspace();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
+  const paging = usePagination(Object.entries(doc.materials), data.problem.id);
   return (
     <div className="section-stack">
       <SectionHeading
@@ -23,7 +26,7 @@ export default function Materials() {
         }
       />
       {Object.entries(doc.materials).length ? (
-        Object.entries(doc.materials).map(([key, material]) => (
+        paging.items.map(([key, material]) => (
           <section className="card" key={key}>
             <SectionHeading
               title={key}
@@ -111,6 +114,7 @@ export default function Materials() {
           />
         </section>
       )}
+      <Pagination {...paging} label="공개 자료 묶음" />
       {adding && (
         <Modal
           title="자료 묶음 추가"

@@ -1,8 +1,11 @@
 import Select from '../../components/Select';
+import Pagination, { PaginatedList } from '../../components/Pagination';
+import { useRemotePage } from '../../lib/useRemotePage';
+import { jobRelation, requesterName } from '../../lib/jobHistory';
 import LanguageLimits from '../../components/LanguageResourceLimits';
 import JudgeCompatibilityNotice from './JudgeCompatibilityNotice';
 import { can, canEdit } from '../../lib/permissions';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   executionResultPath,
@@ -76,7 +79,6 @@ export default function Executions({
   const canPackage = can(data.problem, 'package');
   const canApply = can(data.problem, 'edit_tests');
   const draft = canEdit(data.problem);
-  const [rows, setRows] = useState<Job[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const search = searchParams.toString();
@@ -88,20 +90,67 @@ export default function Executions({
       : verification
         ? 'verify'
         : 'all';
-  const [defaultSelection, setDefaultSelection] = useState({
-    problemId: data.problem.id,
-    mode,
-    id: '',
+  const historyPage = Math.max(
+    1,
+    Math.min(
+      1000000,
+      Math.trunc(Number(searchParams.get('history_page'))) || 1,
+    ),
+  );
+  const relation = ['current', 'other'].includes(
+    searchParams.get('history_relation') || '',
+  )
+    ? searchParams.get('history_relation')!
+    : 'all';
+  const chosenKind = searchParams.get('history_kind') || 'all';
+  const historyKind =
+    mode === 'all' && Object.hasOwn(jobLabels, chosenKind) ? chosenKind : mode;
+  const historyQuery = new URLSearchParams({
+    page: String(historyPage),
+    page_size: '20',
+    kind: historyKind,
+    relation,
+    current_hash: data.document_hash,
   });
-  const visible = rows.filter((row) => matchesExecutionView(row.kind, mode));
-  const selected =
-    requestedJob ||
-    (defaultSelection.problemId === data.problem.id &&
-    defaultSelection.mode === mode &&
-    visible.some((row) => row.id === defaultSelection.id)
-      ? defaultSelection.id
-      : visible[0]?.id) ||
-    '';
+  const {
+    data: history,
+    error: historyError,
+    refresh: fetchRows,
+  } = useRemotePage<Job>(
+    `/problems/${data.problem.id}/jobs?${historyQuery}`,
+    historyPage,
+    3000,
+    (values) =>
+      values.filter(
+        (row) =>
+          (historyKind === 'all' || row.kind === historyKind) &&
+          (relation === 'all' ||
+            (jobRelation(row, data.document_hash) === 'other') ===
+              (relation === 'other')),
+      ),
+  );
+  const visible = history?.items || [];
+  function changeHistory(key: string, value: string) {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set(key, value);
+      if (key !== 'history_page') next.delete('history_page');
+      return next;
+    });
+  }
+  const selected = requestedJob || visible[0]?.id || '';
+  // Pin the initial result so polling and page changes preserve the detail view.
+  useEffect(() => {
+    if (!requestedJob && selected)
+      setSearchParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+          if (!next.get('job')) next.set('job', selected);
+          return next;
+        },
+        { replace: true },
+      );
+  }, [requestedJob, selected, setSearchParams]);
   const [loadedJob, setJob] = useState<Job | null>(null);
   const job = loadedJob?.id === selected ? loadedJob : null;
   const [jobError, setJobError] = useState<{
@@ -171,43 +220,6 @@ export default function Executions({
       window.clearInterval(timer);
     };
   }, [notify]);
-  const fetchRows = useCallback(async () => {
-    const values = await api<Job[]>(`/problems/${data.problem.id}/jobs`);
-    setRows(values);
-  }, [data.problem.id]);
-  useEffect(() => {
-    let active = true;
-    const poll = async () => {
-      try {
-        const values = await api<Job[]>(`/problems/${data.problem.id}/jobs`);
-        if (active) {
-          setRows(values);
-          const candidates = values.filter((row) =>
-            matchesExecutionView(row.kind, mode),
-          );
-          setDefaultSelection((previous) =>
-            previous.problemId === data.problem.id &&
-            previous.mode === mode &&
-            candidates.some((row) => row.id === previous.id)
-              ? previous
-              : {
-                  problemId: data.problem.id,
-                  mode,
-                  id: candidates[0]?.id || '',
-                },
-          );
-        }
-      } catch (e) {
-        if (active) notify((e as Error).message, true);
-      }
-    };
-    void poll();
-    const timer = window.setInterval(() => void poll(), 3000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [data.problem.id, mode, notify]);
   useEffect(() => {
     if (!selected) return;
     let active = true;
@@ -282,11 +294,8 @@ export default function Executions({
       setBusy(false);
     }
   }
-  const stale = Boolean(
-    job &&
-    (job.options.source_document_hash || job.document_hash) !==
-      data.document_hash,
-  );
+  const sourceRelation = job ? jobRelation(job, data.document_hash) : null;
+  const stale = sourceRelation === 'other';
   const scope = (job?.result.scope || job?.options.scope) as
     InvocationScope | undefined;
   async function apply() {
@@ -522,6 +531,65 @@ export default function Executions({
           <p>기록을 선택하면 해당 작업의 진행 상황과 결과가 표시됩니다.</p>
         </div>
       </div>
+      <div className="history-filters">
+        <div
+          className="history-relations"
+          role="group"
+          aria-label="실행 자료 기준"
+        >
+          {(
+            [
+              ['all', '전체 기록'],
+              ['current', '현재 저장본'],
+              ['other', '다른 자료'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              type="button"
+              key={value}
+              className={`button small ${relation === value ? 'primary' : ''}`}
+              aria-pressed={relation === value}
+              onClick={() => changeHistory('history_relation', value)}
+            >
+              {label}
+              {history?.counts ? ` ${history.counts[value]}` : ''}
+            </button>
+          ))}
+        </div>
+        {mode === 'all' && (
+          <label>
+            작업 종류
+            <Select
+              aria-label="기록 작업 종류"
+              value={historyKind}
+              onChange={(event) =>
+                changeHistory('history_kind', event.target.value)
+              }
+            >
+              <option value="all">모든 작업</option>
+              {Object.entries(jobLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </label>
+        )}
+      </div>
+      {dirty && (
+        <Notice>
+          저장하지 않은 변경이 있습니다. 자료 기준 표시는 마지막으로 저장한 작업
+          사본과 비교합니다.
+        </Notice>
+      )}
+      {historyError && (
+        <Notice tone="error">
+          기록을 불러오지 못했습니다. {historyError}
+          <button className="button small" onClick={() => void fetchRows()}>
+            다시 불러오기
+          </button>
+        </Notice>
+      )}
       <section
         className="execution-layout execution-history"
         aria-label={verification ? '저장된 검증 기록' : '저장된 실행 기록'}
@@ -530,9 +598,18 @@ export default function Executions({
           <div className="card-heading">
             <h3>
               {verification ? '검증 기록' : '작업 기록'}{' '}
-              <span className="count">{visible.length}</span>
+              <span className="count">{history?.total ?? '…'}</span>
             </h3>
           </div>
+          {history && (
+            <Pagination
+              {...history}
+              label={verification ? '검증 기록' : '작업 기록'}
+              onPageChange={(page) =>
+                changeHistory('history_page', String(page))
+              }
+            />
+          )}
           {visible.length ? (
             visible.map((row) => (
               <button
@@ -547,6 +624,19 @@ export default function Executions({
                       ? row.options.name
                       : jobLabels[row.kind]}
                   </strong>
+                  <Badge
+                    tone={
+                      jobRelation(row, data.document_hash) === 'other'
+                        ? 'warning'
+                        : 'accent'
+                    }
+                  >
+                    {jobRelation(row, data.document_hash) === 'other'
+                      ? '다른 자료'
+                      : jobRelation(row, data.document_hash) === 'applied'
+                        ? '결과 반영본'
+                        : '현재 저장본'}
+                  </Badge>
                   {row.kind === 'prepare' && row.status === 'completed' && (
                     <Badge
                       tone={
@@ -576,20 +666,45 @@ export default function Executions({
                     {statusLabels[row.status]}
                   </Badge>
                 </div>
+                <div
+                  className="job-requester"
+                  title={row.requester ? `@${row.requester.handle}` : undefined}
+                >
+                  <Icon name="users" size={14} />
+                  <span>{requesterName(row, user?.id)} 요청</span>
+                </div>
                 <small>
-                  r{row.revision} · {time(row.created_at)}
+                  {jobLabels[row.kind]} · r{row.revision} ·{' '}
+                  {time(row.created_at)}
                 </small>
                 <span>{row.result.summary || '검증 워커 배정 대기'}</span>
                 {row.kind === 'stress' && <StressHistorySummary job={row} />}
               </button>
             ))
+          ) : !history && !historyError ? (
+            <p className="history-loading" role="status">
+              기록을 불러오고 있습니다.
+            </p>
           ) : (
             <Empty
               icon="play"
               title={
                 verification ? '검증 기록이 없습니다.' : '실행 기록이 없습니다.'
               }
-              description="작업을 요청하면 여기에 기록됩니다."
+              description={
+                relation !== 'all' || historyKind !== 'all'
+                  ? '필터를 변경해 다른 기록을 확인하세요.'
+                  : '작업을 요청하면 여기에 기록됩니다.'
+              }
+            />
+          )}
+          {history && (
+            <Pagination
+              {...history}
+              label={verification ? '검증 기록' : '작업 기록'}
+              onPageChange={(page) =>
+                changeHistory('history_page', String(page))
+              }
             />
           )}
         </section>
@@ -619,6 +734,61 @@ export default function Executions({
                   {statusLabels[job.status]}
                 </Badge>
               </div>
+              <section
+                className={`execution-source-summary ${sourceRelation === 'other' ? 'different' : 'matching'}`}
+                aria-label="실행 자료와 요청자"
+              >
+                <div className="execution-source-heading">
+                  <Icon
+                    name={sourceRelation === 'other' ? 'branch' : 'check'}
+                  />
+                  <div>
+                    <strong>
+                      {sourceRelation === 'other'
+                        ? '현재 작업 사본과 다른 자료'
+                        : sourceRelation === 'applied'
+                          ? '이 작업의 결과가 현재 저장본에 반영됨'
+                          : '현재 저장본과 같은 자료'}
+                    </strong>
+                    <p>
+                      {sourceRelation === 'other'
+                        ? '이 결과는 요청 당시 자료에 해당합니다. 현재 자료의 검증 결과로 사용할 수 없습니다.'
+                        : sourceRelation === 'applied'
+                          ? '실행 당시 원본과 결과를 반영한 저장본을 구분해 보관합니다.'
+                          : '마지막으로 저장한 작업 사본을 기준으로 실행한 기록입니다.'}
+                    </p>
+                  </div>
+                </div>
+                <dl>
+                  <div>
+                    <dt>요청자</dt>
+                    <dd
+                      title={
+                        job.requester ? `@${job.requester.handle}` : undefined
+                      }
+                    >
+                      {requesterName(job, user?.id)}
+                      {job.requester && <small>@{job.requester.handle}</small>}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>작업</dt>
+                    <dd>{jobLabels[job.kind]}</dd>
+                  </div>
+                  <div>
+                    <dt>자료 기준</dt>
+                    <dd>
+                      {job.options.snapshot === 'committed'
+                        ? `커밋 r${job.revision}`
+                        : `요청 당시 작업 사본 · r${job.revision}`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>요청 시각</dt>
+                    <dd>{time(job.created_at)}</dd>
+                  </div>
+                </dl>
+              </section>
               <p className="muted small">
                 {job.result.runtime?.backend === 'archive'
                   ? '저장된 자료로 ZIP 생성 · 코드 실행 없음'
@@ -690,70 +860,72 @@ export default function Executions({
                     컴파일·생성·검증·PDF 실행을 담당한 실제 노드와 실행 자원을
                     확인합니다.
                   </p>
-                  <div
-                    className="table-scroll"
-                    role="region"
-                    aria-label="에이전트 실행 기록 표"
-                    tabIndex={0}
+                  <PaginatedList
+                    items={job.result.execution_runs}
+                    resetKey={job.id}
+                    label="에이전트 실행 기록"
                   >
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>채점 노드</th>
-                          <th>환경</th>
-                          <th>실행 결과</th>
-                          <th>CPU 시간</th>
-                          <th>메모리</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {job.result.execution_runs.map((run) => (
-                          <tr key={run.task_id}>
-                            <td>
-                              <span
-                                className="agent-execution-node"
-                                title={run.node_name || '채점 노드'}
-                              >
-                                {run.node_name || '채점 노드'}
-                              </span>
-                            </td>
-                            <td>
-                              {run.runtime === 'renderer'
-                                ? 'PDF 렌더링'
-                                : '제작용 실행'}
-                            </td>
-                            <td>
-                              {{
-                                ok: '실행 완료',
-                                'time-limit': '시간 초과',
-                                'memory-limit': '메모리 초과',
-                                'output-limit': '출력 초과',
-                                'wall-limit': '실행 응답 시간 초과',
-                              }[run.status] || run.status}
-                            </td>
-                            <td>
-                              {run.cpu_ms == null
-                                ? '미제공'
-                                : `${run.cpu_ms}ms`}
-                            </td>
-                            <td>
-                              {run.memory_kb == null
-                                ? '미제공'
-                                : `${(run.memory_kb / 1024).toFixed(1)}MiB`}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                    {(runs) => (
+                      <div
+                        className="table-scroll"
+                        role="region"
+                        aria-label="에이전트 실행 기록 표"
+                        tabIndex={0}
+                      >
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>채점 노드</th>
+                              <th>환경</th>
+                              <th>실행 결과</th>
+                              <th>CPU 시간</th>
+                              <th>메모리</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {runs.map((run) => (
+                              <tr key={run.task_id}>
+                                <td>
+                                  <span
+                                    className="agent-execution-node"
+                                    title={run.node_name || '채점 노드'}
+                                  >
+                                    {run.node_name || '채점 노드'}
+                                  </span>
+                                </td>
+                                <td>
+                                  {run.runtime === 'renderer'
+                                    ? 'PDF 렌더링'
+                                    : '제작용 실행'}
+                                </td>
+                                <td>
+                                  {{
+                                    ok: '실행 완료',
+                                    'time-limit': '시간 초과',
+                                    'memory-limit': '메모리 초과',
+                                    'output-limit': '출력 초과',
+                                    'wall-limit': '실행 응답 시간 초과',
+                                  }[run.status] || run.status}
+                                </td>
+                                <td>
+                                  {run.cpu_ms == null
+                                    ? '미제공'
+                                    : `${run.cpu_ms}ms`}
+                                </td>
+                                <td>
+                                  {run.memory_kb == null
+                                    ? '미제공'
+                                    : `${(run.memory_kb / 1024).toFixed(1)}MiB`}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </PaginatedList>
                 </details>
               ) : null}
-              {stale && (
-                <Notice>
-                  현재 작업 사본과 다른 자료의 실행 기록입니다. 이 결과는 당시
-                  자료에만 해당합니다.
-                </Notice>
-              )}
               {dirty && (
                 <div className="muted small">
                   저장하지 않은 변경은 이 실행 기록에 포함되지 않습니다.
@@ -893,139 +1065,158 @@ export default function Executions({
                 />
               )}
               <TestVerdictMatrix job={job} />
-              {job.result.solutions?.map((solution) => (
-                <SolutionResultPanel
-                  key={`${job.id}/${solution.name}`}
-                  solution={solution}
-                  jobStatus={job.status}
-                >
-                  {solution.expectations?.length ? (
-                    <div className="table-scroll">
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>기대 판정 범위</th>
-                            <th>기대</th>
-                            <th>실행 / 전체</th>
-                            <th>관측</th>
-                            <th>검증</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {solution.expectations.map((scope) => (
-                            <tr
-                              key={`${scope.origin}/${scope.testset}/${scope.group}`}
+              <PaginatedList
+                items={job.result.solutions || []}
+                resetKey={job.id}
+                label="풀이 검증 결과"
+              >
+                {(solutions) =>
+                  solutions.map((solution) => (
+                    <SolutionResultPanel
+                      key={`${job.id}/${solution.name}`}
+                      solution={solution}
+                      jobStatus={job.status}
+                    >
+                      {solution.expectations?.length ? (
+                        <div className="table-scroll">
+                          <table className="data-table">
+                            <thead>
+                              <tr>
+                                <th>기대 판정 범위</th>
+                                <th>기대</th>
+                                <th>실행 / 전체</th>
+                                <th>관측</th>
+                                <th>검증</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {solution.expectations.map((scope) => (
+                                <tr
+                                  key={`${scope.origin}/${scope.testset}/${scope.group}`}
+                                >
+                                  <td>
+                                    <ExpectationScopeLabel scope={scope} />
+                                  </td>
+                                  <td>{scope.tag}</td>
+                                  <td>
+                                    {scope.tested} / {scope.total}
+                                  </td>
+                                  <td>
+                                    {scope.verdicts.join(' · ') || '미실행'}
+                                  </td>
+                                  <td>
+                                    {scope.skipped
+                                      ? '실행 제외'
+                                      : scope.matched === false
+                                        ? '불일치'
+                                        : !scope.complete
+                                          ? '부분 실행 · 미확인'
+                                          : '일치'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : null}
+                      {solution.total_score != null && (
+                        <p>점수 {solution.total_score.toLocaleString()}</p>
+                      )}
+                      {solution.score_scope_complete === false && (
+                        <p className="muted small">
+                          일부 테스트만 실행했으므로 세트 전체 점수는 계산하지
+                          않았습니다.
+                        </p>
+                      )}
+                      <SolutionJudgeSummary solution={solution} />
+                      {solution.groups?.length ? (
+                        <div className="inline-tags">
+                          {solution.groups.map((g) => (
+                            <Badge
+                              key={`${g.testset}-${g.name}`}
+                              tone={g.passed ? 'success' : 'warning'}
                             >
-                              <td>
-                                <ExpectationScopeLabel scope={scope} />
-                              </td>
-                              <td>{scope.tag}</td>
-                              <td>
-                                {scope.tested} / {scope.total}
-                              </td>
-                              <td>{scope.verdicts.join(' · ') || '미실행'}</td>
-                              <td>
-                                {scope.skipped
-                                  ? '실행 제외'
-                                  : scope.matched === false
-                                    ? '불일치'
-                                    : !scope.complete
-                                      ? '부분 실행 · 미확인'
-                                      : '일치'}
-                              </td>
-                            </tr>
+                              {g.name} · {g.score}점
+                              {g.blocked
+                                ? ' · 의존 그룹 미통과'
+                                : !g.complete
+                                  ? ' · 전체 실행 필요'
+                                  : ''}
+                            </Badge>
                           ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : null}
-                  {solution.total_score != null && (
-                    <p>점수 {solution.total_score.toLocaleString()}</p>
-                  )}
-                  {solution.score_scope_complete === false && (
-                    <p className="muted small">
-                      일부 테스트만 실행했으므로 세트 전체 점수는 계산하지
-                      않았습니다.
-                    </p>
-                  )}
-                  <SolutionJudgeSummary solution={solution} />
-                  {solution.groups?.length ? (
-                    <div className="inline-tags">
-                      {solution.groups.map((g) => (
-                        <Badge
-                          key={`${g.testset}-${g.name}`}
-                          tone={g.passed ? 'success' : 'warning'}
-                        >
-                          {g.name} · {g.score}점
-                          {g.blocked
-                            ? ' · 의존 그룹 미통과'
-                            : !g.complete
-                              ? ' · 전체 실행 필요'
-                              : ''}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="solution-testsets">
-                    {[...new Set(solution.cases.map((row) => row.testset))].map(
-                      (setName) => (
-                        <section
-                          key={setName}
-                          className="solution-testset-cases"
-                          aria-label={`${setName} 테스트 결과`}
-                        >
-                          {(scope?.all_testsets ||
-                            new Set(solution.cases.map((row) => row.testset))
-                              .size > 1) && (
-                            <h4 className="muted small">{setName}</h4>
-                          )}
-                          <CaseResultGrid
-                            cases={solution.cases.filter(
-                              (row) => row.testset === setName,
+                        </div>
+                      ) : null}
+                      <div className="solution-testsets">
+                        {[
+                          ...new Set(solution.cases.map((row) => row.testset)),
+                        ].map((setName) => (
+                          <section
+                            key={setName}
+                            className="solution-testset-cases"
+                            aria-label={`${setName} 테스트 결과`}
+                          >
+                            {(scope?.all_testsets ||
+                              new Set(solution.cases.map((row) => row.testset))
+                                .size > 1) && (
+                              <h4 className="muted small">{setName}</h4>
                             )}
-                            solutionName={solution.name}
-                            onSelect={(row) =>
-                              setCaseResult({
-                                ...row,
-                                solution_name: solution.name,
-                              })
-                            }
-                          />
-                        </section>
-                      ),
-                    )}
-                  </div>
-                  {solution.skipped && (
-                    <p className="muted">NR 태그로 실행하지 않았습니다.</p>
-                  )}
-                </SolutionResultPanel>
-              ))}
+                            <CaseResultGrid
+                              key={`${job.id}/${solution.name}/${setName}`}
+                              cases={solution.cases.filter(
+                                (row) => row.testset === setName,
+                              )}
+                              solutionName={solution.name}
+                              onSelect={(row) =>
+                                setCaseResult({
+                                  ...row,
+                                  solution_name: solution.name,
+                                })
+                              }
+                            />
+                          </section>
+                        ))}
+                      </div>
+                      {solution.skipped && (
+                        <p className="muted">NR 태그로 실행하지 않았습니다.</p>
+                      )}
+                    </SolutionResultPanel>
+                  ))
+                }
+              </PaginatedList>
               {job.result.unit_tests?.length ? (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>자체 테스트</th>
-                      <th>기대 판정</th>
-                      <th>실제 판정</th>
-                      <th>결과</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {job.result.unit_tests.map((test, i) => (
-                      <tr key={test.id}>
-                        <td>#{i + 1}</td>
-                        <td>{test.expected}</td>
-                        <td>{test.actual}</td>
-                        <td>
-                          <Badge tone={test.matched ? 'success' : 'danger'}>
-                            {test.matched ? '일치' : '불일치'}
-                          </Badge>
-                          <div className="subtext">{test.comment}</div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <PaginatedList
+                  items={job.result.unit_tests}
+                  resetKey={job.id}
+                  label="자체 테스트 결과"
+                >
+                  {(tests, offset) => (
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>자체 테스트</th>
+                          <th>기대 판정</th>
+                          <th>실제 판정</th>
+                          <th>결과</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tests.map((test, i) => (
+                          <tr key={test.id}>
+                            <td>#{offset + i + 1}</td>
+                            <td>{test.expected}</td>
+                            <td>{test.actual}</td>
+                            <td>
+                              <Badge tone={test.matched ? 'success' : 'danger'}>
+                                {test.matched ? '일치' : '불일치'}
+                              </Badge>
+                              <div className="subtext">{test.comment}</div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </PaginatedList>
               ) : null}
               {job.kind === 'stress' && (
                 <StressCounterexamples

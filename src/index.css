@@ -1840,6 +1840,122 @@ svg {
 .execution-history {
   min-width: 0;
 }
+.history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.history-filters > label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.history-filters .select-wrapper {
+  min-width: 180px;
+}
+.history-relations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.history-loading {
+  padding: 20px;
+  color: var(--zoj-muted);
+  font-size: 12px;
+}
+.list-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border-top: 1px solid var(--zoj-border);
+  min-width: 0;
+}
+.pagination-range {
+  color: var(--zoj-muted);
+  font-size: 11px;
+}
+.pagination-buttons,
+.pagination-buttons > span {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.pagination-buttons .button {
+  min-width: 30px;
+  padding: 6px 9px;
+}
+.pagination-gap {
+  padding: 0 2px;
+  color: var(--zoj-muted);
+}
+.execution-list .pagination-range {
+  width: 100%;
+}
+.execution-source-summary {
+  border-radius: 12px;
+  border: 1px solid var(--zoj-border);
+  border-left: 4px solid var(--zoj-accent);
+  padding: 18px;
+  background: var(--zoj-surface);
+}
+.execution-source-summary.different {
+  border-left-color: #d97706;
+  background: #fffbeb;
+}
+.execution-source-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.execution-source-heading > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--zoj-accent);
+}
+.execution-source-summary.different .execution-source-heading > svg {
+  color: #b45309;
+}
+.execution-source-heading strong {
+  font-size: 14px;
+}
+.execution-source-heading p {
+  margin: 6px 0 0;
+  color: var(--zoj-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.execution-source-summary dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+  margin: 18px 0 0;
+}
+.execution-source-summary dt {
+  color: var(--zoj-muted);
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+.execution-source-summary dd {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.execution-source-summary dd small {
+  display: block;
+  font-size: 10px;
+  color: var(--zoj-muted);
+  margin-top: 3px;
+  font-weight: 400;
+}
 .execution-history-heading {
   display: flex;
   align-items: flex-start;
@@ -1861,7 +1977,7 @@ svg {
 }
 .execution-layout {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: 320px minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
@@ -1889,6 +2005,34 @@ svg {
   gap: 8px;
   justify-content: space-between;
   align-items: center;
+}
+.job-row > div:first-child {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.job-row > div:first-child > strong {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+}
+.job-row > .job-requester {
+  justify-content: flex-start;
+  gap: 6px;
+  color: var(--zoj-muted);
+  font-size: 12px;
+}
+.job-requester span {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .execution-layout .execution-list {
+    grid-template-columns: 1fr;
+  }
+  .history-filters > label {
+    width: 100%;
+  }
+  .execution-source-summary {
+    padding: 14px;
+  }
 }
 .job-row strong {
   font-size: 12px;
@@ -2696,22 +2840,24 @@ svg {
     grid-template-columns: 1fr;
   }
   .execution-list {
-    display: flex;
-    overflow: auto;
-    align-items: stretch;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .execution-list > .card-heading {
-    display: none;
+    grid-column: 1 / -1;
+  }
+  .execution-list > .list-pagination {
+    grid-column: 1 / -1;
   }
   .job-row {
-    min-width: 200px;
-    max-width: 260px;
-    border-bottom: 0;
+    min-width: 0;
+    max-width: none;
+    border-bottom: 1px solid var(--zoj-border);
     border-right: 1px solid var(--zoj-border);
     padding: 13px;
   }
   .job-row.selected {
-    box-shadow: inset 0 -3px 0 #8c85e8;
+    box-shadow: inset 3px 0 0 #8c85e8;
   }
   .problem-preview {
     padding: 28px;

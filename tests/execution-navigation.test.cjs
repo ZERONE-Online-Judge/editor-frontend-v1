@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const Module = require('node:module');
+const { URL } = require('node:url');
 const ts = require('typescript');
 const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<body></body>', {
@@ -23,7 +24,13 @@ const { act } = React;
 const { createRoot } = require('react-dom/client');
 const Router = require('react-router-dom');
 const h = React.createElement;
-let state, jobs, requests, requestError, detailGate, advancedLimits;
+let state,
+  jobs,
+  requests,
+  requestError,
+  detailGate,
+  advancedLimits,
+  historyGate;
 let revisionRequests,
   workspaceReads,
   saveEnabled,
@@ -97,7 +104,7 @@ function job(id, kind, summary) {
   };
 }
 async function get(url, options = {}) {
-  if (url.endsWith('/zoj-publications')) return [];
+  if (url.includes('/zoj-publications')) return [];
   if (url === '/zoj/contests')
     return { configured: true, email: 'author@example.com', contests: [] };
   if (url.includes('/revision-status?'))
@@ -140,6 +147,33 @@ async function get(url, options = {}) {
     return JSON.parse(JSON.stringify(state.document));
   if (url.endsWith('/preparation-status'))
     return { version: state.version, pending_preparations: [] };
+  if (url.startsWith('/problems/p/jobs?')) {
+    const query = new URL(url, 'http://editor.test').searchParams;
+    if (historyGate?.page === Number(query.get('page')))
+      return historyGate.promise;
+    const kind = query.get('kind');
+    const hash = query.get('current_hash');
+    const matching = (row) =>
+      (row.options.source_document_hash || row.document_hash) === hash ||
+      row.application?.document_hash === hash;
+    const all = jobs.filter((row) => kind === 'all' || row.kind === kind);
+    const current = all.filter(matching).length;
+    const filtered = all.filter(
+      (row) =>
+        query.get('relation') === 'all' ||
+        matching(row) === (query.get('relation') === 'current'),
+    );
+    const pages = Math.max(1, Math.ceil(filtered.length / 20));
+    const page = Math.min(Number(query.get('page')), pages);
+    return {
+      items: filtered.slice((page - 1) * 20, page * 20),
+      total: filtered.length,
+      page,
+      page_size: 20,
+      pages,
+      counts: { all: all.length, current, other: all.length - current },
+    };
+  }
   if (url === '/problems/p/jobs') return [...jobs];
   if (url.endsWith('/comments')) return [];
   const id = url.split('/jobs/')[1];
@@ -205,6 +239,7 @@ beforeEach(() => {
   requests = [];
   requestError = null;
   detailGate = null;
+  historyGate = null;
   advancedLimits = null;
   const main = {
     name: 'main.py',
@@ -364,7 +399,7 @@ test('execution results include verification history while launch controls remai
   );
   assert.equal(
     host.querySelector('#location').textContent,
-    '/problems/p/invocations',
+    '/problems/p/invocations?job=latest',
   );
   const link = host.querySelector(
     '.problem-sidebar a[href="/problems/p/verification"]',
@@ -1358,6 +1393,127 @@ test('polling new jobs does not replace the record currently being viewed', asyn
   } finally {
     window.setInterval = nativeInterval;
   }
+});
+
+test('History pages retain the selected result and show original requesters', async () => {
+  jobs = Array.from({ length: 125 }, (_, index) => ({
+    ...job(`entry-${index}`, 'verify', `검증 결과 ${index}`),
+    requester: {
+      id: 'reviewer',
+      display_name: '검수 동료',
+      handle: 'reviewer',
+    },
+  }));
+  await mount('verification');
+  assert.equal(host.querySelectorAll('.job-row').length, 20);
+  assert.match(
+    host.querySelector('.execution-source-summary').textContent,
+    /검수 동료.*@reviewer/,
+  );
+  assert.match(host.querySelector('.job-row').textContent, /검수 동료 요청/);
+  const next = host.querySelector('[aria-label="검증 기록 다음 페이지"]');
+  await act(async () => next.click());
+  await flush();
+  assert.equal(host.querySelectorAll('.job-row').length, 20);
+  assert.match(host.querySelector('.job-row').textContent, /검증 결과 20/);
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /검증 결과 0/,
+  );
+  assert.match(host.querySelector('#location').textContent, /history_page=2/);
+  await act(async () =>
+    host.querySelector('[aria-label="검증 기록 7페이지"]').click(),
+  );
+  await flush();
+  assert.equal(host.querySelectorAll('.job-row').length, 5);
+  assert.match(
+    host.querySelector('.execution-list .pagination-range').textContent,
+    /121–125/,
+  );
+});
+
+test('Material filters reset pagination and distinguish source hashes from applied results', async () => {
+  jobs = Array.from({ length: 24 }, (_, index) => ({
+    ...job(`mixed-${index}`, index % 2 ? 'prepare' : 'verify', `작업 ${index}`),
+    document_hash: 'transformed-runtime-hash',
+    options: { source_document_hash: index < 4 ? 'current' : 'old-material' },
+  }));
+  jobs[4].application = {
+    document_hash: 'current',
+    workspace_version: 2,
+    applied_at: 1,
+  };
+  await mount('invocations?history_page=2&job=mixed-20');
+  assert.match(
+    host.querySelector('.execution-source-summary').textContent,
+    /현재 작업 사본과 다른 자료/,
+  );
+  await click('현재 저장본 5');
+  assert.equal(host.querySelectorAll('.job-row').length, 5);
+  assert.doesNotMatch(
+    host.querySelector('#location').textContent,
+    /history_page/,
+  );
+  assert.match(host.querySelector('.job-row').textContent, /현재 저장본/);
+  const applied = [...host.querySelectorAll('.job-row')].find((node) =>
+    node.textContent.includes('작업 4'),
+  );
+  assert.match(applied.textContent, /결과 반영본/);
+  await act(async () => applied.click());
+  await flush();
+  assert.match(
+    host.querySelector('.execution-source-summary').textContent,
+    /결과가 현재 저장본에 반영됨/,
+  );
+  assert.doesNotMatch(
+    host.querySelector('.execution-source-summary').textContent,
+    /현재 작업 사본과 다른 자료/,
+  );
+  await click('다른 자료 19');
+  assert.equal(host.querySelectorAll('.job-row').length, 19);
+  const kind = host.querySelector('[aria-label="기록 작업 종류"]');
+  await act(async () => {
+    kind.value = 'prepare';
+    kind.dispatchEvent(new window.Event('change', { bubbles: true }));
+  });
+  await flush();
+  assert.equal(host.querySelectorAll('.job-row').length, 10);
+});
+
+test('A direct link can open a record outside the visible history page', async () => {
+  jobs = Array.from({ length: 125 }, (_, index) =>
+    job(`old-${index}`, 'verify', `기록 ${index}`),
+  );
+  await mount('verification?job=old-124');
+  assert.equal(host.querySelectorAll('.job-row').length, 20);
+  assert.match(host.querySelector('.execution-detail').textContent, /기록 124/);
+});
+
+test('A slow previous page cannot overwrite the page restored by browser back', async () => {
+  jobs = Array.from({ length: 45 }, (_, index) =>
+    job(`race-${index}`, 'verify', `검증 ${index}`),
+  );
+  let resolve;
+  historyGate = {
+    page: 2,
+    promise: new Promise((done) => {
+      resolve = done;
+    }),
+  };
+  await mount('verification');
+  await act(async () =>
+    host.querySelector('[aria-label="검증 기록 다음 페이지"]').click(),
+  );
+  await flush();
+  assert.match(host.textContent, /기록을 불러오고 있습니다/);
+  await click('뒤로 이동');
+  assert.equal(host.querySelectorAll('.job-row').length, 20);
+  await act(async () =>
+    resolve({ items: [jobs[30]], page: 2, total: 45, pages: 3, page_size: 20 }),
+  );
+  await flush();
+  assert.equal(host.querySelectorAll('.job-row').length, 20);
+  assert.match(host.querySelector('.job-row').textContent, /검증 0/);
 });
 
 function discoveryLimits() {

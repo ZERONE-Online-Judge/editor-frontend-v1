@@ -48,6 +48,9 @@ loaded.require = (id) => {
   if (
     id === '../../components/LanguageResourceLimits' ||
     id === '../../components/Select' ||
+    id === '../../components/Pagination' ||
+    id === '../../lib/useRemotePage' ||
+    id === '../../lib/jobHistory' ||
     id === '../../lib/permissions' ||
     id === '../../lib/workspace' ||
     id === '../../lib/executionNavigation' ||
