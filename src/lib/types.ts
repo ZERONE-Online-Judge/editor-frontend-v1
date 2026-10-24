@@ -382,6 +382,7 @@ export type Job = {
   started_at: number | null;
   finished_at: number | null;
   result: {
+    prepare_mode?: 'full' | 'inputs' | 'validate' | 'answers';
     stress_results_version?: number;
     stress_results?: StressSolutionResult[];
     stress_result_summary?: {

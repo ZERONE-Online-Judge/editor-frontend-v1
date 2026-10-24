@@ -54,8 +54,10 @@ loaded.require = (id) => {
     id === '../../lib/permissions' ||
     id === '../../lib/workspace' ||
     id === '../../lib/executionNavigation' ||
+    id === '../../lib/validationResults' ||
     id === '../../lib/authContext' ||
     id === './GeneratedTestResults' ||
+    id === './ValidationResults' ||
     id === './JudgeCompatibilityNotice' ||
     id === './InvocationComments' ||
     id === './StressControls' ||

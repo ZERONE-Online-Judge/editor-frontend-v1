@@ -1,4 +1,6 @@
 import GeneratedTestResults from './GeneratedTestResults';
+import ValidationResults from './ValidationResults';
+import { isComponentCheck, isInputCheck } from '../../lib/validationResults';
 import Select from '../../components/Select';
 import Pagination, { PaginatedList } from '../../components/Pagination';
 import { useRemotePage } from '../../lib/useRemotePage';
@@ -290,6 +292,8 @@ export default function Executions({
   }
   const sourceRelation = job ? jobRelation(job, data.document_hash) : null;
   const stale = sourceRelation === 'other';
+  const validationFeedback =
+    job && (isComponentCheck(job) || isInputCheck(job));
   const scope = (job?.result.scope || job?.options.scope) as
     InvocationScope | undefined;
   async function apply() {
@@ -624,7 +628,9 @@ export default function Executions({
                   <strong>
                     {typeof row.options.name === 'string' && row.options.name
                       ? row.options.name
-                      : jobLabels[row.kind]}
+                      : isInputCheck(row)
+                        ? '입력 검사'
+                        : jobLabels[row.kind]}
                   </strong>
                   <Badge
                     tone={
@@ -678,8 +684,8 @@ export default function Executions({
                   <span>{requesterName(row, user?.id)} 요청</span>
                 </div>
                 <small>
-                  {jobLabels[row.kind]} · r{row.revision} ·{' '}
-                  {time(row.created_at)}
+                  {isInputCheck(row) ? '입력 검사' : jobLabels[row.kind]} · r
+                  {row.revision} · {time(row.created_at)}
                 </small>
                 <span>{row.result.summary || '검증 워커 배정 대기'}</span>
                 {row.kind === 'stress' && <StressHistorySummary job={row} />}
@@ -720,7 +726,9 @@ export default function Executions({
                   <h3>
                     {typeof job.options.name === 'string' && job.options.name
                       ? job.options.name
-                      : jobLabels[job.kind]}
+                      : isInputCheck(job)
+                        ? '입력 검사'
+                        : jobLabels[job.kind]}
                   </h3>
                   <p>
                     {time(job.created_at)} · r{job.revision}
@@ -738,6 +746,9 @@ export default function Executions({
                   {statusLabels[job.status]}
                 </Badge>
               </div>
+              {validationFeedback && (
+                <ValidationResults key={job.id} job={job} />
+              )}
               <section
                 className={`execution-source-summary ${sourceRelation === 'other' ? 'different' : 'matching'}`}
                 aria-label="실행 자료와 요청자"
@@ -777,7 +788,9 @@ export default function Executions({
                   </div>
                   <div>
                     <dt>작업</dt>
-                    <dd>{jobLabels[job.kind]}</dd>
+                    <dd>
+                      {isInputCheck(job) ? '입력 검사' : jobLabels[job.kind]}
+                    </dd>
                   </div>
                   <div>
                     <dt>자료 기준</dt>
@@ -969,7 +982,7 @@ export default function Executions({
                     )}
                 </div>
               )}
-              {job.result.error && (
+              {job.result.error && !validationFeedback && (
                 <Notice tone="error">
                   {job.result.error_code ? (
                     <div className="execution-error-message">
@@ -992,7 +1005,7 @@ export default function Executions({
                   )}
                 </Notice>
               )}
-              {job.result.verified !== undefined && (
+              {job.result.verified !== undefined && !validationFeedback && (
                 <div
                   className={`verification-summary ${job.kind === 'package' && job.options.verify === false ? '' : job.result.verified ? 'passed' : 'mismatch'}`}
                 >
@@ -1022,7 +1035,9 @@ export default function Executions({
                       (n, t) => n + t.length,
                       0,
                     )}
-                    개 입력·정답 생성 완료
+                    {isInputCheck(job)
+                      ? '개 입력 검사 완료'
+                      : '개 입력·정답 생성 완료'}
                     {job.application && (
                       <small className="block">
                         내 작업 사본에 반영됨 ·{' '}
@@ -1194,40 +1209,8 @@ export default function Executions({
                   ))
                 }
               </PaginatedList>
-              {job.result.unit_tests?.length ? (
-                <PaginatedList
-                  items={job.result.unit_tests}
-                  resetKey={job.id}
-                  label="자체 테스트 결과"
-                >
-                  {(tests, offset) => (
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>자체 테스트</th>
-                          <th>기대 판정</th>
-                          <th>실제 판정</th>
-                          <th>결과</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tests.map((test, i) => (
-                          <tr key={test.id}>
-                            <td>#{offset + i + 1}</td>
-                            <td>{test.expected}</td>
-                            <td>{test.actual}</td>
-                            <td>
-                              <Badge tone={test.matched ? 'success' : 'danger'}>
-                                {test.matched ? '일치' : '불일치'}
-                              </Badge>
-                              <div className="subtext">{test.comment}</div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </PaginatedList>
+              {!validationFeedback && job.result.unit_tests?.length ? (
+                <ValidationResults key={job.id} job={job} />
               ) : null}
               {job.kind === 'stress' && (
                 <StressCounterexamples
