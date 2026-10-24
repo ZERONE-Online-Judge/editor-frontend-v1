@@ -431,6 +431,7 @@ export type Job = {
     summary?: string;
     progress?: number;
     error?: string;
+    error_code?: string;
     verified?: boolean;
     mismatches?: string[];
     test_matrix?: {

@@ -793,12 +793,25 @@ export default function Executions({
               )}
               {job.result.error && (
                 <Notice tone="error">
-                  <CodeEditor
-                    readOnly
-                    rows={6}
-                    label="실행 오류"
-                    value={job.result.error}
-                  />
+                  {job.result.error_code ? (
+                    <div className="execution-error-message">
+                      <strong>
+                        {['invalid_script', 'invalid_script_group'].includes(
+                          job.result.error_code,
+                        )
+                          ? '생성 스크립트를 확인해 주세요.'
+                          : '작업을 진행할 수 없습니다.'}
+                      </strong>
+                      <p>{job.result.error}</p>
+                    </div>
+                  ) : (
+                    <CodeEditor
+                      readOnly
+                      rows={6}
+                      label="실행 오류"
+                      value={job.result.error}
+                    />
+                  )}
                 </Notice>
               )}
               {job.result.verified !== undefined && (
