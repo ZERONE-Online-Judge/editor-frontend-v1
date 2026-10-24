@@ -28,6 +28,7 @@ let state,
   jobs,
   requests,
   requestError,
+  requestGate,
   detailGate,
   advancedLimits,
   historyGate;
@@ -212,6 +213,7 @@ async function post(url, body) {
     return { discarded_at: row.discarded_at };
   }
   assert.equal(url, '/problems/p/jobs');
+  if (requestGate) await requestGate.promise;
   const result = job(
     'new-' + body.kind,
     body.kind,
@@ -243,6 +245,7 @@ beforeEach(() => {
   updateFailure = null;
   requests = [];
   requestError = null;
+  requestGate = null;
   detailGate = null;
   historyGate = null;
   advancedLimits = null;
@@ -466,13 +469,11 @@ test('the solutions shortcut opens verification setup without sending a judge re
   await click('전체 풀이 검증 시작');
   assert.equal(requests.length, 1);
   assert.equal(requests[0].body.kind, 'verify');
-  const result = [...host.querySelectorAll('.notice a')].find(
-    (el) => el.textContent.trim() === '검증 결과로 이동',
-  );
   assert.equal(
-    result.getAttribute('href'),
-    '/problems/p/verification?job=new-verify',
+    host.querySelector('#location').textContent,
+    '/problems/p/invocations?job=new-verify',
   );
+  assert.equal(host.querySelector('.verification-launcher'), null);
 });
 
 test('read-only users can view the verification history but cannot start a new verification', async () => {
@@ -820,10 +821,9 @@ for (const allSets of [false, true]) {
     assert.equal(request.options.auto_apply, false);
     assert.equal(request.options.test_indices, undefined);
     assert.match(request.options.name, /전체 테스트 검사/);
-    assert.ok(
-      host.querySelector(
-        '.notice a[href="/problems/p/invocations?job=new-prepare"]',
-      ),
+    assert.equal(
+      host.querySelector('#location').textContent,
+      '/problems/p/invocations?job=new-prepare',
     );
   });
 }
@@ -835,20 +835,14 @@ for (const [tab, button, kind] of [
 ]) {
   test(
     tab +
-      ' request card links directly to that saved execution without starting verification',
+      ' request automatically opens that saved execution without another click',
     async () => {
       await mount(tab);
       await click(button);
-      const link = [...host.querySelectorAll('.notice a')].find(
-        (a) => a.textContent.trim() === '실행 결과로 이동',
-      );
-      assert.ok(link);
       assert.equal(
-        link.getAttribute('href'),
+        host.querySelector('#location').textContent,
         '/problems/p/invocations?job=new-' + kind,
       );
-      await act(async () => link.click());
-      await flush();
       assert.ok(host.textContent.includes('방금 요청한 ' + kind + ' 결과'));
       assert.equal(
         host
@@ -1231,6 +1225,64 @@ test('a rejected request shows no misleading result link', async () => {
     /실행 요청이 거부/,
   );
   assert.equal(host.querySelector('.notice a'), null);
+  assert.equal(
+    host.querySelector('#location').textContent,
+    '/problems/p/tests',
+  );
+  assert.equal(host.querySelector('.workspace-content').disabled, false);
+  requestError = null;
+  await click('입력·정답 생성');
+  assert.equal(requests.length, 2);
+  assert.equal(
+    host.querySelector('#location').textContent,
+    '/problems/p/invocations?job=new-prepare',
+  );
+});
+
+test('a slow submission displays progress, blocks double clicks, and opens only its accepted job', async () => {
+  let resolve;
+  requestGate = {
+    promise: new Promise((done) => {
+      resolve = done;
+    }),
+  };
+  await mount('tests');
+  const button = [...host.querySelectorAll('button')].find(
+    (el) => el.textContent.trim() === '입력·정답 생성',
+  );
+  await act(async () => {
+    button.click();
+    button.click();
+  });
+  await flush();
+  assert.equal(requests.length, 1);
+  assert.equal(
+    host.querySelector('#location').textContent,
+    '/problems/p/tests',
+  );
+  assert.equal(host.querySelector('.workspace-content').disabled, true);
+  assert.equal(
+    host.querySelector('.workspace-content').getAttribute('aria-busy'),
+    'true',
+  );
+  assert.match(
+    host.querySelector('[role="status"]').textContent,
+    /요청을 접수하고 있습니다/,
+  );
+  await act(async () => {
+    resolve();
+  });
+  await flush();
+  assert.equal(requests.length, 1);
+  assert.equal(
+    host.querySelector('#location').textContent,
+    '/problems/p/invocations?job=new-prepare',
+  );
+  assert.match(
+    host.querySelector('.execution-detail').textContent,
+    /방금 요청한 prepare 결과/,
+  );
+  assert.equal(host.querySelector('.workspace-content').disabled, false);
 });
 
 test('stress history shows saved request conditions without using current source settings', async () => {
