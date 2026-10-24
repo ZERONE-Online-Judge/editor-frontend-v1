@@ -28,6 +28,8 @@ export async function api<T>(
     const data = await response
       .json()
       .catch(() => ({ error: { message: '서버에 연결하지 못했습니다.' } }));
+    if ((data.error || data).code === 'central_login_required')
+      window.dispatchEvent(new Event('zoj-central-login-required'));
     throw new ApiError(response.status, data.error || data);
   }
   return response.json();

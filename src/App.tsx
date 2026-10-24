@@ -7,9 +7,11 @@ import {
   Outlet,
   RouterProvider,
   useNavigate,
+  useLocation,
   useParams,
 } from 'react-router-dom';
-import { patch } from './lib/api';
+import { api, patch } from './lib/api';
+import { securityUrl } from './lib/sharedLogin';
 import { useAuth } from './lib/authContext';
 import type { User } from './lib/types';
 import { Empty, Icon, Modal, Notice, SectionHeading } from './components/ui';
@@ -21,6 +23,18 @@ const ProblemWorkspace = lazy(() => import('./pages/Workspace'));
 function Layout() {
   const { user, setUser } = useAuth();
   const [profile, setProfile] = useState(false);
+  const [sharedAuth, setSharedAuth] = useState(true);
+  useEffect(() => {
+    let active = true;
+    api<{ mode: string }>('/auth/config')
+      .then((config) => {
+        if (active) setSharedAuth(config.mode !== 'local');
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [name, setName] = useState(user?.display_name || '');
@@ -84,7 +98,8 @@ function Layout() {
           key={user.id}
           onSetup={() => {
             setProfile(false);
-            setPasswordOpen(true);
+            if (sharedAuth) window.location.assign(securityUrl('password'));
+            else setPasswordOpen(true);
           }}
         />
       )}
@@ -167,7 +182,8 @@ function Layout() {
             type="button"
             onClick={() => {
               setProfile(false);
-              setPasswordOpen(true);
+              if (sharedAuth) window.location.assign(securityUrl('password'));
+              else setPasswordOpen(true);
             }}
           >
             <span className="account-security-icon" aria-hidden="true">
@@ -185,19 +201,44 @@ function Layout() {
             </span>
             <span>
               <strong>비밀번호 관리</strong>
-              <small>이메일 인증 후 비밀번호 등록·변경</small>
+              <small>이메일 또는 패스키 인증 후 등록·변경</small>
             </span>
             <Icon name="arrow" />
           </button>
+          {sharedAuth && (
+            <a className="account-security-card" href={securityUrl('passkeys')}>
+              <span className="account-security-icon" aria-hidden="true">
+                <Icon name="shield" />
+              </span>
+              <span>
+                <strong>패스키 관리</strong>
+                <small>ZOJ와 에디터에서 사용할 패스키 추가·삭제</small>
+              </span>
+              <Icon name="arrow" />
+            </a>
+          )}
         </Modal>
       )}
     </div>
   );
 }
 function Protected() {
+  const location = useLocation();
   const { user, loading } = useAuth();
   if (loading) return <div className="loading">계정을 확인하고 있습니다.</div>;
-  return user ? <Outlet /> : <Navigate to="/login" replace />;
+  return user ? (
+    <Outlet />
+  ) : (
+    <Navigate
+      to={
+        '/login?' +
+        new URLSearchParams({
+          next: location.pathname + location.search + location.hash,
+        })
+      }
+      replace
+    />
+  );
 }
 function WorkspaceRoute() {
   const { problemId } = useParams();

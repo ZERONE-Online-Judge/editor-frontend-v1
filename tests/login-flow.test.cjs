@@ -79,7 +79,7 @@ function source(relative) {
   );
   return loaded.exports;
 }
-const Login = source('pages/Login.tsx').default;
+const Login = source('pages/LocalLogin.tsx').default;
 async function mount() {
   calls = [];
   const host = document.createElement('div');
