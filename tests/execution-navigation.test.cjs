@@ -518,6 +518,10 @@ for (const category of detailedCategories) {
       host.querySelector('.execution-source-summary').textContent,
       new RegExp(definition.label),
     );
+    assert.equal(
+      host.querySelector('.execution-detail').firstElementChild,
+      host.querySelector('.execution-source-summary'),
+    );
     assert.deepEqual(requests, []);
   });
 }
@@ -1103,6 +1107,10 @@ test('a failed input check shows the exact failing set and test without claiming
   jobs.unshift(result);
   await mount('invocations?job=input-feedback');
   const feedback = host.querySelector('.validation-results');
+  assert.equal(
+    host.querySelector('.execution-detail').firstElementChild,
+    host.querySelector('.execution-source-summary'),
+  );
   assert.match(feedback.textContent, /입력 조건을 위반한 테스트가 있습니다/);
   assert.match(
     feedback.querySelector('.validation-message').textContent,
@@ -1110,6 +1118,114 @@ test('a failed input check shows the exact failing set and test without claiming
   );
   assert.equal(feedback.querySelector('.passed'), null);
 });
+
+for (const allSets of [false, true]) {
+  test(`test generation uses the shared ${allSets ? 'all-set' : 'current-set'} scope and retains generation-only auto apply`, async () => {
+    await mount('tests');
+    const sets = host.querySelector('[aria-label="테스트 세트 선택"]');
+    const editor = host.querySelector('[aria-label="생성 스크립트 편집"]');
+    const controls = host.querySelector('[aria-label="테스트 실행 설정"]');
+    assert.ok(
+      sets.compareDocumentPosition(editor) &
+        window.Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    assert.ok(
+      editor.compareDocumentPosition(controls) &
+        window.Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    assert.ok(controls.querySelector('.generation-auto-apply'));
+    assert.ok(controls.querySelector('.button.primary'));
+    assert.match(controls.textContent, /전체 테스트 검사/);
+    assert.equal(
+      host.querySelector(
+        '.workspace-content > .section-stack > .section-heading .button.primary',
+      ),
+      null,
+    );
+    const extra = [...sets.querySelectorAll('button')].find((el) =>
+      el.textContent.startsWith('extra'),
+    );
+    await act(() => extra.click());
+    assert.equal(extra.getAttribute('aria-pressed'), 'true');
+    assert.ok(host.querySelector('[aria-label="extra · 생성 스크립트"]'));
+    await act(() =>
+      controls.querySelector('.generation-auto-apply input').click(),
+    );
+    if (allSets) await setControl('실행 범위', 'all');
+    await click('입력·정답 생성');
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].body.options.testset, 'extra');
+    assert.equal(requests[0].body.options.all_testsets, allSets);
+    assert.equal(requests[0].body.options.prepare_mode, 'full');
+    assert.equal(requests[0].body.options.auto_apply, true);
+    assert.match(
+      host.querySelector('#location').textContent,
+      /invocations\?job=new-prepare/,
+    );
+  });
+}
+
+test('the single-set layout and read-only access keep execution permissions intact', async () => {
+  delete state.document.testsets.extra;
+  state.problem.role = 'READ';
+  await mount('tests');
+  const scope = host.querySelector('[aria-label="테스트 실행 설정"] select');
+  assert.equal(scope.options.length, 1);
+  assert.equal(scope.value, 'current');
+  assert.equal(
+    host.querySelector('[aria-label="tests · 생성 스크립트"]').readOnly,
+    true,
+  );
+  for (const button of host.querySelectorAll('.test-execution-panel button'))
+    assert.ok(button.disabled);
+  assert.ok(host.querySelector('[aria-label="새 테스트 세트 이름"]').disabled);
+  assert.deepEqual(requests, []);
+});
+
+for (const status of [
+  'queued',
+  'running',
+  'completed',
+  'failed',
+  'cancelled',
+]) {
+  test(`request metadata stays first for ${status} input checks before validation feedback`, async () => {
+    const result = job('metadata-first', 'prepare', '입력 검사');
+    result.status = status;
+    result.options.prepare_mode = 'inputs';
+    result.requester = {
+      id: 'author',
+      display_name: '테스트 작성자',
+      handle: 'author',
+    };
+    result.result.testsets = {
+      tests: [{ index: 1, validator: 'VALID', input_sha: 'input' }],
+    };
+    jobs = [result];
+    await mount('invocations?job=metadata-first');
+    const detail = host.querySelector('.execution-detail');
+    assert.equal(
+      detail.firstElementChild.getAttribute('aria-label'),
+      '실행 자료와 요청자',
+    );
+    assert.equal(
+      detail.querySelectorAll('.execution-source-summary').length,
+      1,
+    );
+    assert.deepEqual(
+      [...detail.firstElementChild.querySelectorAll('dt')].map(
+        (el) => el.textContent,
+      ),
+      ['요청자', '작업', '자료 기준', '요청 시각'],
+    );
+    assert.match(
+      detail.firstElementChild.textContent,
+      /테스트 작성자.*@author.*입력 생성·검사/,
+    );
+    assert.ok(detail.querySelector('.validation-results'));
+  });
+}
+
 for (const allSets of [false, true]) {
   test(`whole input check saves the script and checks ${allSets ? 'all sets' : 'the current set'} without generating answers or auto-applying`, async () => {
     saveEnabled = true;
@@ -1125,7 +1241,7 @@ for (const allSets of [false, true]) {
     });
     const auto = host.querySelector('.generation-auto-apply input');
     await act(() => auto.click());
-    if (allSets) await setControl('검사 범위', 'all');
+    if (allSets) await setControl('실행 범위', 'all');
     await click('전체 테스트 검사');
     assert.equal(requests.length, 2);
     assert.equal(requests[0].url, '/problems/p/working-copy');
