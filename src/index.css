@@ -1853,9 +1853,12 @@ svg {
   align-items: center;
   gap: 10px;
   font-size: 12px;
+  white-space: nowrap;
 }
-.history-filters .select-wrapper {
+.history-filters .zoj-select {
   min-width: 180px;
+  width: auto;
+  flex: 1;
 }
 .history-relations {
   display: flex;
