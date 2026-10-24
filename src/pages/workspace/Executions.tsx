@@ -753,33 +753,6 @@ export default function Executions({
             <section className="card execution-detail">
               {job ? (
                 <>
-                  <div className="section-heading">
-                    <div>
-                      <h3>{jobCategory(job).label}</h3>
-                      <p>{jobCategory(job).description}</p>
-                      {typeof job.options.name === 'string' &&
-                        job.options.name && (
-                          <p>요청 이름: {job.options.name}</p>
-                        )}
-                      <p>
-                        {time(job.created_at)} · r{job.revision}
-                      </p>
-                    </div>
-                    <Badge
-                      tone={
-                        job.status === 'failed'
-                          ? 'danger'
-                          : job.status === 'completed'
-                            ? 'success'
-                            : 'accent'
-                      }
-                    >
-                      {statusLabels[job.status]}
-                    </Badge>
-                  </div>
-                  {validationFeedback && (
-                    <ValidationResults key={job.id} job={job} />
-                  )}
                   <section
                     className={`execution-source-summary ${sourceRelation === 'other' ? 'different' : 'matching'}`}
                     aria-label="실행 자료와 요청자"
@@ -839,6 +812,33 @@ export default function Executions({
                       </div>
                     </dl>
                   </section>
+                  <div className="section-heading">
+                    <div>
+                      <h3>{jobCategory(job).label}</h3>
+                      <p>{jobCategory(job).description}</p>
+                      {typeof job.options.name === 'string' &&
+                        job.options.name && (
+                          <p>요청 이름: {job.options.name}</p>
+                        )}
+                      <p>
+                        {time(job.created_at)} · r{job.revision}
+                      </p>
+                    </div>
+                    <Badge
+                      tone={
+                        job.status === 'failed'
+                          ? 'danger'
+                          : job.status === 'completed'
+                            ? 'success'
+                            : 'accent'
+                      }
+                    >
+                      {statusLabels[job.status]}
+                    </Badge>
+                  </div>
+                  {validationFeedback && (
+                    <ValidationResults key={job.id} job={job} />
+                  )}
                   <p className="muted small">
                     {job.result.runtime?.backend === 'archive'
                       ? '저장된 자료로 ZIP 생성 · 코드 실행 없음'

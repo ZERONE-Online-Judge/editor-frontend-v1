@@ -22,15 +22,20 @@ import {
 } from '../../components/ui';
 export default function Tests() {
   const { data, document: doc, mutate, editable, run, notify } = useWorkspace();
-  const [selected, setSelected] = useState(
+  const [selectedName, setSelected] = useState(
     Object.keys(doc.testsets)[0] || 'tests',
   );
+  const selected = doc.testsets[selectedName]
+    ? selectedName
+    : Object.keys(doc.testsets)[0] || 'tests';
   const [newSet, setNewSet] = useState('');
   const [editing, setEditing] = useState<Test | null | false>(false);
   const [groups, setGroups] = useState(false);
   const [busy, setBusy] = useState(false);
   const [autoApply, setAutoApply] = useState(false);
-  const [checkAllSets, setCheckAllSets] = useState(false);
+  const [allSets, setAllSets] = useState(false);
+  const setNames = Object.keys(doc.testsets);
+  const runAllSets = allSets && setNames.length > 1;
   const [selection, setSelection] = useState<{
     name: string;
     indices: number[];
@@ -45,15 +50,15 @@ export default function Tests() {
     selection.name === selected
       ? selection.indices.filter((index) => availableIndices.has(index))
       : [];
-  async function checkTests() {
+  async function execute(mode: 'full' | 'inputs') {
     setBusy(true);
     try {
       await run('prepare', {
         testset: selected,
-        all_testsets: checkAllSets,
-        prepare_mode: 'inputs',
-        auto_apply: false,
-        name: `입력 생성·검사 · ${checkAllSets ? '모든 세트' : selected}`,
+        all_testsets: runAllSets,
+        prepare_mode: mode,
+        auto_apply: mode === 'full' && autoApply && editable,
+        name: `${mode === 'full' ? '입력·정답 생성' : '입력 생성·검사'} · ${runAllSets ? '모든 세트' : selected}`,
       });
     } catch (e) {
       notify((e as Error).message, true);
@@ -108,175 +113,239 @@ export default function Tests() {
     <div className="section-stack">
       <SectionHeading
         title="테스트 · 생성 스크립트"
-        description="직접 입력과 생성기로 테스트를 준비하고, validator와 Main 풀이로 입력·정답을 확인합니다."
+        description="테스트 세트를 선택하고 생성 규칙을 작성한 뒤, 입력 검사나 정답 생성을 실행하세요."
         actions={
-          <>
-            <button
-              className="button primary"
-              disabled={!can(data.problem, 'prepare') || busy}
-              onClick={() =>
-                void run('prepare', {
-                  testset: selected,
-                  auto_apply: autoApply && editable,
-                }).catch((e) => notify(e.message, true))
-              }
-            >
-              <Icon name="play" />
-              입력·정답 생성
-            </button>
-            <button
-              className="button"
-              disabled={!can(data.problem, 'prepare') || busy}
-              onClick={() => void checkTests()}
-            >
-              <Icon name="play" />
-              전체 테스트 검사
-            </button>
-            {Object.keys(doc.testsets).length > 1 && (
-              <button
-                className="button"
-                disabled={!can(data.problem, 'prepare') || busy}
-                onClick={() =>
-                  void run('prepare', {
-                    testset: selected,
-                    all_testsets: true,
-                    auto_apply: autoApply && editable,
-                  }).catch((e) => notify(e.message, true))
-                }
-              >
-                전체 테스트 세트 생성
-              </button>
-            )}
-            <Link
-              className="button"
-              to={`/problems/${data.problem.id}/invocations`}
-            >
-              실행 결과
-            </Link>
-          </>
+          <Link
+            className="button"
+            to={`/problems/${data.problem.id}/invocations`}
+          >
+            실행 결과
+            <Icon name="arrow" />
+          </Link>
         }
       />
-      <p className="muted small">
-        ‘입력·정답 생성’은 현재 선택한 <strong>{selected}</strong> 세트만
-        처리합니다.
-      </p>
-      <div className="test-validation-toolbar">
-        <label>
-          검사 범위
-          <Select
-            value={checkAllSets ? 'all' : 'current'}
-            disabled={busy}
-            onChange={(e) => setCheckAllSets(e.target.value === 'all')}
-          >
-            <option value="current">현재 세트 · {selected}</option>
-            {Object.keys(doc.testsets).length > 1 && (
-              <option value="all">모든 테스트 세트</option>
-            )}
-          </Select>
-        </label>
-        <p className="muted small">
-          ‘전체 테스트 검사’는 등록 입력과 스크립트 생성 입력을 Validator로
-          검사합니다. 정답 생성과 자동 반영 없이 실행하며, 검사한 입력은 실행
-          결과에서 확인할 수 있습니다.
-        </p>
-      </div>
-      <label className="checkbox generation-auto-apply">
-        <input
-          type="checkbox"
-          checked={autoApply}
-          disabled={!editable || busy}
-          onChange={(e) => setAutoApply(e.target.checked)}
-        />
-        성공하면 내 작업 사본에 자동 반영
-        <small>실행 이후 저장된 자료가 바뀌면 반영하지 않습니다.</small>
-      </label>
-      <div className="card language-toolbar">
-        <div className="tabs">
-          {Object.keys(doc.testsets).map((name) => (
+      <section className="card test-set-panel" aria-label="테스트 세트 선택">
+        <div className="test-set-heading">
+          <div>
+            <h3>테스트 세트</h3>
+            <p className="muted small">
+              세트마다 생성 스크립트와 등록 테스트를 따로 관리합니다.
+            </p>
+          </div>
+          <details className="test-set-create">
+            <summary className="button small">
+              <Icon name="plus" />새 세트
+            </summary>
+            <div className="inline-form">
+              <input
+                aria-label="새 테스트 세트 이름"
+                value={newSet}
+                disabled={!editable || busy}
+                onChange={(e) => setNewSet(e.target.value)}
+                placeholder="새 테스트 세트 이름"
+              />
+              <button
+                className="button small"
+                disabled={
+                  !editable ||
+                  busy ||
+                  !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(newSet) ||
+                  Boolean(doc.testsets[newSet])
+                }
+                onClick={() => {
+                  mutate((d) => {
+                    d.testsets[newSet] = {
+                      tests: {},
+                      script: '',
+                      groups_enabled: false,
+                      groups: {},
+                    };
+                  });
+                  setSelected(newSet);
+                  setNewSet('');
+                }}
+              >
+                세트 추가
+              </button>
+            </div>
+          </details>
+        </div>
+        <div
+          className="tabs test-set-tabs"
+          role="group"
+          aria-label="편집할 테스트 세트"
+        >
+          {setNames.map((name) => (
             <button
               className={name === selected ? 'active' : ''}
+              aria-label={`${name} · 등록 테스트 ${Object.keys(doc.testsets[name].tests).length}개`}
+              aria-pressed={name === selected}
               key={name}
               onClick={() => setSelected(name)}
             >
-              {name}
+              <Icon name="folder" size={16} />
+              <span>{name}</span>
+              <span className="test-set-count">
+                {Object.keys(doc.testsets[name].tests).length}
+              </span>
             </button>
           ))}
         </div>
-        <div className="inline-form">
-          <input
-            aria-label="새 테스트 세트 이름"
-            value={newSet}
-            onChange={(e) => setNewSet(e.target.value)}
-            placeholder="새 테스트 세트"
-          />
-          <button
-            className="button small"
-            disabled={
-              !editable ||
-              !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(newSet) ||
-              Boolean(doc.testsets[newSet])
-            }
-            onClick={() => {
-              mutate((d) => {
-                d.testsets[newSet] = {
-                  tests: {},
-                  script: '',
-                  groups_enabled: false,
-                  groups: {},
-                };
-              });
-              setSelected(newSet);
-              setNewSet('');
-            }}
-          >
-            세트 추가
-          </button>
-        </div>
-      </div>
+      </section>
       {set && (
         <>
-          <section className="card">
-            <SectionHeading
-              title="생성 스크립트"
-              description={
-                <>
-                  <code>gen 100 42 &gt; 1</code>은 1번 테스트를,{' '}
-                  <code>gen 100 43 &gt; $</code>는 다음 빈 번호를 생성합니다.
-                </>
-              }
-            />
-            <CodeEditor
-              value={set.script}
-              onChange={(value) =>
-                mutate((d) => {
-                  d.testsets[selected].script = value;
-                })
-              }
-              label={`${selected} · 생성 스크립트`}
-              rows={7}
-              readOnly={!editable}
-            />
-            <GeneratorLoop
-              key={selected}
-              groups={set.groups_enabled ? Object.keys(set.groups) : []}
-              disabled={!editable}
-              append={(script) =>
-                mutate((d) => {
-                  d.testsets[selected].script = [
-                    d.testsets[selected].script.trimEnd(),
-                    script,
-                  ]
-                    .filter(Boolean)
-                    .join('\n');
-                })
-              }
-            />
-            <p className="muted small">
-              파일에 등록한 생성기를 사용하세요. 이 스크립트는 셸 명령이 아닌
-              테스트 생성 규칙으로 처리합니다. repeat seed in 1..100 / end로
-              반복하고 group 그룹명으로 생성할 그룹을 지정할 수 있습니다.
-            </p>
-          </section>
+          <div className="test-generation-workspace">
+            <section
+              className="card test-script-panel"
+              aria-label="생성 스크립트 편집"
+            >
+              <SectionHeading
+                title="생성 스크립트"
+                description={
+                  <>
+                    <strong>{selected}</strong> 세트의 테스트 생성 규칙을
+                    작성합니다.
+                  </>
+                }
+              />
+              <CodeEditor
+                value={set.script}
+                onChange={(value) =>
+                  mutate((d) => {
+                    d.testsets[selected].script = value;
+                  })
+                }
+                label={`${selected} · 생성 스크립트`}
+                rows={12}
+                readOnly={!editable}
+              />
+              <GeneratorLoop
+                key={selected}
+                groups={set.groups_enabled ? Object.keys(set.groups) : []}
+                disabled={!editable}
+                append={(script) =>
+                  mutate((d) => {
+                    d.testsets[selected].script = [
+                      d.testsets[selected].script.trimEnd(),
+                      script,
+                    ]
+                      .filter(Boolean)
+                      .join('\n');
+                  })
+                }
+              />
+              <details className="test-script-help">
+                <summary>작성 방법과 예시</summary>
+                <dl>
+                  <div>
+                    <dt>번호를 지정해 생성</dt>
+                    <dd>
+                      <code>gen 100 42 &gt; 1</code>
+                      <span>1번 테스트를 생성합니다.</span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>빈 번호에 이어서 생성</dt>
+                    <dd>
+                      <code>gen 100 43 &gt; $</code>
+                      <span>다음 빈 테스트 번호를 사용합니다.</span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>여러 시드를 반복</dt>
+                    <dd>
+                      <code>repeat seed in 1..100</code>
+                      <code>{'  gen 100 {seed} > $'}</code>
+                      <code>end</code>
+                    </dd>
+                  </div>
+                </dl>
+                <p className="muted small">
+                  ‘파일’에 등록한 생성기를 사용하세요. <code>group 그룹명</code>
+                  으로 생성할 그룹을 지정할 수 있습니다.
+                </p>
+              </details>
+            </section>
+            <section
+              className="card test-execution-panel"
+              aria-label="테스트 실행 설정"
+            >
+              <SectionHeading
+                title="테스트 실행"
+                description="범위와 실행할 작업을 선택하세요."
+              />
+              <label>
+                실행 범위
+                <Select
+                  value={runAllSets ? 'all' : 'current'}
+                  disabled={busy}
+                  onChange={(e) => setAllSets(e.target.value === 'all')}
+                >
+                  <option value="current">현재 세트 · {selected}</option>
+                  {setNames.length > 1 && (
+                    <option value="all">
+                      모든 테스트 세트 · {setNames.length}개
+                    </option>
+                  )}
+                </Select>
+              </label>
+              <p className="muted small test-execution-scope">
+                {runAllSets ? (
+                  `모든 테스트 세트 ${setNames.length}개에 적용합니다.`
+                ) : (
+                  <>
+                    <strong>{selected}</strong> 세트에만 적용합니다.
+                  </>
+                )}
+              </p>
+              <div className="test-execution-choice">
+                <button
+                  className="button primary"
+                  disabled={!can(data.problem, 'prepare') || busy}
+                  onClick={() => void execute('full')}
+                >
+                  <Icon name="play" />
+                  입력·정답 생성
+                </button>
+                <p className="muted small">
+                  입력을 검사하고 Main 풀이로 정답까지 생성합니다.
+                </p>
+                <label className="checkbox generation-auto-apply">
+                  <input
+                    type="checkbox"
+                    checked={autoApply}
+                    disabled={!editable || busy}
+                    onChange={(e) => setAutoApply(e.target.checked)}
+                  />
+                  <span>
+                    성공하면 내 작업 사본에 자동 반영
+                    <small>
+                      입력·정답 생성에만 적용합니다. 실행 이후 저장 자료가
+                      바뀌면 반영하지 않습니다.
+                    </small>
+                  </span>
+                </label>
+              </div>
+              <div className="test-execution-choice">
+                <button
+                  className="button"
+                  disabled={!can(data.problem, 'prepare') || busy}
+                  onClick={() => void execute('inputs')}
+                >
+                  <Icon name="check" />
+                  전체 테스트 검사
+                </button>
+                <p className="muted small">
+                  등록 입력과 스크립트 생성 입력을 Validator로 검사합니다. 정답
+                  생성과 자동 반영 없이 입력만 확인합니다.
+                </p>
+              </div>
+              <p className="muted small test-execution-note">
+                <Icon name="arrow" size={15} />
+                실행하면 결과 화면으로 바로 이동합니다.
+              </p>
+            </section>
+          </div>
           <section className="card no-padding">
             <div className="card-heading">
               <div>
