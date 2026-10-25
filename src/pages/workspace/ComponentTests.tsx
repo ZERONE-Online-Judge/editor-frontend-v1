@@ -51,7 +51,7 @@ export default function ComponentTests({
               : '채점 프로그램과 풀이 사이의 양방향 대화를 처리합니다.'
         }
       />
-      <section className="card">
+      <section className="card form-section">
         <label>
           사용할 {title} 프로그램
           <Select
@@ -85,8 +85,8 @@ export default function ComponentTests({
           </Select>
         </label>
         {kind === 'validator' && (
-          <>
-            <h3 className="mt-section">추가 Validator</h3>
+          <div className="component-extra-validators">
+            <h3>추가 Validator</h3>
             <div className="checkbox-list">
               {sources
                 .filter((f) => f.name !== doc.validator)
@@ -111,16 +111,18 @@ export default function ComponentTests({
             <p className="muted small">
               기본 validator에 더해 모두 통과해야 유효한 테스트가 됩니다.
             </p>
-          </>
+          </div>
         )}
-        <Link className="text-link" to={`/problems/${data.problem.id}/files`}>
-          <Icon name="code" size={15} />
-          소스 파일 관리
-        </Link>
-        <p className="muted small">
-          파일 · 리소스에서 {title} 역할을 지정한 소스만 표시합니다. 기존에
-          연결한 프로그램은 그대로 표시됩니다.
-        </p>
+        <div className="component-source-help">
+          <Link className="text-link" to={`/problems/${data.problem.id}/files`}>
+            <Icon name="code" size={15} />
+            소스 파일 관리
+          </Link>
+          <p className="muted small">
+            파일 · 리소스에서 {title} 역할을 지정한 소스만 표시합니다. 기존에
+            연결한 프로그램은 그대로 표시됩니다.
+          </p>
+        </div>
       </section>
       {kind !== 'interactor' && (
         <section className="card no-padding">
@@ -155,71 +157,74 @@ export default function ComponentTests({
             </div>
           </div>
           {tests.length ? (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>테스트</th>
-                  <th>기대 판정</th>
-                  <th>입력 자료</th>
-                  <th>내용</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {paging.items.map(([id, test], position) => {
-                  const index = paging.offset + position;
-                  return (
-                    <tr key={id}>
-                      <td>#{index + 1}</td>
-                      <td>
-                        <Badge
-                          tone={
-                            test.expected === 'VALID' || test.expected === 'OK'
-                              ? 'success'
-                              : 'warning'
-                          }
-                        >
-                          {test.expected}
-                        </Badge>
-                      </td>
-                      <td>
-                        <a
-                          className="text-link"
-                          href={`/api/problems/${data.problem.id}/blobs/${test.input_sha}`}
-                          download={`unit-${index + 1}.in`}
-                        >
-                          입력 다운로드
-                        </a>
-                      </td>
-                      <td>
-                        <button
-                          className="button small"
-                          onClick={() =>
-                            setSelected({ id, test, number: index + 1 })
-                          }
-                        >
-                          {editable ? '내용 보기·수정' : '내용 보기'}
-                        </button>
-                      </td>
-                      <td>
-                        <button
-                          className="icon-button"
-                          disabled={!editable}
-                          aria-label={`자체 테스트 ${index + 1} 제거`}
-                          onClick={() =>
-                            mutate((d) => {
-                              delete d[unitKey][id];
-                            })
-                          }
-                        >
-                          <Icon name="trash" size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <div className="table-scroll">
+              <table className="data-table component-tests-table">
+                <thead>
+                  <tr>
+                    <th>테스트</th>
+                    <th>기대 판정</th>
+                    <th>입력 자료</th>
+                    <th>내용</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {paging.items.map(([id, test], position) => {
+                    const index = paging.offset + position;
+                    return (
+                      <tr key={id}>
+                        <td>#{index + 1}</td>
+                        <td>
+                          <Badge
+                            tone={
+                              test.expected === 'VALID' ||
+                              test.expected === 'OK'
+                                ? 'success'
+                                : 'warning'
+                            }
+                          >
+                            {test.expected}
+                          </Badge>
+                        </td>
+                        <td>
+                          <a
+                            className="text-link"
+                            href={`/api/problems/${data.problem.id}/blobs/${test.input_sha}`}
+                            download={`unit-${index + 1}.in`}
+                          >
+                            입력 다운로드
+                          </a>
+                        </td>
+                        <td>
+                          <button
+                            className="button small"
+                            onClick={() =>
+                              setSelected({ id, test, number: index + 1 })
+                            }
+                          >
+                            {editable ? '내용 보기·수정' : '내용 보기'}
+                          </button>
+                        </td>
+                        <td>
+                          <button
+                            className="icon-button"
+                            disabled={!editable}
+                            aria-label={`자체 테스트 ${index + 1} 제거`}
+                            onClick={() =>
+                              mutate((d) => {
+                                delete d[unitKey][id];
+                              })
+                            }
+                          >
+                            <Icon name="trash" size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <Empty
               icon="tests"

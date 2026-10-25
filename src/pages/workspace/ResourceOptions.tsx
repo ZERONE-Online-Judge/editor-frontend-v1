@@ -11,7 +11,7 @@ export default function ResourceOptions({
   change: (value: ResourcePolicy | null) => void;
 }) {
   return (
-    <section className="scoped-expectations">
+    <section className="scoped-expectations resource-options">
       <label className="checkbox">
         <input
           type="checkbox"

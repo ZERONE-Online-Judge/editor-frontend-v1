@@ -342,7 +342,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
                     </td>
                     <td>
                       {isSolution ? (
-                        <>
+                        <div className="table-field">
                           <Select
                             aria-label={`${file.name} 기대 판정`}
                             value={(file as Solution).tag}
@@ -374,7 +374,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
                           >
                             세트·그룹 기대 판정
                           </button>
-                        </>
+                        </div>
                       ) : (
                         <div className="source-role-badges">
                           {sourceRoles(doc, file.name).length ? (

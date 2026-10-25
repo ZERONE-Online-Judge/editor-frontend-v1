@@ -20,6 +20,10 @@
   --zoj-card-copy: 0.875rem;
   --zoj-card-hint: 0.75rem;
   --zoj-card-shadow: 0 1px 3px #312e810a;
+  --zoj-control-height: 42px;
+  --zoj-control-height-small: 34px;
+  --zoj-control-gap: 10px;
+  --zoj-form-gap: 20px;
 }
 
 @layer components {

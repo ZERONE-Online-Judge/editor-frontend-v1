@@ -476,7 +476,7 @@ export default function Executions({
         />
       ) : packages ? (
         <>
-          <section className="card compact">
+          <section className="card compact form-section">
             <label className="checkbox">
               <input
                 type="checkbox"

@@ -81,12 +81,14 @@ summary:focus-visible {
 }
 label {
   display: grid;
-  gap: 9px;
+  align-content: start;
+  min-width: 0;
+  gap: 8px;
   font-size: 13px;
   font-weight: 600;
   color: #334155;
 }
-input:not([type='checkbox'], .sr-only),
+input:not([type='checkbox'], [type='radio'], .sr-only),
 select,
 textarea {
   width: 100%;
@@ -102,9 +104,11 @@ textarea {
     border-color 0.15s,
     box-shadow 0.15s;
 }
-input:not([type='checkbox'], .sr-only),
+input:not([type='checkbox'], [type='radio'], .sr-only),
 select {
-  height: 42px;
+  height: var(--zoj-control-height);
+  padding-block: 0;
+  line-height: 1.5;
 }
 input:focus,
 textarea:focus,
@@ -121,11 +125,14 @@ textarea:disabled {
 textarea {
   resize: vertical;
 }
-input[type='checkbox'] {
+input[type='checkbox'],
+input[type='radio'] {
   width: 16px;
   height: 16px;
+  margin: 0;
   accent-color: var(--zoj-accent);
   flex-shrink: 0;
+  vertical-align: middle;
 }
 label small {
   color: var(--zoj-muted);
@@ -308,26 +315,35 @@ svg {
 }
 .actions {
   display: flex;
-  gap: 8px;
+  gap: var(--zoj-control-gap);
   align-items: center;
   flex-wrap: wrap;
+}
+.actions:has(> .button:not(.small)) > :is(.button.small, .icon-button) {
+  min-height: var(--zoj-control-height);
+}
+.actions:has(> .button:not(.small)) > .icon-button {
+  width: var(--zoj-control-height);
 }
 .button {
   display: inline-flex;
   justify-content: center;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
+  min-height: var(--zoj-control-height);
   min-width: 0;
   padding: 9px 14px;
   border: 1px solid var(--zoj-border);
   border-radius: var(--zoj-radius-control);
   background: #fff;
   color: #475569;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
   line-height: 1.5;
-  white-space: nowrap;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
   transition:
     background 0.15s,
     border-color 0.15s;
@@ -350,9 +366,9 @@ svg {
   background: #fff1f2;
 }
 .button.small {
-  min-height: 32px;
+  min-height: var(--zoj-control-height-small);
   padding: 6px 10px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .button.large {
   min-height: 48px;
@@ -385,6 +401,7 @@ svg {
   align-items: center;
   width: 32px;
   height: 32px;
+  flex: none;
   color: #64748b;
   border-radius: 7px;
   background: transparent;
@@ -413,6 +430,7 @@ svg {
   gap: 18px;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   padding: 20px 24px;
   border-bottom: 1px solid var(--zoj-border);
 }
@@ -427,6 +445,7 @@ svg {
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
+  flex-wrap: wrap;
   margin-bottom: 20px;
 }
 .section-heading p {
@@ -616,7 +635,7 @@ svg {
   color: #94a3b8;
 }
 .search-field input {
-  height: 40px;
+  height: calc(var(--zoj-control-height) - 2px);
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -639,7 +658,7 @@ svg {
 }
 .stress-verdict-options {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
   gap: 10px;
 }
 .stress-results {
@@ -1422,22 +1441,27 @@ svg {
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
+  gap: var(--zoj-form-gap);
+  align-items: start;
 }
 .form-grid .span-2 {
   grid-column: 1/-1;
 }
 .checkbox {
   display: flex;
-  gap: 8px;
+  gap: var(--zoj-control-gap);
+  min-height: 36px;
+  padding-block: 6px;
   align-items: center;
   line-height: 1.7;
   font-size: 12px;
   font-weight: 500;
+  overflow-wrap: anywhere;
+  cursor: pointer;
 }
 .checkbox-list {
   display: flex;
-  gap: 12px 24px;
+  gap: 8px 24px;
   flex-wrap: wrap;
   align-items: center;
   margin-top: 12px;
@@ -1460,18 +1484,42 @@ svg {
   gap: 10px;
   align-items: end;
   min-width: 0;
+  flex-wrap: wrap;
 }
 .inline-form > input {
   flex: 1;
 }
 .inline-form label {
-  min-width: 160px;
+  flex: 1 1 180px;
+  min-width: 0;
 }
 .inline-form select {
-  min-width: 180px;
+  min-width: 0;
 }
 .inline-form input {
-  min-width: 100px;
+  min-width: 0;
+}
+.inline-form > .button,
+.inline-form > .actions > .button {
+  min-height: var(--zoj-control-height);
+}
+.form-section {
+  display: grid;
+  align-content: start;
+  gap: var(--zoj-form-gap);
+}
+.form-section > .section-heading,
+.form-section > .permission-checklist,
+.form-section > .material-section {
+  margin-block: 0;
+}
+.form-section > .button,
+.form-section > .text-link,
+.form-grid > .button {
+  justify-self: start;
+}
+.form-grid > .button {
+  align-self: end;
 }
 .stat-strip {
   display: grid;
@@ -1620,7 +1668,8 @@ svg {
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: var(--zoj-control-gap);
   padding: 16px 24px;
   border-top: 1px solid var(--zoj-border);
   background: #fafbfe;
@@ -1722,7 +1771,7 @@ svg {
 }
 .language-toolbar .inline-form input {
   width: 160px;
-  height: 34px;
+  height: var(--zoj-control-height);
   font-size: 12px;
 }
 .statement-section {
@@ -3181,11 +3230,9 @@ svg {
     gap: 14px;
   }
   .card-heading .actions {
-    gap: 6px;
+    gap: var(--zoj-control-gap);
   }
   .card-heading .actions .button {
-    font-size: 10px;
-    padding-inline: 10px;
     flex: 1;
   }
   .tests-table {
@@ -5089,4 +5136,118 @@ svg {
 }
 .execution-request-scope {
   overflow-wrap: anywhere;
+}
+
+/* Keep related controls aligned without compressing labels or hit areas. */
+.actions > *,
+.card-heading > *,
+.section-heading > * {
+  min-width: 0;
+}
+.actions > .icon-button {
+  width: var(--zoj-control-height-small);
+  height: var(--zoj-control-height-small);
+}
+.table-field {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  min-width: 180px;
+}
+.component-tests-table {
+  min-width: 620px;
+}
+.component-tests-table .button,
+.component-tests-table .text-link {
+  white-space: nowrap;
+}
+.resource-options {
+  display: grid;
+  gap: 14px;
+}
+.resource-options > .checkbox-list {
+  margin-top: 0;
+}
+.resource-options > .checkbox-list > .checkbox {
+  padding-inline: 4px;
+}
+.invocation-select-list > .checkbox {
+  min-height: 38px;
+  padding: 8px;
+  border-radius: 6px;
+}
+.invocation-select-list > .checkbox:hover {
+  background: #eef2ff;
+}
+.invocation-select-list > .checkbox:has(input:checked) {
+  background: #eef2ff;
+}
+.invocation-controls > .button,
+.invocation-review-code > .button,
+.generator-loop > .button {
+  justify-self: start;
+}
+.invocation-review-code[open],
+.generator-loop[open] {
+  display: grid;
+  gap: 16px;
+}
+.invocation-review-code > summary,
+.invocation-review-code .form-grid {
+  margin: 0;
+}
+.stress-controls .checkbox > small,
+.stress-results .checkbox > small {
+  grid-column: 2;
+}
+.conflict-item label > span:has(input[type='radio']) {
+  display: flex;
+  align-items: center;
+  gap: var(--zoj-control-gap);
+  min-height: 36px;
+}
+@media (max-width: 767px) {
+  :root {
+    --zoj-control-height: 44px;
+    --zoj-control-height-small: 38px;
+  }
+}
+@media (max-width: 600px) {
+  .checkbox {
+    min-height: 40px;
+  }
+  .problem-heading .actions .button,
+  .card-heading .actions .button {
+    min-width: min(100%, 120px);
+    font-size: 12px;
+  }
+  .modal-footer > .button {
+    flex: 1 1 120px;
+  }
+  .inline-form > input,
+  .inline-form > label {
+    flex: 1 1 180px;
+  }
+  .inline-form > .button {
+    flex: 1 1 120px;
+  }
+  .invocation-controls > .button,
+  .form-grid > .button {
+    width: 100%;
+  }
+  .publication-row > .actions {
+    width: 100%;
+  }
+}
+.component-extra-validators {
+  display: grid;
+  gap: 12px;
+}
+.component-extra-validators .checkbox-list {
+  margin: 0;
+}
+.component-source-help {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
 }

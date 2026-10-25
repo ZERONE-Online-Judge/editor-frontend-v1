@@ -166,22 +166,24 @@ export default function ZojPublishing({
                   · r{row.result.revision} · {time(row.created_at)}
                 </small>
               </div>
-              <button
-                className="button small"
-                disabled={!editable || !ready}
-                onClick={() => setUpdateTarget(row)}
-              >
-                새 패키지로 업데이트
-              </button>
-              <a
-                className="button small"
-                href={row.result.url}
-                target="_blank"
-                rel="noreferrer"
-              >
-                ZOJ에서 보기
-                <Icon name="arrow" size={14} />
-              </a>
+              <div className="actions">
+                <button
+                  className="button small"
+                  disabled={!editable || !ready}
+                  onClick={() => setUpdateTarget(row)}
+                >
+                  새 패키지로 업데이트
+                </button>
+                <a
+                  className="button small"
+                  href={row.result.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  ZOJ에서 보기
+                  <Icon name="arrow" size={14} />
+                </a>
+              </div>
             </div>
           ))}
           {historyPage && (
