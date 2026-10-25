@@ -52,6 +52,7 @@ loaded.require = (id) => {
     id === '../../lib/useRemotePage' ||
     id === '../../lib/jobHistory' ||
     id === '../../lib/executionCategories' ||
+    id === '../../lib/executionTitles' ||
     id === '../../lib/permissions' ||
     id === '../../lib/workspace' ||
     id === '../../lib/executionNavigation' ||

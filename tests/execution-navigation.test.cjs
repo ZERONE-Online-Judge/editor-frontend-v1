@@ -232,6 +232,10 @@ async function post(url, body) {
     body.kind,
     '방금 요청한 ' + body.kind + ' 결과',
   );
+  result.options = {
+    ...result.options,
+    ...global.structuredClone(body.options),
+  };
   jobs.unshift(result);
   return result;
 }
@@ -492,9 +496,10 @@ for (const category of detailedCategories) {
     );
     await mount('invocations?history_page=2');
     await setControl('작업 종류', category);
-    const definition = source(
-      'lib/executionCategories.ts',
-    ).executionCategories.find((row) => row.id === category);
+    const displayed = jobs.find((row) => row.id === `${category}-0`);
+    const expectedTitle = source('lib/executionTitles.ts').executionTitle(
+      displayed,
+    );
     assert.equal(host.querySelectorAll('.job-row').length, 3);
     assert.doesNotMatch(
       host.querySelector('#location').textContent,
@@ -506,11 +511,11 @@ for (const category of detailedCategories) {
     );
     assert.equal(
       host.querySelector('.job-row strong').textContent,
-      definition.label,
+      expectedTitle,
     );
     assert.equal(
       host.querySelector('.execution-detail h3').textContent,
-      definition.label,
+      expectedTitle,
     );
     assert.match(
       host.querySelector('.execution-detail').textContent,
@@ -518,7 +523,7 @@ for (const category of detailedCategories) {
     );
     assert.match(
       host.querySelector('.execution-source-summary').textContent,
-      new RegExp(definition.label),
+      new RegExp(expectedTitle),
     );
     assert.equal(
       host.querySelector('.execution-detail').firstElementChild,
@@ -527,6 +532,28 @@ for (const category of detailedCategories) {
     assert.deepEqual(requests, []);
   });
 }
+
+test('selected verification scope is identical in history, detail, metadata and acceptance notice', async () => {
+  await mount('verification');
+  await setControl('대상 풀이', 'selected');
+  const pick = host.querySelector('.invocation-select-list input');
+  await act(() => pick.click());
+  await click('선택 범위 검증 시작');
+  const requested = jobs.find((row) => row.id === 'new-verify');
+  const title = source('lib/executionTitles.ts').executionTitle(requested);
+  assert.match(title, /선택 풀이 1개 검증/);
+  assert.equal(host.querySelector('.job-row strong').textContent, title);
+  assert.equal(host.querySelector('.execution-detail h3').textContent, title);
+  const field = [
+    ...host.querySelectorAll('.execution-source-summary dl > div'),
+  ].find((el) => el.querySelector('dt').textContent === '작업');
+  assert.equal(field.querySelector('dd').textContent, title);
+  assert.ok(
+    host
+      .querySelector('.workspace-main')
+      .textContent.includes(`${title} 요청을 접수했습니다.`),
+  );
+});
 
 test('verification result links stay in execution results and preserve saved jobs and query options', async () => {
   await mount('invocations?job=latest&view=team');
@@ -1282,7 +1309,7 @@ for (const status of [
     );
     assert.match(
       detail.firstElementChild.textContent,
-      /테스트 작성자.*@author.*입력 생성·검사/,
+      /테스트 작성자.*@author.*입력 검사/,
     );
     assert.ok(detail.querySelector('.validation-results'));
   });

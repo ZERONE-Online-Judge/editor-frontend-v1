@@ -1,17 +1,24 @@
 import type { Job } from './types';
 
+function preparationMode(job: Job) {
+  return (
+    job.options.prepare_mode ||
+    (job.category?.startsWith('prepare-')
+      ? job.category.slice(8)
+      : job.result.prepare_mode)
+  );
+}
+
 export function isInputCheck(job: Job) {
   return (
     job.kind === 'prepare' &&
-    ['inputs', 'validate'].includes(
-      String(job.result.prepare_mode || job.options.prepare_mode),
-    )
+    ['inputs', 'validate'].includes(String(preparationMode(job)))
   );
 }
 
 export function isCheckOnly(job: Job) {
   if (!isInputCheck(job)) return false;
-  const mode = job.result.prepare_mode || job.options.prepare_mode;
+  const mode = preparationMode(job);
   if (mode === 'validate') return true;
   if (typeof job.options.check_only === 'boolean')
     return job.options.check_only;

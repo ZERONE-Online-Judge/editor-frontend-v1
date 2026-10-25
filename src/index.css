@@ -5076,3 +5076,17 @@ svg {
     transition: none;
   }
 }
+
+.job-row > .job-scope-summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--zoj-muted);
+}
+.execution-request-scope {
+  overflow-wrap: anywhere;
+}
