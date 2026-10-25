@@ -398,7 +398,7 @@ export default function ProblemWorkspace() {
             <div className="breadcrumb">
               <Link to="/problems">문제</Link>
               <Icon name="arrow" size={12} />
-              <span>{data.problem.slug}</span>
+              <span title={data.problem.slug}>{data.problem.slug}</span>
             </div>
             <div className="problem-heading-title">
               <h1>{doc.info.name}</h1>
