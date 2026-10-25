@@ -114,7 +114,7 @@ export default function Statements() {
       </div>
       {statement && (
         <>
-          <section className="card">
+          <section className="card form-section">
             <label>
               이 언어의 문제 제목
               <input

@@ -103,7 +103,7 @@ function AccessPanel() {
         </Notice>
       ) : (
         <>
-          <section className="card">
+          <section className="card form-section">
             <SectionHeading title="협업자 추가" />
             <label>
               이메일 또는 Editor 아이디

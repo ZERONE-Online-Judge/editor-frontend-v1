@@ -26,7 +26,7 @@ export default function GeneratorLoop({
     error = (e as Error).message;
   }
   return (
-    <details className="scoped-expectations">
+    <details className="scoped-expectations generator-loop">
       <summary>시드 범위로 생성 규칙 추가</summary>
       <fieldset disabled={disabled} className="form-grid">
         <label className="span-2">

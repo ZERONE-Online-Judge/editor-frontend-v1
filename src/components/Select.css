@@ -1,6 +1,6 @@
 select.zoj-select {
   appearance: none;
-  min-height: 38px;
+  min-height: var(--zoj-control-height);
   max-width: 100%;
   border: 1px solid #dce2eb;
   border-radius: 9px;

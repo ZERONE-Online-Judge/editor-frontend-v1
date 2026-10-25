@@ -27,7 +27,7 @@ export default function Materials() {
       />
       {Object.entries(doc.materials).length ? (
         paging.items.map(([key, material]) => (
-          <section className="card" key={key}>
+          <section className="card form-section" key={key}>
             <SectionHeading
               title={key}
               actions={
