@@ -1,6 +1,10 @@
 import GeneratedTestResults from './GeneratedTestResults';
 import ValidationResults from './ValidationResults';
-import { isComponentCheck, isInputCheck } from '../../lib/validationResults';
+import {
+  isCheckOnly,
+  isComponentCheck,
+  isInputCheck,
+} from '../../lib/validationResults';
 import Select from '../../components/Select';
 import Pagination, { PaginatedList } from '../../components/Pagination';
 import { useRemotePage } from '../../lib/useRemotePage';
@@ -303,12 +307,13 @@ export default function Executions({
   }
   const sourceRelation = job ? jobRelation(job, data.document_hash) : null;
   const stale = sourceRelation === 'other';
+  const checkOnly = job ? isCheckOnly(job) : false;
   const validationFeedback =
     job && (isComponentCheck(job) || isInputCheck(job));
   const scope = (job?.result.scope || job?.options.scope) as
     InvocationScope | undefined;
   async function apply() {
-    if (!job || deciding) return;
+    if (!job || deciding || isCheckOnly(job)) return;
     setDeciding(true);
     try {
       const version = await save();
@@ -327,7 +332,7 @@ export default function Executions({
     }
   }
   async function discardGenerated() {
-    if (!job || deciding) return;
+    if (!job || deciding || isCheckOnly(job)) return;
     setDeciding(true);
     try {
       await post(`/problems/${data.problem.id}/jobs/${job.id}/discard`);
@@ -669,25 +674,27 @@ export default function Executions({
                             ? '결과 반영본'
                             : '현재 저장본'}
                       </Badge>
-                      {row.kind === 'prepare' && row.status === 'completed' && (
-                        <Badge
-                          tone={
-                            row.application
-                              ? 'success'
-                              : row.document_hash === data.document_hash
-                                ? 'warning'
-                                : 'neutral'
-                          }
-                        >
-                          {row.discarded_at
-                            ? '반영하지 않고 버림'
-                            : row.application
-                              ? '내 사본에 반영됨'
-                              : row.document_hash === data.document_hash
-                                ? '미반영'
-                                : '이전 자료'}
-                        </Badge>
-                      )}
+                      {row.kind === 'prepare' &&
+                        row.status === 'completed' &&
+                        (!isCheckOnly(row) || row.application) && (
+                          <Badge
+                            tone={
+                              row.application
+                                ? 'success'
+                                : row.document_hash === data.document_hash
+                                  ? 'warning'
+                                  : 'neutral'
+                            }
+                          >
+                            {row.discarded_at
+                              ? '반영하지 않고 버림'
+                              : row.application
+                                ? '내 사본에 반영됨'
+                                : row.document_hash === data.document_hash
+                                  ? '미반영'
+                                  : '이전 자료'}
+                          </Badge>
+                        )}
                       <Badge
                         tone={
                           row.status === 'failed'
@@ -1073,9 +1080,11 @@ export default function Executions({
                           (n, t) => n + t.length,
                           0,
                         )}
-                        {isInputCheck(job)
+                        {checkOnly
                           ? '개 입력 검사 완료'
-                          : '개 입력·정답 생성 완료'}
+                          : isInputCheck(job)
+                            ? '개 입력 생성·검사 완료'
+                            : '개 입력·정답 생성 완료'}
                         {job.application && (
                           <small className="block">
                             내 작업 사본에 반영됨 ·{' '}
@@ -1089,7 +1098,7 @@ export default function Executions({
                           반영하지 않고 버림 · {time(job.discarded_at)}
                         </small>
                       )}
-                      {!job.application && !job.discarded_at && (
+                      {!checkOnly && !job.application && !job.discarded_at && (
                         <div className="actions">
                           <button
                             className="button"
@@ -1109,12 +1118,19 @@ export default function Executions({
                       )}
                     </div>
                   )}
-                  {job.result.auto_apply?.status === 'blocked' && (
-                    <Notice>
-                      {job.result.auto_apply.message ||
-                        '자동 반영되지 않았습니다. 실행 당시 자료와 작업 사본을 확인하세요.'}
-                    </Notice>
+                  {checkOnly && (
+                    <p className="muted small check-only-notice">
+                      검사 전용 실행입니다. 입력 검사 결과만 보관하며, 등록
+                      테스트와 생성 스크립트는 변경하지 않습니다.
+                    </p>
                   )}
+                  {!checkOnly &&
+                    job.result.auto_apply?.status === 'blocked' && (
+                      <Notice>
+                        {job.result.auto_apply.message ||
+                          '자동 반영되지 않았습니다. 실행 당시 자료와 작업 사본을 확인하세요.'}
+                      </Notice>
+                    )}
                   {job.kind === 'prepare' && (
                     <GeneratedTestResults
                       key={job.id}

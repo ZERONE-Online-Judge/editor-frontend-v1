@@ -1091,8 +1091,68 @@ test('input-only checks show their validator verdicts without claiming answer ge
     /정답 생성 완료/,
   );
   assert.ok(detail.querySelector('[aria-label="검사한 입력 미리보기"]'));
+  assert.equal(detail.querySelector('.result-action .actions'), null);
+  assert.match(
+    detail.querySelector('.check-only-notice').textContent,
+    /검사 전용 실행/,
+  );
+  assert.doesNotMatch(host.querySelector('.job-row').textContent, /미반영/);
   assert.equal(detail.querySelector('[aria-label="정답 미리보기"]'), null);
 });
+
+for (const mode of ['inputs', 'validate']) {
+  test(`${mode} checks have no apply/discard actions while retaining input previews`, async () => {
+    const result = job('check-only', 'prepare', '입력 검사 완료');
+    result.options = {
+      prepare_mode: mode,
+      check_only: true,
+      test_indices: [1],
+    };
+    result.result.testsets = {
+      tests: [{ index: 1, input_sha: 'input', validator: 'VALID' }],
+    };
+    jobs = [result];
+    await mount('invocations?job=check-only');
+    const detail = host.querySelector('.execution-detail');
+    assert.equal(detail.querySelector('.result-action .actions'), null);
+    assert.ok(detail.querySelector('[aria-label="검사한 입력 미리보기"]'));
+    assert.match(
+      detail.textContent,
+      /등록 테스트와 생성 스크립트는 변경하지 않습니다/,
+    );
+    assert.doesNotMatch(host.querySelector('.job-row').textContent, /미반영/);
+    assert.deepEqual(requests, []);
+  });
+}
+
+for (const options of [
+  { prepare_mode: 'inputs', test_indices: [1] },
+  { prepare_mode: 'inputs', check_only: false, test_indices: [] },
+  { prepare_mode: 'full' },
+  { prepare_mode: 'answers' },
+]) {
+  test(`generation preserves apply/discard actions: ${JSON.stringify(options)}`, async () => {
+    const result = job('generation', 'prepare', '생성 완료');
+    result.options = options;
+    result.result.testsets = {
+      tests: [
+        {
+          index: 1,
+          input_sha: 'input',
+          answer_sha: 'answer',
+          validator: 'VALID',
+        },
+      ],
+    };
+    jobs = [result];
+    await mount('invocations?job=generation');
+    const actions = host.querySelector('.result-action .actions');
+    assert.match(actions.textContent, /작업 사본에 반영/);
+    assert.match(actions.textContent, /반영하지 않고 버리기/);
+    assert.equal(host.querySelector('.check-only-notice'), null);
+    assert.deepEqual(requests, []);
+  });
+}
 
 test('a failed input check shows the exact failing set and test without claiming success from prior sets', async () => {
   const result = job(
