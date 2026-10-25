@@ -175,13 +175,15 @@ async function get(url, options = {}) {
         query.get('relation') === 'all' ||
         matching(row) === (query.get('relation') === 'current'),
     );
-    const pages = Math.max(1, Math.ceil(filtered.length / 20));
+    const pageSize = Number(query.get('page_size'));
+    assert.equal(pageSize, 10);
+    const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
     const page = Math.min(Number(query.get('page')), pages);
     return {
-      items: filtered.slice((page - 1) * 20, page * 20),
+      items: filtered.slice((page - 1) * pageSize, page * pageSize),
       total: filtered.length,
       page,
-      page_size: 20,
+      page_size: pageSize,
       pages,
       counts: { all: all.length, current, other: all.length - current },
     };
@@ -2049,7 +2051,7 @@ test('History pages retain the selected result and show original requesters', as
     },
   }));
   await mount('invocations?history_category=verify');
-  assert.equal(host.querySelectorAll('.job-row').length, 20);
+  assert.equal(host.querySelectorAll('.job-row').length, 10);
   assert.match(
     host.querySelector('.execution-source-summary').textContent,
     /검수 동료.*@reviewer/,
@@ -2058,15 +2060,15 @@ test('History pages retain the selected result and show original requesters', as
   const next = host.querySelector('[aria-label="작업 기록 다음 페이지"]');
   await act(async () => next.click());
   await flush();
-  assert.equal(host.querySelectorAll('.job-row').length, 20);
-  assert.match(host.querySelector('.job-row').textContent, /검증 결과 20/);
+  assert.equal(host.querySelectorAll('.job-row').length, 10);
+  assert.match(host.querySelector('.job-row').textContent, /검증 결과 10/);
   assert.match(
     host.querySelector('.execution-detail').textContent,
     /검증 결과 0/,
   );
   assert.match(host.querySelector('#location').textContent, /history_page=2/);
   await act(async () =>
-    host.querySelector('[aria-label="작업 기록 7페이지"]').click(),
+    host.querySelector('[aria-label="작업 기록 13페이지"]').click(),
   );
   await flush();
   assert.equal(host.querySelectorAll('.job-row').length, 5);
@@ -2114,7 +2116,7 @@ test('Material filters reset pagination and distinguish source hashes from appli
     /현재 작업 사본과 다른 자료/,
   );
   await click('다른 자료 19');
-  assert.equal(host.querySelectorAll('.job-row').length, 19);
+  assert.equal(host.querySelectorAll('.job-row').length, 10);
   const kind = host.querySelector('[aria-label="기록 작업 종류"]');
   await act(async () => {
     kind.value = 'prepare';
@@ -2129,7 +2131,7 @@ test('A direct link can open a record outside the visible history page', async (
     job(`old-${index}`, 'verify', `기록 ${index}`),
   );
   await mount('verification?job=old-124');
-  assert.equal(host.querySelectorAll('.job-row').length, 20);
+  assert.equal(host.querySelectorAll('.job-row').length, 10);
   assert.match(host.querySelector('.execution-detail').textContent, /기록 124/);
 });
 
@@ -2151,12 +2153,12 @@ test('A slow previous page cannot overwrite the page restored by browser back', 
   await flush();
   assert.match(host.textContent, /기록을 불러오고 있습니다/);
   await click('뒤로 이동');
-  assert.equal(host.querySelectorAll('.job-row').length, 20);
+  assert.equal(host.querySelectorAll('.job-row').length, 10);
   await act(async () =>
-    resolve({ items: [jobs[30]], page: 2, total: 45, pages: 3, page_size: 20 }),
+    resolve({ items: [jobs[10]], page: 2, total: 45, pages: 5, page_size: 10 }),
   );
   await flush();
-  assert.equal(host.querySelectorAll('.job-row').length, 20);
+  assert.equal(host.querySelectorAll('.job-row').length, 10);
   assert.match(host.querySelector('.job-row').textContent, /검증 0/);
 });
 

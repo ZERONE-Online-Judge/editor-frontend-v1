@@ -119,7 +119,7 @@ export default function Executions({
   const historyKind = isExecutionCategory(chosenKind) ? chosenKind : 'all';
   const historyQuery = new URLSearchParams({
     page: String(historyPage),
-    page_size: '20',
+    page_size: '10',
     kind: 'all',
     category: historyKind,
     relation,
@@ -144,6 +144,7 @@ export default function Executions({
               (relation === 'other')),
       ),
     showResults,
+    10,
   );
   const visible = history?.items || [];
   function changeHistory(key: string, value: string) {
