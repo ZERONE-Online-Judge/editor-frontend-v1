@@ -5295,13 +5295,76 @@ svg {
   color: #9b641c;
 }
 .job-outcome.is-compact {
-  padding: 10px 12px;
+  padding: 3px 0 0;
+  border: 0;
+  border-radius: 0;
   background: transparent;
 }
-.job-outcome.is-compact dt {
-  font-size: 10px;
+.job-outcome.is-compact dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
 }
-.job-outcome.is-compact p {
-  font-size: 10px;
-  margin-top: 7px;
+.job-outcome.is-compact dl > div {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+.job-outcome.is-compact dl > div + div {
+  border-left: 1px solid var(--zoj-border);
+  padding-left: 14px;
+}
+.job-outcome.is-compact dt {
+  font-size: 11px;
+  font-weight: 400;
+  margin: 0;
+}
+.job-outcome.is-compact .badge {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.job-outcome.is-compact dl > div:first-child .badge.success {
+  color: var(--zoj-ink);
+}
+.job-row > .job-row-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+.job-row > .job-row-heading > strong {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.job-row .job-row-heading .job-requester {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--zoj-muted);
+}
+.job-row > .job-history-scope {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--zoj-muted);
+}
+.job-row > .job-row-flags {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  color: #9b641c;
+  font-size: 11px;
+}
+.job-row > .job-row-flags:empty {
+  display: none;
+}
+.job-row > .job-legacy-summary {
+  color: var(--zoj-muted);
+  font-size: 11px;
 }

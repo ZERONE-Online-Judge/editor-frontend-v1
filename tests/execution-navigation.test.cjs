@@ -503,28 +503,45 @@ for (const [kind, status, assessment, label, tone] of [
     for (const panel of [list, detail]) {
       assert.deepEqual(
         [...panel.querySelectorAll('dt')].map((el) => el.textContent),
-        ['실행 상태', '결과 확인'],
+        panel === list ? ['실행', '결과'] : ['실행 상태', '결과 확인'],
       );
       assert.equal(
         panel.querySelectorAll('dd')[0].textContent,
         { completed: '완료', failed: '실패', cancelled: '중단' }[status],
       );
       const result = panel.querySelectorAll('dd')[1];
-      assert.equal(result.textContent, label);
+      const shortLabels = {
+        expectations_match: '예상 일치',
+        component_matches: '예상 일치',
+        expectations_differ: '불일치 1개',
+        component_differs: '불일치 1개',
+        input_rejected: '불통과',
+        counterexample_found: '반례 2개',
+        incomplete_checks: '미완료',
+        render_failed: '생성 불완전',
+        missing_evidence: '미확인',
+      };
+      assert.equal(
+        result.textContent,
+        panel === list ? shortLabels[assessment.code] || label : label,
+      );
       assert.match(
         panel.getAttribute('aria-label'),
         new RegExp(`결과 확인: ${label}`),
       );
       assert.ok(result.querySelector('.badge').classList.contains(tone));
-      if (assessment.partial)
+      if (assessment.partial && panel === detail)
         assert.match(panel.textContent, /전체 확인 미완료/);
       if (assessment.counts)
         assert.match(
-          panel.textContent,
+          panel === list ? panel.getAttribute('aria-label') : panel.textContent,
           /검증 항목 3개 · 일치 2개 · 불일치 1개/,
         );
       if (kind === 'stress' && assessment.found)
-        assert.match(panel.textContent, /20회 탐색 · 반례 2개/);
+        assert.match(
+          panel === list ? panel.getAttribute('aria-label') : panel.textContent,
+          /20회 탐색 · 반례 2개/,
+        );
     }
     assert.ok(detail.querySelector('.job-outcome-description'));
     assert.equal(
@@ -547,7 +564,12 @@ for (const [status, expected] of [
     jobs = [value];
     await mount('invocations?job=legacy-outcome');
     for (const panel of host.querySelectorAll('.job-outcome')) {
-      assert.equal(panel.querySelectorAll('dd')[1].textContent, expected);
+      assert.equal(
+        panel.querySelectorAll('dd')[1].textContent,
+        panel.classList.contains('is-compact')
+          ? { completed: '미확인', queued: '대기', running: '확인 중' }[status]
+          : expected,
+      );
       assert.equal(
         panel.querySelectorAll('dd')[1].querySelector('.badge.success'),
         null,
@@ -670,8 +692,9 @@ for (const category of detailedCategories) {
     );
     assert.equal(
       host.querySelector('.job-row strong').textContent,
-      expectedTitle,
+      expectedTitle.split(' · ')[0],
     );
+    assert.ok(host.querySelector('.job-row').title.startsWith(expectedTitle));
     assert.equal(
       host.querySelector('.execution-detail h3').textContent,
       expectedTitle,
@@ -701,7 +724,11 @@ test('selected verification scope is identical in history, detail, metadata and 
   const requested = jobs.find((row) => row.id === 'new-verify');
   const title = source('lib/executionTitles.ts').executionTitle(requested);
   assert.match(title, /선택 풀이 1개 검증/);
-  assert.equal(host.querySelector('.job-row strong').textContent, title);
+  assert.equal(
+    host.querySelector('.job-row strong').textContent,
+    title.split(' · ')[0],
+  );
+  assert.ok(host.querySelector('.job-row').title.startsWith(title));
   assert.equal(host.querySelector('.execution-detail h3').textContent, title);
   const field = [
     ...host.querySelectorAll('.execution-source-summary dl > div'),
@@ -2137,10 +2164,7 @@ test('stress history shows saved request conditions without using current source
     panel.querySelector('pre code').textContent,
     'gen --size 100 "{seed}"',
   );
-  assert.match(
-    host.querySelector('.job-stress-context').title,
-    /gen --size 100 "\{seed\}" · 최대 100회 · 30초/,
-  );
+  assert.match(host.querySelector('.job-row').title, /스트레스 테스트/);
   assert.deepEqual(requests, []);
 });
 
@@ -2302,7 +2326,11 @@ test('History pages retain the selected result and show original requesters', as
     host.querySelector('.execution-source-summary').textContent,
     /검수 동료.*@reviewer/,
   );
-  assert.match(host.querySelector('.job-row').textContent, /검수 동료 요청/);
+  assert.match(host.querySelector('.job-requester').textContent, /검수 동료/);
+  assert.match(
+    host.querySelector('.job-row').getAttribute('aria-label'),
+    /검수 동료 요청/,
+  );
   const next = host.querySelector('[aria-label="작업 기록 다음 페이지"]');
   await act(async () => next.click());
   await flush();
@@ -2346,7 +2374,11 @@ test('Material filters reset pagination and distinguish source hashes from appli
     host.querySelector('#location').textContent,
     /history_page/,
   );
-  assert.match(host.querySelector('.job-row').textContent, /현재 저장본/);
+  assert.match(
+    host.querySelector('.job-row').getAttribute('aria-label'),
+    /현재 저장본/,
+  );
+  assert.equal(host.querySelector('.job-row .job-row-flags').textContent, '');
   const applied = [...host.querySelectorAll('.job-row')].find((node) =>
     node.textContent.includes('작업 4'),
   );
