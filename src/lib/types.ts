@@ -359,6 +359,38 @@ export type StressConfiguration = {
   minimize_attempts?: number;
   minimize_seconds?: number;
 };
+export type JobAssessment = {
+  kind:
+    | 'pending'
+    | 'expectations'
+    | 'component'
+    | 'input'
+    | 'preparation'
+    | 'stress'
+    | 'render'
+    | 'none';
+  status:
+    | 'pending'
+    | 'passed'
+    | 'failed'
+    | 'incomplete'
+    | 'not_run'
+    | 'unknown'
+    | 'found'
+    | 'not_found'
+    | 'empty';
+  code: string;
+  partial: boolean;
+  counts?: {
+    total: number;
+    passed: number;
+    failed: number;
+    unconfirmed: number;
+  };
+  found?: number;
+  iterations?: number;
+  uncovered?: number;
+};
 export type Job = {
   category?: string;
   discarded_at?: number | null;
@@ -373,6 +405,7 @@ export type Job = {
   requester?: { id: string; display_name: string; handle: string } | null;
   kind: JobKind;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  outcome?: { execution: Job['status']; assessment: JobAssessment };
   document_hash: string;
   workspace_version: number;
   revision: number;
@@ -383,6 +416,8 @@ export type Job = {
   started_at: number | null;
   finished_at: number | null;
   result: {
+    preparation_total?: number;
+    unit_test_totals?: Record<string, number>;
     prepare_mode?: 'full' | 'inputs' | 'validate' | 'answers';
     stress_results_version?: number;
     stress_results?: StressSolutionResult[];

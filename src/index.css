@@ -5251,3 +5251,57 @@ svg {
   gap: 6px;
   justify-items: start;
 }
+
+.job-outcome {
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 10px;
+  background: var(--zoj-surface);
+}
+.job-outcome dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.job-outcome dt {
+  margin-bottom: 7px;
+  color: var(--zoj-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.job-outcome dd {
+  margin: 0;
+}
+.job-outcome .badge {
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}
+.job-outcome p {
+  margin: 10px 0 0;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  font-size: 12px;
+}
+.job-outcome-description {
+  color: var(--zoj-muted);
+}
+.job-outcome-counts {
+  color: var(--zoj-ink);
+}
+.job-outcome-partial {
+  color: #9b641c;
+}
+.job-outcome.is-compact {
+  padding: 10px 12px;
+  background: transparent;
+}
+.job-outcome.is-compact dt {
+  font-size: 10px;
+}
+.job-outcome.is-compact p {
+  font-size: 10px;
+  margin-top: 7px;
+}
