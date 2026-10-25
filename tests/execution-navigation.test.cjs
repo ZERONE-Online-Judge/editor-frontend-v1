@@ -38,6 +38,7 @@ let revisionRequests,
   saveEnabled,
   updateSnapshot,
   updateFailure;
+let unitBlobs, unitBlobFailure, unitUploads, unitUploadFailure;
 const cache = new Map();
 function source(relative) {
   const file = path.resolve(__dirname, '../src', relative);
@@ -60,6 +61,21 @@ function source(relative) {
           truncated: false,
           binary: false,
         }),
+        blobText: async (problem, sha) => {
+          assert.equal(problem, 'p');
+          if (unitBlobFailure) throw unitBlobFailure;
+          assert.ok(unitBlobs.has(sha), `Missing blob ${sha}`);
+          return unitBlobs.get(sha);
+        },
+        upload: async (problem, text) => {
+          assert.equal(problem, 'p');
+          if (unitUploadFailure) throw unitUploadFailure;
+          unitUploads.push(text);
+          return {
+            sha256: `uploaded-${unitUploads.length}`,
+            size: text.length,
+          };
+        },
         put: putWorking,
       };
     if (
@@ -255,6 +271,10 @@ async function putWorking(url, body) {
 }
 let root, host;
 beforeEach(() => {
+  unitBlobs = new Map();
+  unitBlobFailure = null;
+  unitUploads = [];
+  unitUploadFailure = null;
   revisionRequests = [];
   historyReads = 0;
   workspaceReads = 0;
@@ -3259,4 +3279,146 @@ test('verification shares overview resource policy without rendering another set
   assert.deepEqual(state.document.language_resource_limits, {
     pypy3: { time_limit_ms: 700, memory_limit_mb: 384 },
   });
+});
+
+function existingUnit(kind) {
+  const key = kind === 'checker' ? 'checker_tests' : 'validator_tests';
+  state.document[key].original = {
+    input_sha: 'unit-input',
+    answer_sha: kind === 'checker' ? 'unit-answer' : null,
+    output_sha: kind === 'checker' ? 'unit-output' : null,
+    expected: kind === 'checker' ? 'WRONG_ANSWER' : 'INVALID',
+  };
+  unitBlobs.set('unit-input', '3\n1 2 3\n');
+  unitBlobs.set('unit-answer', '6\n');
+  unitBlobs.set('unit-output', '5\n');
+  return key;
+}
+async function editUnitText(label, value) {
+  const textarea = host.querySelector(`textarea[aria-label="${label}"]`);
+  assert.ok(textarea, label);
+  await act(() => {
+    Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype,
+      'value',
+    ).set.call(textarea, value);
+    textarea.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  await flush();
+}
+for (const kind of ['validator', 'checker']) {
+  test(`${kind} existing self-test loads its saved content and edits the same case`, async () => {
+    const key = existingUnit(kind);
+    saveEnabled = true;
+    await mount(kind);
+    await click('내용 보기·수정');
+    assert.equal(
+      host.querySelector('[aria-label="테스트 입력"]').value,
+      '3\n1 2 3\n',
+    );
+    assert.equal(
+      control('기대 판정').value,
+      kind === 'checker' ? 'WRONG_ANSWER' : 'INVALID',
+    );
+    if (kind === 'checker') {
+      assert.equal(host.querySelector('[aria-label="기대 출력"]').value, '6\n');
+      assert.equal(
+        host.querySelector('[aria-label="검사할 참가자 출력"]').value,
+        '5\n',
+      );
+      await editUnitText('기대 출력', '10\n');
+      await editUnitText('검사할 참가자 출력', '10\n');
+    }
+    await editUnitText('테스트 입력', '4\n1 2 3 4\n');
+    await setControl('기대 판정', kind === 'checker' ? 'OK' : 'VALID');
+    await click('수정');
+    assert.equal(host.querySelector('dialog'), null);
+    await click('작업 사본 저장');
+    assert.deepEqual(Object.keys(state.document[key]), ['original']);
+    assert.deepEqual(state.document[key].original, {
+      input_sha: 'uploaded-1',
+      output_sha: kind === 'checker' ? 'uploaded-2' : null,
+      answer_sha: kind === 'checker' ? 'uploaded-3' : null,
+      expected: kind === 'checker' ? 'OK' : 'VALID',
+    });
+    assert.deepEqual(
+      unitUploads,
+      kind === 'checker' ? ['4\n1 2 3 4\n', '10\n', '10\n'] : ['4\n1 2 3 4\n'],
+    );
+  });
+}
+
+test('cancelling a self-test edit leaves its existing contents untouched', async () => {
+  existingUnit('validator');
+  await mount('validator');
+  await click('내용 보기·수정');
+  await editUnitText('테스트 입력', 'discard this');
+  await click('취소');
+  assert.deepEqual(unitUploads, []);
+  await click('내용 보기·수정');
+  assert.equal(
+    host.querySelector('[aria-label="테스트 입력"]').value,
+    '3\n1 2 3\n',
+  );
+});
+
+test('a failed self-test content load prevents empty overwrites and can be retried', async () => {
+  existingUnit('checker');
+  unitBlobFailure = new Error('자료를 불러오지 못했습니다.');
+  await mount('checker');
+  await click('내용 보기·수정');
+  assert.match(
+    host.querySelector('dialog').textContent,
+    /자료를 불러오지 못했습니다/,
+  );
+  const save = [...host.querySelectorAll('dialog button')].find(
+    (el) => el.textContent === '수정',
+  );
+  assert.ok(save.disabled);
+  assert.equal(host.querySelector('[aria-label="테스트 입력"]'), null);
+  assert.deepEqual(unitUploads, []);
+  unitBlobFailure = null;
+  await click('다시 불러오기');
+  assert.equal(
+    host.querySelector('[aria-label="테스트 입력"]').value,
+    '3\n1 2 3\n',
+  );
+  assert.equal(save.disabled, false);
+});
+
+test('read-only users can inspect every checker field without editing or uploading', async () => {
+  existingUnit('checker');
+  state.problem.role = 'READ';
+  await mount('checker');
+  await click('내용 보기');
+  for (const label of ['테스트 입력', '기대 출력', '검사할 참가자 출력']) {
+    assert.ok(host.querySelector(`[aria-label="${label}"]`).readOnly);
+  }
+  assert.ok(control('기대 판정').disabled);
+  assert.equal(
+    [...host.querySelectorAll('dialog button')].some(
+      (el) => el.textContent === '수정',
+    ),
+    false,
+  );
+  assert.deepEqual(unitUploads, []);
+});
+
+test('a self-test upload failure keeps the edited values for retry and does not change the case', async () => {
+  existingUnit('validator');
+  unitUploadFailure = new Error('저장에 실패했습니다.');
+  await mount('validator');
+  await click('내용 보기·수정');
+  await editUnitText('테스트 입력', 'edited\n');
+  await click('수정');
+  assert.match(host.querySelector('dialog').textContent, /저장에 실패했습니다/);
+  assert.equal(
+    host.querySelector('[aria-label="테스트 입력"]').value,
+    'edited\n',
+  );
+  assert.equal(state.document.validator_tests.original.input_sha, 'unit-input');
+  assert.deepEqual(unitUploads, []);
+  unitUploadFailure = null;
+  await click('수정');
+  assert.equal(host.querySelector('dialog'), null);
 });

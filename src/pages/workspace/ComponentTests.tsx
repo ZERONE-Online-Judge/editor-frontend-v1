@@ -2,9 +2,9 @@ import Pagination from '../../components/Pagination';
 import { usePagination } from '../../lib/pagination';
 import Select from '../../components/Select';
 import { can } from '../../lib/permissions';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { upload } from '../../lib/api';
+import { blobText, upload } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
 import type { UnitTest } from '../../lib/types';
 import { sourceRoles } from '../../lib/sourceRoles';
@@ -24,6 +24,11 @@ export default function ComponentTests({
 }) {
   const { data, document: doc, mutate, editable, run, notify } = useWorkspace();
   const [adding, setAdding] = useState(false);
+  const [selected, setSelected] = useState<{
+    id: string;
+    test: UnitTest;
+    number: number;
+  } | null>(null);
   const sources = Object.values(doc.files).filter(
     (f) =>
       f.kind === 'source' &&
@@ -156,6 +161,7 @@ export default function ComponentTests({
                   <th>테스트</th>
                   <th>기대 판정</th>
                   <th>입력 자료</th>
+                  <th>내용</th>
                   <th />
                 </tr>
               </thead>
@@ -184,6 +190,16 @@ export default function ComponentTests({
                         >
                           입력 다운로드
                         </a>
+                      </td>
+                      <td>
+                        <button
+                          className="button small"
+                          onClick={() =>
+                            setSelected({ id, test, number: index + 1 })
+                          }
+                        >
+                          {editable ? '내용 보기·수정' : '내용 보기'}
+                        </button>
                       </td>
                       <td>
                         <button
@@ -233,25 +249,70 @@ export default function ComponentTests({
           onClose={() => setAdding(false)}
         />
       )}
+      {selected && (
+        <UnitModal
+          key={`${kind}/${selected.id}`}
+          kind={kind as 'checker' | 'validator'}
+          existing={selected}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   );
 }
 function UnitModal({
   kind,
+  existing,
   onClose,
 }: {
   kind: 'checker' | 'validator';
+  existing?: { id: string; test: UnitTest; number: number };
   onClose: () => void;
 }) {
-  const { data, mutate } = useWorkspace();
+  const { data, mutate, editable } = useWorkspace();
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [answer, setAnswer] = useState('');
-  const [expected, setExpected] = useState(kind === 'checker' ? 'OK' : 'VALID');
+  const [expected, setExpected] = useState(
+    existing?.test.expected || (kind === 'checker' ? 'OK' : 'VALID'),
+  );
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(!!existing);
+  const [loaded, setLoaded] = useState(!existing);
+  const [retry, setRetry] = useState(0);
   const [error, setError] = useState('');
+  useEffect(() => {
+    if (!existing) return;
+    let active = true;
+    const read = (sha: string | null) =>
+      sha ? blobText(data.problem.id, sha) : Promise.resolve('');
+    void Promise.all([
+      read(existing.test.input_sha),
+      kind === 'checker' ? read(existing.test.output_sha) : '',
+      kind === 'checker' ? read(existing.test.answer_sha) : '',
+    ]).then(
+      ([input, output, answer]) => {
+        if (!active) return;
+        setInput(input);
+        setOutput(output);
+        setAnswer(answer);
+        setLoaded(true);
+        setLoading(false);
+      },
+      (e: Error) => {
+        if (!active) return;
+        setError(e.message);
+        setLoading(false);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [data.problem.id, existing, kind, retry]);
   async function submit() {
+    if (!editable || busy || loading || !loaded) return;
     setBusy(true);
+    setError('');
     try {
       const inp = await upload(data.problem.id, input);
       const out =
@@ -266,7 +327,7 @@ function UnitModal({
       };
       mutate((d) => {
         d[kind === 'checker' ? 'checker_tests' : 'validator_tests'][
-          crypto.randomUUID()
+          existing?.id || crypto.randomUUID()
         ] = test;
       });
       onClose();
@@ -279,57 +340,89 @@ function UnitModal({
   return (
     <Modal
       wide
-      title="자체 테스트 추가"
-      onClose={onClose}
+      title={
+        existing
+          ? `자체 테스트 #${existing.number}${editable ? ' 수정' : ' 내용'}`
+          : '자체 테스트 추가'
+      }
+      onClose={() => {
+        if (!busy) onClose();
+      }}
       footer={
         <>
-          <button className="button" onClick={onClose}>
-            취소
+          <button className="button" disabled={busy} onClick={onClose}>
+            {editable ? '취소' : '닫기'}
           </button>
-          <button
-            className="button primary"
-            disabled={busy}
-            onClick={() => void submit()}
-          >
-            추가
-          </button>
+          {editable && (
+            <button
+              className="button primary"
+              disabled={busy || loading || !loaded}
+              onClick={() => void submit()}
+            >
+              {busy ? '저장 중…' : existing ? '수정' : '추가'}
+            </button>
+          )}
         </>
       }
     >
-      <label>
-        기대 판정
-        <Select value={expected} onChange={(e) => setExpected(e.target.value)}>
-          {(kind === 'checker'
-            ? ['OK', 'WRONG_ANSWER', 'PRESENTATION_ERROR', 'CRASHED']
-            : ['VALID', 'INVALID']
-          ).map((v) => (
-            <option key={v}>{v}</option>
-          ))}
-        </Select>
-      </label>
-      <CodeEditor
-        value={input}
-        onChange={setInput}
-        label="테스트 입력"
-        rows={6}
-      />
-      {kind === 'checker' && (
-        <div className="form-grid">
-          <CodeEditor
-            value={answer}
-            onChange={setAnswer}
-            label="기대 출력"
-            rows={6}
-          />
-          <CodeEditor
-            value={output}
-            onChange={setOutput}
-            label="검사할 참가자 출력"
-            rows={6}
-          />
-        </div>
-      )}
+      {loading && <Notice>기존 테스트 내용을 불러오고 있습니다.</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
+      {!loading && !loaded && (
+        <button
+          className="button"
+          onClick={() => {
+            setLoading(true);
+            setError('');
+            setRetry((value) => value + 1);
+          }}
+        >
+          다시 불러오기
+        </button>
+      )}
+      {loaded && (
+        <>
+          <label>
+            기대 판정
+            <Select
+              disabled={!editable || busy}
+              value={expected}
+              onChange={(e) => setExpected(e.target.value)}
+            >
+              {(kind === 'checker'
+                ? ['OK', 'WRONG_ANSWER', 'PRESENTATION_ERROR', 'CRASHED']
+                : ['VALID', 'INVALID']
+              ).map((v) => (
+                <option key={v}>{v}</option>
+              ))}
+            </Select>
+          </label>
+          <CodeEditor
+            value={input}
+            onChange={setInput}
+            label="테스트 입력"
+            readOnly={!editable || busy}
+            rows={6}
+          />
+          {kind === 'checker' && (
+            <div className="form-grid">
+              <CodeEditor
+                value={answer}
+                onChange={setAnswer}
+                label="기대 출력"
+                readOnly={!editable || busy}
+                rows={6}
+              />
+              <CodeEditor
+                value={output}
+                onChange={setOutput}
+                label="검사할 참가자 출력"
+                readOnly={!editable || busy}
+                rows={6}
+              />
+            </div>
+          )}
+        </>
+      )}
     </Modal>
   );
 }
