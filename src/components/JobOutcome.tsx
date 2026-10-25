@@ -13,7 +13,7 @@ export default function JobOutcome({
   return (
     <section
       className={compact ? 'job-outcome is-compact' : 'job-outcome'}
-      aria-label="작업 실행과 결과 확인"
+      aria-label={`실행 상태: ${execution.label} · 결과 확인: ${assessment.label}`}
     >
       <dl>
         <div>

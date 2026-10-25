@@ -511,6 +511,10 @@ for (const [kind, status, assessment, label, tone] of [
       );
       const result = panel.querySelectorAll('dd')[1];
       assert.equal(result.textContent, label);
+      assert.match(
+        panel.getAttribute('aria-label'),
+        new RegExp(`결과 확인: ${label}`),
+      );
       assert.ok(result.querySelector('.badge').classList.contains(tone));
       if (assessment.partial)
         assert.match(panel.textContent, /전체 확인 미완료/);
