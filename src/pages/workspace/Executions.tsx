@@ -1,3 +1,7 @@
+import {
+  executionPresentation,
+  executionTitle,
+} from '../../lib/executionTitles';
 import GeneratedTestResults from './GeneratedTestResults';
 import ValidationResults from './ValidationResults';
 import {
@@ -660,7 +664,7 @@ export default function Executions({
                     onClick={() => selectJob(row.id)}
                   >
                     <div>
-                      <strong>{jobCategory(row).label}</strong>
+                      <strong>{executionTitle(row)}</strong>
                       <Badge
                         tone={
                           jobRelation(row, data.document_hash) === 'other'
@@ -719,6 +723,14 @@ export default function Executions({
                     <small>
                       r{row.revision} · {time(row.created_at)}
                     </small>
+                    {executionPresentation(row).detail && (
+                      <span
+                        className="job-scope-summary"
+                        title={executionPresentation(row).detail}
+                      >
+                        {executionPresentation(row).detail}
+                      </span>
+                    )}
                     {typeof row.options.name === 'string' &&
                       row.options.name && (
                         <small>요청 이름: {row.options.name}</small>
@@ -804,7 +816,7 @@ export default function Executions({
                       </div>
                       <div>
                         <dt>작업</dt>
-                        <dd>{jobCategory(job).label}</dd>
+                        <dd>{executionTitle(job)}</dd>
                       </div>
                       <div>
                         <dt>자료 기준</dt>
@@ -822,8 +834,13 @@ export default function Executions({
                   </section>
                   <div className="section-heading">
                     <div>
-                      <h3>{jobCategory(job).label}</h3>
+                      <h3>{executionTitle(job)}</h3>
                       <p>{jobCategory(job).description}</p>
+                      {executionPresentation(job).detail && (
+                        <p className="execution-request-scope">
+                          {executionPresentation(job).detail}
+                        </p>
+                      )}
                       {typeof job.options.name === 'string' &&
                         job.options.name && (
                           <p>요청 이름: {job.options.name}</p>

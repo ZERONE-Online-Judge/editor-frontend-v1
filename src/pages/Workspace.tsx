@@ -12,7 +12,7 @@ import {
 } from 'react';
 import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { api, post, put, ApiError } from '../lib/api';
-import { jobCategory } from '../lib/executionCategories';
+import { executionTitle } from '../lib/executionTitles';
 import type {
   Job,
   JobKind,
@@ -253,7 +253,7 @@ export default function ProblemWorkspace() {
         });
         if (activeProblem.current === problemId) {
           notify(
-            `${jobCategory(result).label} 요청을 접수했습니다. 아래에서 진행 상황과 결과를 확인하세요.`,
+            `${executionTitle(result)} 요청을 접수했습니다. 아래에서 진행 상황과 결과를 확인하세요.`,
           );
           navigate(executionResultPath(problemId, result.id));
         }
