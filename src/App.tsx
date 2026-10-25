@@ -72,6 +72,8 @@ function Layout() {
             <>
               <button
                 className="account-button"
+                aria-label={`내 정보 · 설정 (${user.display_name})`}
+                title={`${user.display_name} · 내 정보 · 설정`}
                 onClick={() => {
                   setName(user.display_name);
                   setHandle(user.handle);

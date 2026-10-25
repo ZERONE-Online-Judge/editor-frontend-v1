@@ -187,6 +187,7 @@ svg {
 }
 .brand {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 10px;
   white-space: nowrap;
@@ -214,6 +215,7 @@ svg {
 }
 .app-header nav {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   height: 100%;
   gap: 28px;
@@ -241,6 +243,7 @@ svg {
   background: var(--zoj-accent);
 }
 .account-controls {
+  min-width: 0;
   margin-left: auto;
   display: flex;
   align-items: center;
@@ -248,11 +251,13 @@ svg {
 }
 .account-button {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 8px;
   font-size: 12px;
 }
 .account-button > span {
+  flex-shrink: 0;
   height: 30px;
   width: 30px;
   display: grid;
@@ -264,6 +269,11 @@ svg {
   font-weight: 700;
 }
 .account-button strong {
+  min-width: 0;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 600;
 }
@@ -1314,6 +1324,13 @@ svg {
   padding-bottom: 24px;
   border-bottom: 1px solid var(--zoj-border);
 }
+.problem-heading > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.problem-heading > .actions {
+  flex-shrink: 0;
+}
 .breadcrumb {
   display: flex;
   align-items: center;
@@ -1321,6 +1338,15 @@ svg {
   font-size: 11px;
   color: #8892a7;
   margin-bottom: 10px;
+}
+.breadcrumb > a {
+  flex-shrink: 0;
+}
+.breadcrumb > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .breadcrumb a:hover {
   color: var(--zoj-accent);
@@ -1331,8 +1357,13 @@ svg {
   gap: 14px;
 }
 .problem-heading-title h1 {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 24px;
   letter-spacing: -0.035em;
+}
+.problem-heading-title > .badge {
+  flex-shrink: 0;
 }
 .working-state {
   display: flex;
