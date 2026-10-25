@@ -89,6 +89,38 @@ const labels: Record<string, [string, string]> = {
   ],
 };
 
+function compactLabel(check: JobAssessment, fallback: string) {
+  const labels: Record<string, string> = {
+    queued: '대기',
+    running: '확인 중',
+    expectations_match: '예상 일치',
+    component_matches: '예상 일치',
+    expectations_differ: '예상 불일치',
+    component_differs: '예상 불일치',
+    input_valid: '통과',
+    input_rejected: '불통과',
+    input_format: '형식 불통과',
+    preparation_ready: '생성·검사 통과',
+    reference_failed: '기준 풀이 실패',
+    incomplete_checks: '미완료',
+    no_targets: '대상 없음',
+    missing_evidence: '미확인',
+    render_ready: '생성 완료',
+    render_failed: '생성 불완전',
+  };
+  let label = labels[check.code] || fallback;
+  if (
+    ['expectations_differ', 'component_differs'].includes(check.code) &&
+    check.counts?.failed
+  )
+    label = `불일치 ${check.counts.failed}개`;
+  if (check.code === 'counterexample_found' && check.found)
+    label = `반례 ${check.found}개`;
+  if (check.partial && ['failed', 'found'].includes(check.status))
+    label += ' · 일부';
+  return label;
+}
+
 function countSummary(check: JobAssessment) {
   if (check.kind === 'stress' && check.iterations !== undefined) {
     return `${check.iterations}회 탐색 · 반례 ${check.found || 0}개${check.uncovered ? ` · 미발견 풀이 ${check.uncovered}개` : ''}`;
@@ -147,6 +179,7 @@ export function jobOutcomePresentation(job: Job) {
     execution: executionLabels[job.status],
     assessment: {
       label,
+      compactLabel: compactLabel(check, label),
       description,
       tone,
       partial: check.partial,

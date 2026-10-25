@@ -240,3 +240,14 @@ export function executionPresentation(job: Job) {
 export function executionTitle(job: Job) {
   return executionPresentation(job).title;
 }
+
+export function executionHistoryPresentation(job: Job) {
+  const [title, ...scope] = executionTitle(job).split(' · ');
+  return {
+    title,
+    scope: scope
+      .filter((part) => part !== '모든 세트 1개')
+      .map((part) => part.replace(/^전체 테스트 /, '테스트 '))
+      .join(' · '),
+  };
+}

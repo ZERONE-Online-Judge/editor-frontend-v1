@@ -1,6 +1,7 @@
 import {
   executionPresentation,
   executionTitle,
+  executionHistoryPresentation,
 } from '../../lib/executionTitles';
 import GeneratedTestResults from './GeneratedTestResults';
 import ValidationResults from './ValidationResults';
@@ -12,7 +13,7 @@ import {
 import Select from '../../components/Select';
 import Pagination, { PaginatedList } from '../../components/Pagination';
 import { useRemotePage } from '../../lib/useRemotePage';
-import { jobRelation, requesterName } from '../../lib/jobHistory';
+import { jobRelation, requesterName, historyTime } from '../../lib/jobHistory';
 import JobOutcome from '../../components/JobOutcome';
 import {
   executionCategories,
@@ -33,9 +34,7 @@ import InvocationComments from './InvocationComments';
 import StressControls from './StressControls';
 import StressCounterexamples from './StressCounterexamples';
 import { retryStressOptions } from '../../lib/stressOptions';
-import StressRunConditions, {
-  StressHistorySummary,
-} from './StressRunConditions';
+import StressRunConditions from './StressRunConditions';
 import InvocationControls from './InvocationControls';
 import TestsetSelector from './TestsetSelector';
 import ExecutionLimitsInfo from './ExecutionLimitsInfo';
@@ -654,23 +653,39 @@ export default function Executions({
                     }
                     key={row.id}
                     aria-pressed={row.id === selected}
+                    aria-label={`${executionTitle(row)} · ${requesterName(row, user?.id)} 요청 · ${time(row.created_at)} · ${jobRelation(row, data.document_hash) === 'other' ? '다른 자료' : '현재 저장본'}`}
+                    title={`${executionTitle(row)}${executionPresentation(row).detail ? ` · ${executionPresentation(row).detail}` : ''}`}
                     onClick={() => selectJob(row.id)}
                   >
-                    <div>
-                      <strong>{executionTitle(row)}</strong>
-                      <Badge
-                        tone={
-                          jobRelation(row, data.document_hash) === 'other'
-                            ? 'warning'
-                            : 'accent'
-                        }
+                    <div className="job-row-heading">
+                      <strong>{executionHistoryPresentation(row).title}</strong>
+                      <small
+                        className="job-requester"
+                        title={`${requesterName(row, user?.id)} 요청 · ${time(row.created_at)}`}
                       >
-                        {jobRelation(row, data.document_hash) === 'other'
-                          ? '다른 자료'
-                          : jobRelation(row, data.document_hash) === 'applied'
-                            ? '결과 반영본'
-                            : '현재 저장본'}
-                      </Badge>
+                        <span>{requesterName(row, user?.id)}</span>
+                        <time
+                          dateTime={new Date(
+                            row.created_at * 1000,
+                          ).toISOString()}
+                        >
+                          {historyTime(row.created_at)}
+                        </time>
+                      </small>
+                    </div>
+                    {executionHistoryPresentation(row).scope && (
+                      <span className="job-history-scope">
+                        {executionHistoryPresentation(row).scope}
+                      </span>
+                    )}
+                    <JobOutcome job={row} compact />
+                    <div className="job-row-flags">
+                      {jobRelation(row, data.document_hash) === 'other' && (
+                        <span>다른 자료</span>
+                      )}
+                      {jobRelation(row, data.document_hash) === 'applied' && (
+                        <span>결과 반영본</span>
+                      )}
                       {row.kind === 'prepare' &&
                         row.status === 'completed' &&
                         (!isCheckOnly(row) || row.application) && (
@@ -693,34 +708,14 @@ export default function Executions({
                           </Badge>
                         )}
                     </div>
-                    <JobOutcome job={row} compact />
-                    <div
-                      className="job-requester"
-                      title={
-                        row.requester ? `@${row.requester.handle}` : undefined
-                      }
-                    >
-                      <Icon name="users" size={14} />
-                      <span>{requesterName(row, user?.id)} 요청</span>
-                    </div>
-                    <small>
-                      r{row.revision} · {time(row.created_at)}
-                    </small>
-                    {executionPresentation(row).detail && (
-                      <span
-                        className="job-scope-summary"
-                        title={executionPresentation(row).detail}
-                      >
-                        {executionPresentation(row).detail}
-                      </span>
-                    )}
                     {typeof row.options.name === 'string' &&
                       row.options.name && (
                         <small>요청 이름: {row.options.name}</small>
                       )}
-                    <span>{row.result.summary || '검증 워커 배정 대기'}</span>
-                    {row.kind === 'stress' && (
-                      <StressHistorySummary job={row} />
+                    {!row.outcome && row.result.summary && (
+                      <span className="job-legacy-summary">
+                        {row.result.summary}
+                      </span>
                     )}
                   </button>
                 ))

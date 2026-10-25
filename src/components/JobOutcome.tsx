@@ -13,26 +13,33 @@ export default function JobOutcome({
   return (
     <section
       className={compact ? 'job-outcome is-compact' : 'job-outcome'}
-      aria-label={`실행 상태: ${execution.label} · 결과 확인: ${assessment.label}`}
+      aria-label={`실행 상태: ${execution.label} · 결과 확인: ${assessment.label}${assessment.counts ? ` · ${assessment.counts}` : ''}`}
+      title={
+        compact
+          ? `${assessment.description}${assessment.counts ? ` ${assessment.counts}` : ''}`
+          : undefined
+      }
     >
       <dl>
         <div>
-          <dt>실행 상태</dt>
+          <dt>{compact ? '실행' : '실행 상태'}</dt>
           <dd>
             <Badge tone={execution.tone}>{execution.label}</Badge>
           </dd>
         </div>
         <div>
-          <dt>결과 확인</dt>
+          <dt>{compact ? '결과' : '결과 확인'}</dt>
           <dd>
-            <Badge tone={assessment.tone}>{assessment.label}</Badge>
+            <Badge tone={assessment.tone}>
+              {compact ? assessment.compactLabel : assessment.label}
+            </Badge>
           </dd>
         </div>
       </dl>
-      {assessment.partial && (
+      {!compact && assessment.partial && (
         <p className="job-outcome-partial">일부 결과 · 전체 확인 미완료</p>
       )}
-      {assessment.counts && (
+      {!compact && assessment.counts && (
         <p className="job-outcome-counts">{assessment.counts}</p>
       )}
       {!compact && (
