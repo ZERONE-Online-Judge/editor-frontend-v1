@@ -57,7 +57,6 @@ export default function Tests() {
         testset: selected,
         all_testsets: runAllSets,
         prepare_mode: mode,
-        check_only: mode === 'inputs',
         auto_apply: mode === 'full' && autoApply && editable,
         name: `${mode === 'full' ? '입력·정답 생성' : '입력 생성·검사'} · ${runAllSets ? '모든 세트' : selected}`,
       });

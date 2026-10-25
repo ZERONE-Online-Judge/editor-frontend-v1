@@ -56,7 +56,6 @@ export default function BulkTests({
         testset: setName,
         test_indices: indices,
         prepare_mode: mode,
-        check_only: mode === 'validate',
         name: `${executionCategories.find((category) => category.id === `prepare-${mode}`)?.label} · 선택 ${indices.length}개`,
       });
     } catch (e) {

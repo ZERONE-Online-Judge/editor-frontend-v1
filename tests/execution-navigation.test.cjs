@@ -1314,7 +1314,6 @@ for (const allSets of [false, true]) {
     assert.equal(request.options.testset, 'tests');
     assert.equal(request.options.all_testsets, allSets);
     assert.equal(request.options.prepare_mode, 'inputs');
-    assert.equal(request.options.check_only, true);
     assert.equal(request.options.auto_apply, false);
     assert.equal(request.options.test_indices, undefined);
     assert.match(request.options.name, /입력 생성·검사/);
