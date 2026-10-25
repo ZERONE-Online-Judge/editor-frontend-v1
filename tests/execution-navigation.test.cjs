@@ -417,6 +417,145 @@ async function selectSets(label, names) {
   await flush();
 }
 
+for (const [kind, status, assessment, label, tone] of [
+  [
+    'verify',
+    'completed',
+    {
+      kind: 'expectations',
+      status: 'failed',
+      code: 'expectations_differ',
+      counts: { total: 3, passed: 2, failed: 1, unconfirmed: 0 },
+    },
+    '기대 판정 불일치',
+    'danger',
+  ],
+  [
+    'verify',
+    'completed',
+    { kind: 'expectations', status: 'passed', code: 'expectations_match' },
+    '기대 판정 일치',
+    'success',
+  ],
+  [
+    'validator-tests',
+    'completed',
+    { kind: 'component', status: 'passed', code: 'component_matches' },
+    '기대 동작 일치',
+    'success',
+  ],
+  [
+    'prepare',
+    'failed',
+    { kind: 'input', status: 'failed', code: 'input_rejected' },
+    '입력 검사 불통과',
+    'danger',
+  ],
+  [
+    'package',
+    'completed',
+    { kind: 'expectations', status: 'not_run', code: 'verification_skipped' },
+    '검증 생략',
+    'neutral',
+  ],
+  [
+    'stress',
+    'completed',
+    {
+      kind: 'stress',
+      status: 'found',
+      code: 'counterexample_found',
+      found: 2,
+      iterations: 20,
+    },
+    '반례 발견',
+    'accent',
+  ],
+  [
+    'stress',
+    'cancelled',
+    {
+      kind: 'stress',
+      status: 'incomplete',
+      code: 'incomplete_checks',
+      partial: true,
+    },
+    '확인 미완료',
+    'warning',
+  ],
+  [
+    'render',
+    'completed',
+    { kind: 'render', status: 'failed', code: 'render_failed' },
+    '문서 생성 불완전',
+    'danger',
+  ],
+]) {
+  test(`${kind} ${status} history and detail show independent execution and ${label} outcomes`, async () => {
+    const value = job('outcome', kind, '작업 요약');
+    value.status = status;
+    value.outcome = { execution: status, assessment };
+    jobs = [value];
+    await mount('invocations?job=outcome');
+    const list = host.querySelector('.job-row .job-outcome');
+    const detail = host.querySelector('.execution-detail .job-outcome');
+    assert.ok(list.classList.contains('is-compact'));
+    for (const panel of [list, detail]) {
+      assert.deepEqual(
+        [...panel.querySelectorAll('dt')].map((el) => el.textContent),
+        ['실행 상태', '결과 확인'],
+      );
+      assert.equal(
+        panel.querySelectorAll('dd')[0].textContent,
+        { completed: '완료', failed: '실패', cancelled: '중단' }[status],
+      );
+      const result = panel.querySelectorAll('dd')[1];
+      assert.equal(result.textContent, label);
+      assert.match(
+        panel.getAttribute('aria-label'),
+        new RegExp(`결과 확인: ${label}`),
+      );
+      assert.ok(result.querySelector('.badge').classList.contains(tone));
+      if (assessment.partial)
+        assert.match(panel.textContent, /전체 확인 미완료/);
+      if (assessment.counts)
+        assert.match(
+          panel.textContent,
+          /검증 항목 3개 · 일치 2개 · 불일치 1개/,
+        );
+      if (kind === 'stress' && assessment.found)
+        assert.match(panel.textContent, /20회 탐색 · 반례 2개/);
+    }
+    assert.ok(detail.querySelector('.job-outcome-description'));
+    assert.equal(
+      host
+        .querySelector('.execution-detail')
+        .firstElementChild.getAttribute('aria-label'),
+      '실행 자료와 요청자',
+    );
+  });
+}
+
+for (const [status, expected] of [
+  ['completed', '결과 미확인'],
+  ['queued', '실행 후 확인'],
+  ['running', '확인 중'],
+]) {
+  test(`legacy ${status} jobs never infer a passing check from worker completion`, async () => {
+    const value = job('legacy-outcome', 'verify', '작업 요약');
+    value.status = status;
+    jobs = [value];
+    await mount('invocations?job=legacy-outcome');
+    for (const panel of host.querySelectorAll('.job-outcome')) {
+      assert.equal(panel.querySelectorAll('dd')[1].textContent, expected);
+      assert.equal(
+        panel.querySelectorAll('dd')[1].querySelector('.badge.success'),
+        null,
+      );
+    }
+  });
+}
+
 test('Linux package verification uses ZOJ while retaining offline replay materials', async () => {
   await mount('packages');
   await setControl('패키지 형식', 'linux');

@@ -49,6 +49,7 @@ loaded.require = (id) => {
     id === '../../components/LanguageResourceLimits' ||
     id === '../../components/Select' ||
     id === '../../components/Pagination' ||
+    id === '../../components/JobOutcome' ||
     id === '../../lib/useRemotePage' ||
     id === '../../lib/jobHistory' ||
     id === '../../lib/executionCategories' ||

@@ -13,6 +13,7 @@ import Select from '../../components/Select';
 import Pagination, { PaginatedList } from '../../components/Pagination';
 import { useRemotePage } from '../../lib/useRemotePage';
 import { jobRelation, requesterName } from '../../lib/jobHistory';
+import JobOutcome from '../../components/JobOutcome';
 import {
   executionCategories,
   isExecutionCategory,
@@ -23,15 +24,7 @@ import { can, canEdit } from '../../lib/permissions';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { ExecutionView } from '../../lib/executionNavigation';
-import {
-  api,
-  ApiError,
-  blobPreview,
-  post,
-  statusLabels,
-  time,
-  bytes,
-} from '../../lib/api';
+import { api, ApiError, blobPreview, post, time, bytes } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
 import { BlobDownload } from '../../components/Downloads';
 import type { CaseResult, Job } from '../../lib/types';
@@ -699,18 +692,8 @@ export default function Executions({
                                   : '이전 자료'}
                           </Badge>
                         )}
-                      <Badge
-                        tone={
-                          row.status === 'failed'
-                            ? 'danger'
-                            : row.status === 'completed'
-                              ? 'success'
-                              : 'neutral'
-                        }
-                      >
-                        {statusLabels[row.status]}
-                      </Badge>
                     </div>
+                    <JobOutcome job={row} compact />
                     <div
                       className="job-requester"
                       title={
@@ -849,18 +832,8 @@ export default function Executions({
                         {time(job.created_at)} · r{job.revision}
                       </p>
                     </div>
-                    <Badge
-                      tone={
-                        job.status === 'failed'
-                          ? 'danger'
-                          : job.status === 'completed'
-                            ? 'success'
-                            : 'accent'
-                      }
-                    >
-                      {statusLabels[job.status]}
-                    </Badge>
                   </div>
+                  <JobOutcome job={job} />
                   {validationFeedback && (
                     <ValidationResults key={job.id} job={job} />
                   )}
