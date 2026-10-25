@@ -9,6 +9,18 @@ export function isInputCheck(job: Job) {
   );
 }
 
+export function isCheckOnly(job: Job) {
+  if (!isInputCheck(job)) return false;
+  const mode = job.result.prepare_mode || job.options.prepare_mode;
+  if (mode === 'validate') return true;
+  if (typeof job.options.check_only === 'boolean')
+    return job.options.check_only;
+  // Older whole-input checks did not store an explicit intent marker.
+  return (
+    !Array.isArray(job.options.test_indices) || !job.options.test_indices.length
+  );
+}
+
 export function isComponentCheck(job: Job) {
   return job.kind === 'validator-tests' || job.kind === 'checker-tests';
 }
