@@ -6,6 +6,7 @@ import { useWorkspace } from '../../lib/workspace';
 import type { ProblemDocument, Revision } from '../../lib/types';
 import { Badge, Modal, Notice, SectionHeading } from '../../components/ui';
 import RevisionChanges from '../../components/RevisionChanges';
+import './Revisions.css';
 
 type Selection = {
   problemId: string;
@@ -69,7 +70,7 @@ export default function Revisions() {
     <div className="section-stack">
       <SectionHeading
         title="리비전"
-        description="동료와 공유한 변경과 문제 자료의 스냅샷을 확인합니다."
+        description="커밋 내용과 변경된 자료를 확인합니다. 긴 메시지는 ‘자료 확인’에서 전체를 볼 수 있습니다."
       />
       {historyError && (
         <Notice tone="error">
@@ -79,21 +80,30 @@ export default function Revisions() {
           </button>
         </Notice>
       )}
-      <section className="card no-padding">
-        <table className="data-table">
+      <section className="card no-padding revision-history-card">
+        <table className="data-table revision-history-table">
+          <colgroup>
+            <col className="revision-number-column" />
+            <col />
+            <col className="revision-author-column" />
+            <col className="revision-time-column" />
+            <col className="revision-action-column" />
+          </colgroup>
           <thead>
             <tr>
-              <th>리비전</th>
-              <th>변경 내용</th>
-              <th>작성자</th>
-              <th>시각</th>
-              <th />
+              <th scope="col">리비전</th>
+              <th scope="col">변경 내용</th>
+              <th scope="col">작성자</th>
+              <th scope="col">시각</th>
+              <th scope="col">
+                <span className="sr-only">자료 확인</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.number}>
-                <td>
+                <td className="revision-number-cell">
                   <Badge
                     tone={
                       row.number === data.problem.revision
@@ -104,13 +114,22 @@ export default function Revisions() {
                     r{row.number}
                   </Badge>
                 </td>
-                <td>
-                  <strong className="small">{row.message}</strong>
+                <td className="revision-message-cell">
+                  <strong
+                    className="small revision-history-message"
+                    title={row.message}
+                  >
+                    {row.message}
+                  </strong>
                   {row.minor && <div className="subtext">작은 변경</div>}
                 </td>
-                <td>{row.author}</td>
-                <td className="subtext">{time(row.created_at)}</td>
-                <td>
+                <td className="revision-author-cell" title={row.author}>
+                  {row.author}
+                </td>
+                <td className="subtext revision-time-cell">
+                  {time(row.created_at)}
+                </td>
+                <td className="revision-action-cell">
                   <button
                     className="button small"
                     aria-label={`r${row.number} 자료 확인`}
@@ -135,7 +154,7 @@ export default function Revisions() {
         <Modal
           wide
           className="revision-review-modal"
-          title={`${selected.revision.number > 0 ? `r${selected.revision.number - 1} → r${selected.revision.number}` : 'r0 · 최초 등록'} · ${selected.revision.message}`}
+          title={`${selected.revision.number > 0 ? `r${selected.revision.number - 1} → r${selected.revision.number}` : 'r0 · 최초 등록'} · 자료 비교`}
           onClose={close}
           footer={
             <>
@@ -149,6 +168,10 @@ export default function Revisions() {
             </>
           }
         >
+          <section className="revision-review-message" aria-label="커밋 내용">
+            <strong>커밋 내용</strong>
+            <p>{selected.revision.message}</p>
+          </section>
           {selected.error ? (
             <Notice tone="error">
               <p>리비전 자료를 불러오지 못했습니다. {selected.error}</p>

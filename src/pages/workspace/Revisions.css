@@ -1,0 +1,120 @@
+.revision-history-card {
+  container-type: inline-size;
+}
+.revision-history-card .revision-history-table {
+  table-layout: fixed;
+}
+.revision-number-column {
+  width: 80px;
+}
+.revision-author-column {
+  width: 112px;
+}
+.revision-time-column {
+  width: 176px;
+}
+.revision-action-column {
+  width: 116px;
+}
+.revision-history-message {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}
+.revision-history-table .revision-author-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.revision-history-table .revision-time-cell,
+.revision-history-table .revision-action-cell,
+.revision-history-table .revision-action-cell .button {
+  white-space: nowrap;
+}
+.revision-history-table .revision-action-cell {
+  text-align: right;
+}
+.revision-review-message {
+  flex-shrink: 0;
+  min-width: 0;
+  max-height: min(120px, 18dvh);
+  overflow: auto;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--zoj-border);
+  overflow-wrap: anywhere;
+}
+.revision-review-message > strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--zoj-muted);
+}
+.revision-review-modal .revision-review-message > p {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.65;
+}
+@container (max-width: 760px) {
+  .revision-history-card .revision-history-table,
+  .revision-history-table tbody {
+    display: block;
+  }
+  .revision-history-table colgroup {
+    display: none;
+  }
+  .revision-history-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .revision-history-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px 16px;
+    padding: 18px;
+    border-bottom: 1px solid var(--zoj-border);
+  }
+  .revision-history-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .revision-history-table tbody td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+  .revision-number-cell {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .revision-action-cell {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .revision-message-cell {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .revision-author-cell {
+    grid-column: 1;
+    grid-row: 3;
+    color: var(--zoj-muted);
+  }
+  .revision-time-cell {
+    grid-column: 2;
+    grid-row: 3;
+    font-size: 11px;
+    text-align: right;
+  }
+}

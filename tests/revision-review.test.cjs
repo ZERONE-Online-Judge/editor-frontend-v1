@@ -393,6 +393,33 @@ test('A failed previous revision is not treated as an initial snapshot and can b
   assert.match(v.host.textContent, /이전 리비전과 자료가 같습니다/);
 });
 
+test('A long multiline commit stays available in the review without occupying the dialog heading', async () => {
+  const doc = fixture();
+  const message =
+    '지문 검수\n' +
+    '경계 조건과 입력 범위를 명확하게 정리했습니다.\n'.repeat(20);
+  context = { data: { problem: { id: 'p', revision: 1 } }, notify() {} };
+  responder = (p) =>
+    p.includes('/revisions?')
+      ? [{ number: 1, message, author: '공동 출제자', created_at: 1 }]
+      : clone(doc);
+  const v = await mount(Revisions);
+  assert.equal(
+    v.host.querySelector('.revision-history-message').title,
+    message,
+  );
+  await click(v.host.querySelector('[aria-label="r1 자료 확인"]'));
+  assert.equal(
+    v.host.querySelector('dialog h2').textContent,
+    'r0 → r1 · 자료 비교',
+  );
+  assert.equal(
+    v.host.querySelector('[aria-label="커밋 내용"] p').textContent,
+    message,
+  );
+  assert.ok(v.host.querySelector('.revision-changes'));
+});
+
 test('Large line changes avoid argument limits while preserving both sides', () => {
   const a = Array(70000).fill('a').join('\n'),
     b = Array(70000).fill('b').join('\n');
