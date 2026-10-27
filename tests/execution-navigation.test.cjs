@@ -122,6 +122,25 @@ function job(id, kind, summary) {
   };
 }
 async function get(url, options = {}) {
+  if (url.includes('/revision-preview?')) {
+    const query = new URL(url, 'http://editor.test').searchParams;
+    return {
+      from_revision: Number(query.get('from_revision')),
+      to_revision: Number(query.get('to_revision')),
+      commits: {
+        total: 1,
+        items: [
+          {
+            number: Number(query.get('to_revision')),
+            message: '최댓값 테스트 보강',
+            author: '공동 출제자',
+            created_at: 1778506713,
+          },
+        ],
+      },
+      changes: { total: 0, items: [] },
+    };
+  }
   if (url.includes('/zoj-publications')) return [];
   if (url === '/zoj/contests')
     return { configured: true, email: 'author@example.com', contests: [] };

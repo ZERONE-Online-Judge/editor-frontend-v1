@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { RevisionHead } from '../lib/useRevisionUpdates';
 import { Icon } from './ui';
+import RevisionPreview from './RevisionPreview';
 
 export default function RevisionNotice({
   problemId,
@@ -42,9 +43,6 @@ export default function RevisionNotice({
             : `공유 r${revision}이 도착했습니다. `}
           업데이트를 눌러 가져올 수 있습니다.
         </p>
-        {head?.revision === revision && head.message && (
-          <span className="revision-update-message">{head.message}</span>
-        )}
         {dirty && (
           <small>
             작성 중인 변경은 먼저 저장한 뒤 함께 반영합니다. 같은 항목이 겹치면
@@ -67,6 +65,14 @@ export default function RevisionNotice({
       >
         <Icon name="close" size={16} />
       </button>
+      <div className="revision-update-preview">
+        <RevisionPreview
+          key={`${problemId}/${baseRevision}/${revision}`}
+          problemId={problemId}
+          from={baseRevision}
+          to={revision}
+        />
+      </div>
     </aside>
   );
 }

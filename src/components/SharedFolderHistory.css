@@ -1,0 +1,115 @@
+.folder-history-tabs {
+  margin-bottom: 20px;
+}
+.folder-history {
+  min-width: 0;
+}
+.folder-history-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.folder-history-heading h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.folder-history-heading p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #64748b;
+}
+.folder-history-heading > .button {
+  flex-shrink: 0;
+}
+.folder-history-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.folder-history-list > li {
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 12px;
+  background: white;
+}
+.folder-history-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+.folder-history-meta a {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--zoj-accent);
+  font-weight: 600;
+}
+.folder-history-message {
+  display: block;
+  margin-top: 12px;
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.folder-history-path {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  color: #64748b;
+  overflow-wrap: anywhere;
+}
+.folder-history-files {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 14px;
+  color: #475569;
+  font-size: 12px;
+}
+.folder-history-files > span {
+  display: inline-flex;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.folder-history-files i {
+  font-style: normal;
+  font-weight: 700;
+}
+.folder-change-added {
+  color: #15803d;
+}
+.folder-change-removed {
+  color: #be123c;
+}
+.folder-change-changed {
+  color: var(--zoj-accent);
+}
+.folder-history-list > li > .text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  min-height: 36px;
+}
+.folder-history-list .revision-preview {
+  margin-top: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--zoj-border);
+}
+@media (max-width: 600px) {
+  .folder-history-heading {
+    flex-wrap: wrap;
+  }
+  .folder-history-list > li {
+    padding: 16px;
+  }
+}

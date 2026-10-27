@@ -1,0 +1,108 @@
+.revision-preview {
+  min-width: 0;
+  font-size: 12px;
+}
+.revision-preview-commits {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0 0 16px;
+  list-style: none;
+}
+.revision-preview-commits li {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+.revision-preview-commits li > span {
+  flex-shrink: 0;
+  color: var(--zoj-accent);
+  font-variant-numeric: tabular-nums;
+}
+.revision-preview-commits li > div {
+  min-width: 0;
+}
+.revision-preview-commits strong {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.revision-preview-commits small {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+}
+.revision-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.revision-preview-heading .text-button {
+  min-height: 32px;
+}
+.revision-preview-files {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.revision-preview-files article {
+  min-width: 0;
+  border: 1px solid var(--zoj-border);
+  border-radius: 8px;
+  background: white;
+  overflow: hidden;
+}
+.revision-preview-files header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 9px 12px;
+}
+.revision-preview-files header strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.revision-preview-files header small {
+  color: #64748b;
+}
+.revision-preview-files pre {
+  margin: 0;
+  padding: 10px 0;
+  max-height: 160px;
+  overflow: auto;
+  border-top: 1px solid var(--zoj-border);
+  font: 11px/1.65 var(--font-mono, monospace);
+  background: #f8fafc;
+}
+.revision-preview-files pre span {
+  display: block;
+  min-width: max-content;
+  padding: 0 12px;
+}
+.preview-diff-add {
+  background: #eaf8ef;
+  color: #166534;
+}
+.preview-diff-remove {
+  background: #fff0f1;
+  color: #9f1239;
+}
+.preview-diff-hunk {
+  color: #64748b;
+}
+.revision-preview-files p,
+.revision-preview-note {
+  margin: 0;
+  padding: 8px 12px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.revision-preview > .revision-preview-note {
+  padding-inline: 0;
+}
