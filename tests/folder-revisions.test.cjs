@@ -6,6 +6,7 @@ const fs = require('node:fs'),
   ts = require('typescript');
 const { JSDOM } = require('jsdom');
 const { URL } = require('node:url');
+const console = require('node:console');
 const dom = new JSDOM('<body></body>', {
   url: 'https://editor.test',
   pretendToBeVisual: true,
@@ -36,6 +37,8 @@ function source(relative) {
   const native = m.require.bind(m);
   m.require = (id) => {
     if (id.endsWith('.css')) return {};
+    if (id.endsWith('/authContext'))
+      return { useAuth: () => ({ user: { id: 'owner', handle: 'owner' } }) };
     if (id.endsWith('/api'))
       return {
         api: async (url, options = {}) => {
@@ -99,13 +102,17 @@ const preview = (number = 2, message = '경계값 처리 수정') => ({
     ],
   },
 });
-async function mount(Component, props = {}) {
+async function mount(Component, props = {}, entry = '/') {
   calls = [];
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
   const render = (next) =>
-    act(async () => root.render(h(MemoryRouter, null, h(Component, next))));
+    act(async () =>
+      root.render(
+        h(MemoryRouter, { initialEntries: [entry] }, h(Component, next)),
+      ),
+    );
   await render(props);
   const close = async () => {
     await act(async () => root.unmount());
@@ -272,4 +279,60 @@ test('Bounded and binary previews clearly explain why full changes are not inlin
   assert.match(view.host.textContent, /바이너리 파일/);
   assert.match(view.host.textContent, /변경 8개 중 1개/);
   assert.match(view.host.textContent, /일부 변경만 표시/);
+});
+
+test('The real team folder page retains its overview while switching into revision history', async () => {
+  const Problems = source('pages/Problems.tsx').default;
+  responder = (url) => {
+    if (url === '/folders')
+      return [
+        {
+          id: 'team',
+          name: '공동 출제',
+          parent_id: null,
+          workspace_id: 'team',
+          workspace_role: 'OWNER',
+          can_create: true,
+          can_edit: true,
+          can_manage: true,
+        },
+      ];
+    if (url.startsWith('/problems?') || url.includes('/invitations')) return [];
+    if (url.endsWith('/members'))
+      return {
+        role: 'OWNER',
+        members: [
+          {
+            user_id: 'owner',
+            display_name: '출제자',
+            handle: 'owner',
+            role: 'OWNER',
+          },
+        ],
+        invitations: [],
+      };
+    if (url.includes('/revisions?'))
+      return { items: [], total: 0, page: 1, page_size: 10, pages: 1 };
+    throw new Error(url);
+  };
+  const errors = [],
+    original = console.error;
+  console.error = (...args) => errors.push(args.join(' '));
+  try {
+    const view = await mount(Problems, {}, '/problems?folder=team');
+    assert.match(view.host.textContent, /함께하는 구성원/);
+    await click(view, '리비전');
+    assert.ok(view.host.querySelector('[aria-label="팀 폴더 협업 현황"]'));
+    assert.ok(view.host.querySelector('[aria-label="팀 폴더 리비전"]'));
+    assert.match(view.host.textContent, /공유한 리비전이 없습니다/);
+    assert.ok(
+      !errors.some((message) => /same key/.test(message)),
+      errors.join('\n'),
+    );
+    await click(view, '문제 목록');
+    assert.ok(!view.host.querySelector('[aria-label="팀 폴더 리비전"]'));
+    assert.ok(view.host.querySelector('[aria-label="팀 폴더 협업 현황"]'));
+  } finally {
+    console.error = original;
+  }
 });

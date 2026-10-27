@@ -406,7 +406,10 @@ export default function Problems() {
             </div>
           )}
           {showHistory && folderId ? (
-            <SharedFolderHistory key={folderId} folderId={folderId} />
+            <SharedFolderHistory
+              key={`history-${folderId}`}
+              folderId={folderId}
+            />
           ) : (
             <>
               {folderId && !current && !loading && (
