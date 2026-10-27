@@ -4542,7 +4542,8 @@ svg {
   width: min(840px, calc(100% - 32px));
   max-height: calc(100dvh - var(--revision-notice-top) - 16px);
   overflow-y: auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto auto;
   align-items: flex-start;
   gap: 14px;
   padding: 18px;
@@ -4577,18 +4578,15 @@ svg {
   line-height: 1.6;
   color: #64748b;
 }
-.revision-update-message {
-  display: block;
-  margin-top: 5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: #6d5eaa;
-}
 .revision-update-close {
   flex-shrink: 0;
   color: #7a8799;
+}
+.revision-update-preview {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding-top: 14px;
+  border-top: 1px solid #e5e1f7;
 }
 /* Keep the less urgent reminder out of the live commit notice's space. */
 :root:has(.revision-update-notice) .password-setup-guidance {

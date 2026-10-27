@@ -21,6 +21,7 @@ import {
 } from '../components/SharedFolders';
 import type { SharedFolderTab } from '../components/SharedFolders';
 import SharedFolderOverview from '../components/SharedFolderOverview';
+import SharedFolderHistory from '../components/SharedFolderHistory';
 import {
   folderRoles,
   shareScopeChanges,
@@ -114,6 +115,7 @@ export default function Problems() {
   const sharedRoot = current?.workspace_id
     ? folders.find((f) => f.id === current.workspace_id)
     : undefined;
+  const showHistory = !!sharedRoot && params.get('view') === 'revisions';
   const visible = rows.filter(
     (p) =>
       (filter !== 'mine' || p.owner === user?.handle) &&
@@ -380,313 +382,357 @@ export default function Problems() {
               onOpen={setSharing}
             />
           )}
-          {folderId && !current && !loading && (
-            <Notice>
-              접근할 수 없거나 삭제된 폴더입니다. 전체 문제에서 다시 선택하세요.
-            </Notice>
-          )}
-          {!query && filter !== 'deleted' && children.length > 0 && (
-            <div className="folder-grid">
-              {children.map((f) => (
-                <button
-                  className="folder-tile"
-                  key={f.id}
-                  onClick={() => chooseFolder(f.id)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => drop(e, f.id)}
-                >
-                  <Icon name="folder" size={24} />
-                  <span>
-                    <strong>{f.name}</strong>
-                    <small>
-                      {rows.filter((p) => p.folder_id === f.id).length}개 문제
-                    </small>
-                  </span>
-                  <Icon name="arrow" size={16} />
-                </button>
-              ))}
+          {sharedRoot && (
+            <div
+              className="segmented folder-history-tabs"
+              aria-label="팀 폴더 화면"
+            >
+              <button
+                aria-pressed={!showHistory}
+                className={!showHistory ? 'selected' : ''}
+                onClick={() => setParams({ folder: folderId! })}
+              >
+                문제 목록
+              </button>
+              <button
+                aria-pressed={showHistory}
+                className={showHistory ? 'selected' : ''}
+                onClick={() =>
+                  setParams({ folder: folderId!, view: 'revisions' })
+                }
+              >
+                리비전
+              </button>
             </div>
           )}
-          <div className="problem-toolbar">
-            <div className="segmented" aria-label="문제 분류">
-              {[
-                ['all', '모두'],
-                ['mine', '내 문제'],
-                ['shared', '공유받음'],
-                ['deleted', '휴지통'],
-              ].map(([key, label]) => (
-                <button
-                  aria-pressed={filter === key}
-                  className={filter === key ? 'selected' : ''}
-                  key={key}
-                  onClick={() => {
-                    setLoading(true);
-                    setFilter(key);
-                    setSelection([]);
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <label className="search-field">
-              <Icon name="search" />
-              <input
-                aria-label="문제 검색"
-                placeholder="모든 폴더에서 검색"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </label>
-          </div>
-          <section className="card problem-list">
-            <div className="list-caption">
-              <span>
-                {visible.length}개 문제 {query && '· 모든 폴더 검색'}
-              </span>
-              <div className="actions">
-                <label className="checkbox">
+          {showHistory && folderId ? (
+            <SharedFolderHistory
+              key={`history-${folderId}`}
+              folderId={folderId}
+            />
+          ) : (
+            <>
+              {folderId && !current && !loading && (
+                <Notice>
+                  접근할 수 없거나 삭제된 폴더입니다. 전체 문제에서 다시
+                  선택하세요.
+                </Notice>
+              )}
+              {!query && filter !== 'deleted' && children.length > 0 && (
+                <div className="folder-grid">
+                  {children.map((f) => (
+                    <button
+                      className="folder-tile"
+                      key={f.id}
+                      onClick={() => chooseFolder(f.id)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => drop(e, f.id)}
+                    >
+                      <Icon name="folder" size={24} />
+                      <span>
+                        <strong>{f.name}</strong>
+                        <small>
+                          {rows.filter((p) => p.folder_id === f.id).length}개
+                          문제
+                        </small>
+                      </span>
+                      <Icon name="arrow" size={16} />
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="problem-toolbar">
+                <div className="segmented" aria-label="문제 분류">
+                  {[
+                    ['all', '모두'],
+                    ['mine', '내 문제'],
+                    ['shared', '공유받음'],
+                    ['deleted', '휴지통'],
+                  ].map(([key, label]) => (
+                    <button
+                      aria-pressed={filter === key}
+                      className={filter === key ? 'selected' : ''}
+                      key={key}
+                      onClick={() => {
+                        setLoading(true);
+                        setFilter(key);
+                        setSelection([]);
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <label className="search-field">
+                  <Icon name="search" />
                   <input
-                    type="checkbox"
-                    checked={hideTags}
-                    onChange={(e) => {
-                      const hidden = e.target.checked;
-                      setHideTags(hidden);
-                      try {
-                        window.localStorage.setItem(
-                          'zoj-editor.hide-problem-tags',
-                          String(hidden),
-                        );
-                      } catch {
-                        // The current view still works when storage is disabled.
-                      }
-                    }}
+                    aria-label="문제 검색"
+                    placeholder="모든 폴더에서 검색"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
                   />
-                  태그 숨기기
                 </label>
-                {selection.length > 0 && (
-                  <>
-                    <strong>{selection.length}개 선택</strong>
-                    <button
-                      className="button small"
-                      disabled={busy}
-                      onClick={() => setMoveIds(selection)}
-                    >
-                      <Icon name="folder" size={15} />
-                      선택한 문제 이동
-                    </button>
-                  </>
-                )}
-                <button className="text-button" onClick={() => void refresh()}>
-                  새로고침
-                </button>
               </div>
-            </div>
-            {loading ? (
-              <div className="loading">문제를 불러오고 있습니다.</div>
-            ) : visible.length ? (
-              <div className="table-scroll">
-                <table className="data-table problems-table">
-                  <thead>
-                    <tr>
-                      {filter !== 'deleted' && (
-                        <th className="check-cell">
-                          <input
-                            type="checkbox"
-                            aria-label="표시된 문제 모두 선택"
-                            disabled={movable.length === 0}
-                            checked={
-                              movable.length > 0 &&
-                              movable.every((p) => selection.includes(p.id))
-                            }
-                            onChange={(e) =>
-                              setSelection(
-                                e.target.checked
-                                  ? [
-                                      ...new Set([
-                                        ...selection,
-                                        ...movable.map((p) => p.id),
-                                      ]),
-                                    ]
-                                  : selection.filter(
-                                      (id) => !movable.some((p) => p.id === id),
-                                    ),
-                              )
-                            }
-                          />
-                        </th>
-                      )}
-                      <th>문제</th>
-                      <th>소유자 · 권한</th>
-                      <th>리비전</th>
-                      <th>마지막 수정</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paging.items.map((p) => (
-                      <tr
-                        key={p.id}
-                        draggable={
-                          !p.deleted &&
-                          !busy &&
-                          canOrganizeProblem(p, user?.handle)
-                        }
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData(
-                            'application/x-zoj-problem',
-                            p.id,
-                          );
-                          e.dataTransfer.effectAllowed = 'move';
-                          setDragging(p.id);
+              <section className="card problem-list">
+                <div className="list-caption">
+                  <span>
+                    {visible.length}개 문제 {query && '· 모든 폴더 검색'}
+                  </span>
+                  <div className="actions">
+                    <label className="checkbox">
+                      <input
+                        type="checkbox"
+                        checked={hideTags}
+                        onChange={(e) => {
+                          const hidden = e.target.checked;
+                          setHideTags(hidden);
+                          try {
+                            window.localStorage.setItem(
+                              'zoj-editor.hide-problem-tags',
+                              String(hidden),
+                            );
+                          } catch {
+                            // The current view still works when storage is disabled.
+                          }
                         }}
-                        onDragEnd={() => setDragging(null)}
-                      >
-                        {!p.deleted && (
-                          <td className="check-cell">
-                            <input
-                              type="checkbox"
-                              disabled={!canOrganizeProblem(p, user?.handle)}
-                              aria-label={`${p.name} 선택`}
-                              checked={selection.includes(p.id)}
-                              onChange={(e) =>
-                                setSelection((ids) =>
-                                  e.target.checked
-                                    ? [...ids, p.id]
-                                    : ids.filter((id) => id !== p.id),
-                                )
-                              }
-                            />
-                          </td>
-                        )}
-                        <td className="problem-name-cell">
-                          {p.deleted ? (
-                            <strong className="problem-title">{p.name}</strong>
-                          ) : (
-                            <Link
-                              className="problem-title"
-                              to={`/problems/${p.id}/overview`}
-                            >
-                              {p.name}
-                            </Link>
-                          )}
-                          <div className="subtext">
-                            {p.slug}
-                            {p.note && ` · ${p.note}`}
-                          </div>
-                          {(location === 'all' || query) && p.folder_id && (
-                            <button
-                              className="problem-folder-link"
-                              onClick={() => chooseFolder(p.folder_id!)}
-                            >
-                              <Icon name="folder" size={12} />
-                              {folderPath(folders, p.folder_id)
-                                .map((f) => f.name)
-                                .join(' / ')}
-                            </button>
-                          )}
-                          {!hideTags && p.tags.length > 0 && (
-                            <div className="inline-tags">
-                              {p.tags.map((tag) => (
-                                <Badge key={tag}>{tag}</Badge>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                        <td>
-                          <span>{p.owner_name}</span>
-                          <div className="subtext">@{p.owner}</div>
-                          <Badge
-                            tone={p.role === 'OWNER' ? 'accent' : 'neutral'}
-                          >
-                            {p.role === 'OWNER'
-                              ? '소유자'
-                              : permissionsOf(p).length
-                                ? '기능별 권한'
-                                : '읽기 전용'}
-                          </Badge>
-                        </td>
-                        <td>
-                          <div className="revision-cell">
-                            <Icon name="branch" size={14} />r{p.revision}
-                          </div>
-                          {p.modified && (
-                            <div className="subtext amber">
-                              작업 사본 변경됨
-                            </div>
-                          )}
-                        </td>
-                        <td className="subtext">{time(p.updated_at)}</td>
-                        <td className="problem-actions-cell">
-                          {p.deleted ? (
-                            <button
-                              className="button small"
-                              disabled={p.role !== 'OWNER'}
-                              onClick={() =>
-                                void patch(`/problems/${p.id}/deleted`, {
-                                  deleted: false,
-                                })
-                                  .then(refresh)
-                                  .catch((e) => setError(e.message))
-                              }
-                            >
-                              복원
-                            </button>
-                          ) : (
-                            <div className="actions">
-                              <button
-                                className="icon-button"
-                                disabled={!canOrganizeProblem(p, user?.handle)}
-                                aria-label={`${p.name} 폴더 이동`}
-                                onClick={() => setMoveIds([p.id])}
-                              >
-                                <Icon name="folder" size={17} />
-                              </button>
-                              <Link
-                                className="icon-button"
-                                aria-label={`${p.name} 열기`}
-                                to={`/problems/${p.id}/overview`}
-                              >
-                                <Icon name="arrow" />
-                              </Link>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <Empty
-                title={
-                  filter === 'deleted'
-                    ? '휴지통이 비어 있습니다.'
-                    : query
-                      ? '검색 결과가 없습니다.'
-                      : '이 폴더에 아직 문제가 없습니다.'
-                }
-                description={
-                  creatable
-                    ? '새 문제를 만들거나 다른 폴더의 문제를 옮겨 보세요.'
-                    : '이 폴더의 자료를 열람할 수 있습니다. 문제 추가 권한은 폴더 구성원 설정에서 변경합니다.'
-                }
-                action={
-                  filter !== 'deleted' &&
-                  !query &&
-                  creatable && (
+                      />
+                      태그 숨기기
+                    </label>
+                    {selection.length > 0 && (
+                      <>
+                        <strong>{selection.length}개 선택</strong>
+                        <button
+                          className="button small"
+                          disabled={busy}
+                          onClick={() => setMoveIds(selection)}
+                        >
+                          <Icon name="folder" size={15} />
+                          선택한 문제 이동
+                        </button>
+                      </>
+                    )}
                     <button
-                      className="button primary"
-                      onClick={() => setCreate(true)}
+                      className="text-button"
+                      onClick={() => void refresh()}
                     >
-                      <Icon name="plus" />새 문제 만들기
+                      새로고침
                     </button>
-                  )
-                }
-              />
-            )}
-            {!loading && <Pagination {...paging} label="문제 목록" />}
-          </section>
+                  </div>
+                </div>
+                {loading ? (
+                  <div className="loading">문제를 불러오고 있습니다.</div>
+                ) : visible.length ? (
+                  <div className="table-scroll">
+                    <table className="data-table problems-table">
+                      <thead>
+                        <tr>
+                          {filter !== 'deleted' && (
+                            <th className="check-cell">
+                              <input
+                                type="checkbox"
+                                aria-label="표시된 문제 모두 선택"
+                                disabled={movable.length === 0}
+                                checked={
+                                  movable.length > 0 &&
+                                  movable.every((p) => selection.includes(p.id))
+                                }
+                                onChange={(e) =>
+                                  setSelection(
+                                    e.target.checked
+                                      ? [
+                                          ...new Set([
+                                            ...selection,
+                                            ...movable.map((p) => p.id),
+                                          ]),
+                                        ]
+                                      : selection.filter(
+                                          (id) =>
+                                            !movable.some((p) => p.id === id),
+                                        ),
+                                  )
+                                }
+                              />
+                            </th>
+                          )}
+                          <th>문제</th>
+                          <th>소유자 · 권한</th>
+                          <th>리비전</th>
+                          <th>마지막 수정</th>
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paging.items.map((p) => (
+                          <tr
+                            key={p.id}
+                            draggable={
+                              !p.deleted &&
+                              !busy &&
+                              canOrganizeProblem(p, user?.handle)
+                            }
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData(
+                                'application/x-zoj-problem',
+                                p.id,
+                              );
+                              e.dataTransfer.effectAllowed = 'move';
+                              setDragging(p.id);
+                            }}
+                            onDragEnd={() => setDragging(null)}
+                          >
+                            {!p.deleted && (
+                              <td className="check-cell">
+                                <input
+                                  type="checkbox"
+                                  disabled={
+                                    !canOrganizeProblem(p, user?.handle)
+                                  }
+                                  aria-label={`${p.name} 선택`}
+                                  checked={selection.includes(p.id)}
+                                  onChange={(e) =>
+                                    setSelection((ids) =>
+                                      e.target.checked
+                                        ? [...ids, p.id]
+                                        : ids.filter((id) => id !== p.id),
+                                    )
+                                  }
+                                />
+                              </td>
+                            )}
+                            <td className="problem-name-cell">
+                              {p.deleted ? (
+                                <strong className="problem-title">
+                                  {p.name}
+                                </strong>
+                              ) : (
+                                <Link
+                                  className="problem-title"
+                                  to={`/problems/${p.id}/overview`}
+                                >
+                                  {p.name}
+                                </Link>
+                              )}
+                              <div className="subtext">
+                                {p.slug}
+                                {p.note && ` · ${p.note}`}
+                              </div>
+                              {(location === 'all' || query) && p.folder_id && (
+                                <button
+                                  className="problem-folder-link"
+                                  onClick={() => chooseFolder(p.folder_id!)}
+                                >
+                                  <Icon name="folder" size={12} />
+                                  {folderPath(folders, p.folder_id)
+                                    .map((f) => f.name)
+                                    .join(' / ')}
+                                </button>
+                              )}
+                              {!hideTags && p.tags.length > 0 && (
+                                <div className="inline-tags">
+                                  {p.tags.map((tag) => (
+                                    <Badge key={tag}>{tag}</Badge>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              <span>{p.owner_name}</span>
+                              <div className="subtext">@{p.owner}</div>
+                              <Badge
+                                tone={p.role === 'OWNER' ? 'accent' : 'neutral'}
+                              >
+                                {p.role === 'OWNER'
+                                  ? '소유자'
+                                  : permissionsOf(p).length
+                                    ? '기능별 권한'
+                                    : '읽기 전용'}
+                              </Badge>
+                            </td>
+                            <td>
+                              <div className="revision-cell">
+                                <Icon name="branch" size={14} />r{p.revision}
+                              </div>
+                              {p.modified && (
+                                <div className="subtext amber">
+                                  작업 사본 변경됨
+                                </div>
+                              )}
+                            </td>
+                            <td className="subtext">{time(p.updated_at)}</td>
+                            <td className="problem-actions-cell">
+                              {p.deleted ? (
+                                <button
+                                  className="button small"
+                                  disabled={p.role !== 'OWNER'}
+                                  onClick={() =>
+                                    void patch(`/problems/${p.id}/deleted`, {
+                                      deleted: false,
+                                    })
+                                      .then(refresh)
+                                      .catch((e) => setError(e.message))
+                                  }
+                                >
+                                  복원
+                                </button>
+                              ) : (
+                                <div className="actions">
+                                  <button
+                                    className="icon-button"
+                                    disabled={
+                                      !canOrganizeProblem(p, user?.handle)
+                                    }
+                                    aria-label={`${p.name} 폴더 이동`}
+                                    onClick={() => setMoveIds([p.id])}
+                                  >
+                                    <Icon name="folder" size={17} />
+                                  </button>
+                                  <Link
+                                    className="icon-button"
+                                    aria-label={`${p.name} 열기`}
+                                    to={`/problems/${p.id}/overview`}
+                                  >
+                                    <Icon name="arrow" />
+                                  </Link>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <Empty
+                    title={
+                      filter === 'deleted'
+                        ? '휴지통이 비어 있습니다.'
+                        : query
+                          ? '검색 결과가 없습니다.'
+                          : '이 폴더에 아직 문제가 없습니다.'
+                    }
+                    description={
+                      creatable
+                        ? '새 문제를 만들거나 다른 폴더의 문제를 옮겨 보세요.'
+                        : '이 폴더의 자료를 열람할 수 있습니다. 문제 추가 권한은 폴더 구성원 설정에서 변경합니다.'
+                    }
+                    action={
+                      filter !== 'deleted' &&
+                      !query &&
+                      creatable && (
+                        <button
+                          className="button primary"
+                          onClick={() => setCreate(true)}
+                        >
+                          <Icon name="plus" />새 문제 만들기
+                        </button>
+                      )
+                    }
+                  />
+                )}
+                {!loading && <Pagination {...paging} label="문제 목록" />}
+              </section>
+            </>
+          )}
         </div>
       </div>
       {newShared && (

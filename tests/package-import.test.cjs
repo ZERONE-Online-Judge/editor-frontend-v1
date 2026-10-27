@@ -38,6 +38,7 @@ function source(relative) {
   loaded.paths = Module._nodeModulePaths(path.dirname(filename));
   const native = loaded.require.bind(loaded);
   loaded.require = (id) => {
+    if (id.endsWith('.css')) return {};
     if (id.endsWith('/authContext'))
       return { useAuth: () => ({ user: { id: 'owner', handle: 'author' } }) };
     if (id.endsWith('/api'))
