@@ -1,4 +1,4 @@
-const { URL } = require('node:url');
+const { URL, URLSearchParams } = require('node:url');
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs'),
@@ -145,4 +145,19 @@ test('Return paths reject external targets and authentication loops', () => {
     '/problems/../../logout',
   ])
     assert.equal(helpers.safeEditorPath(route), '/problems');
+});
+test('Package import intent survives the shared login redirect', () => {
+  const previous = window.location.href;
+  try {
+    window.history.replaceState(
+      null,
+      '',
+      '/login?' + new URLSearchParams({ next: '/problems?action=import' }),
+    );
+    const redirect = new URL(helpers.sharedLoginUrl(), window.location.origin);
+    assert.equal(redirect.searchParams.get('next'), '/problems?action=import');
+    assert.equal(helpers.editorReturnPath(), '/problems?action=import');
+  } finally {
+    window.history.replaceState(null, '', previous);
+  }
 });
