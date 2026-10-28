@@ -3249,7 +3249,7 @@ for (const role of ['WRITE', 'READ']) {
     jobs = [artifact];
     await mount('invocations?job=archive');
     const publish = [...host.querySelectorAll('button')].find(
-      (el) => el.textContent.trim() === 'ZOJ에 바로 등록',
+      (el) => el.textContent.trim() === '대회 등록 · 업데이트',
     );
     assert.equal(publish.disabled, true);
     assert.match(

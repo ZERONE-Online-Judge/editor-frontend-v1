@@ -1,3 +1,4 @@
+import ZojTransfer from './pages/ZojTransfer';
 import { useEffect, useState, lazy, Suspense } from 'react';
 import {
   createBrowserRouter,
@@ -421,6 +422,7 @@ const router = createBrowserRouter([
         element: <Protected />,
         children: [
           { path: '/problems', element: <Problems /> },
+          { path: '/problems/zoj-transfer', element: <ZojTransfer /> },
           { path: '/problems/:problemId/:tab', element: <WorkspaceRoute /> },
           { path: '/problems/:problemId', element: <WorkspaceRoute /> },
           { path: '/contests', element: <Navigate to="/problems" replace /> },
