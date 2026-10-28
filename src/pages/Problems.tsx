@@ -111,6 +111,7 @@ export default function Problems() {
   const path = folderPath(folders, folderId);
   const current = folders.find((f) => f.id === folderId);
   const creatable = current?.can_create !== false && (!folderId || !!current);
+  const importFromLink = params.get('action') === 'import';
   const writable = canEditFolder(current) && (!folderId || !!current);
   const sharedRoot = current?.workspace_id
     ? folders.find((f) => f.id === current.workspace_id)
@@ -815,11 +816,16 @@ export default function Problems() {
           onCreated={(id) => navigate(`/problems/${id}/overview`)}
         />
       )}
-      {importing && (
+      {(importing || (importFromLink && creatable)) && (
         <ImportProblem
           folderId={folderId}
           onClose={() => {
             setImporting(false);
+            if (importFromLink) {
+              const next = new URLSearchParams(params);
+              next.delete('action');
+              setParams(next, { replace: true });
+            }
             void refresh();
           }}
           onCreated={(id) => navigate(`/problems/${id}/overview`)}

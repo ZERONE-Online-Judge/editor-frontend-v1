@@ -107,7 +107,8 @@ function source(relative) {
 }
 const Problems = source('pages/Problems.tsx').default;
 function Location() {
-  return h('output', { id: 'location' }, Router.useLocation().pathname);
+  const location = Router.useLocation();
+  return h('output', { id: 'location' }, location.pathname + location.search);
 }
 async function click(host, text) {
   const button = [...host.querySelectorAll('button')].find(
@@ -116,7 +117,7 @@ async function click(host, text) {
   assert.ok(button, text);
   await act(async () => button.click());
 }
-async function setup(limit = 2 * 1024 ** 3, plan = null) {
+async function setup(limit = 2 * 1024 ** 3, plan = null, entry = '/problems') {
   archiveLimit = limit;
   compatibility = plan;
   applyFailure = false;
@@ -128,13 +129,13 @@ async function setup(limit = 2 * 1024 ** 3, plan = null) {
     root.render(
       h(
         Router.MemoryRouter,
-        { initialEntries: ['/problems'] },
+        { initialEntries: [entry] },
         h(Location),
         h(Problems),
       ),
     ),
   );
-  await click(host, '패키지 가져오기');
+  if (!entry.includes('action=import')) await click(host, '패키지 가져오기');
   assert.match(host.textContent, /ZIP 최대/);
   const modal = host.querySelector('dialog');
   const setter = Object.getOwnPropertyDescriptor(
@@ -162,6 +163,27 @@ async function setup(limit = 2 * 1024 ** 3, plan = null) {
     },
   };
 }
+test('An import link opens the dialog without uploading and is consumed when dismissed', async () => {
+  const { host, close } = await setup(
+    2 * 1024 ** 3,
+    null,
+    '/problems?folder=root&action=import',
+  );
+  assert.match(host.querySelector('dialog').textContent, /Polygon Linux ZIP/);
+  assert.equal(
+    requests.some((r) => r.options.method === 'POST'),
+    false,
+  );
+  await click(host, '취소');
+  assert.equal(host.querySelector('dialog'), null);
+  assert.equal(
+    host.querySelector('#location').textContent,
+    '/problems?folder=root',
+  );
+  await click(host, '패키지 가져오기');
+  assert.ok(host.querySelector('dialog'));
+  await close();
+});
 test('Import preserves the ZIP and folder request and lets the user inspect conversion details before opening', async () => {
   failure = false;
   const { host, close } = await setup();
