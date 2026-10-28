@@ -24,7 +24,8 @@ const React = require('react'),
 const { MemoryRouter } = require('react-router-dom');
 let calls = [],
   failTargets = false,
-  queued = false;
+  queued = false,
+  failPrepare = false;
 const project = {
   id: 'p',
   name: '합 문제',
@@ -46,8 +47,10 @@ async function api(url, options = {}) {
   calls.push({ url, body: options.body ? JSON.parse(options.body) : null });
   if (url.startsWith('/zoj-transfer/problems?'))
     return { problems: [project], folders: [], total: 1 };
-  if (url === '/zoj-transfer/problems/p/packages')
+  if (url === '/zoj-transfer/problems/p/packages') {
+    if (failPrepare) throw Error('변경사항을 먼저 커밋하세요.');
     return queued ? { ...job, status: 'queued' } : job;
+  }
   if (url === '/zoj-transfer/problems/p/packages/job') return job;
   if (url === '/zoj/contests')
     return {
@@ -150,6 +153,7 @@ async function setup() {
   calls = [];
   failTargets = false;
   queued = false;
+  failPrepare = false;
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
@@ -297,6 +301,29 @@ test('Queued preparation exposes progress and uses the same bound job until read
       [...v.host.querySelectorAll('button')].find(
         (b) => b.textContent.trim() === '대회 등록 · 업데이트',
       ).disabled,
+      false,
+    );
+  } finally {
+    await v.close();
+  }
+});
+
+test('A failed preparation cannot leave an older package enabled for publishing', async () => {
+  const v = await setup();
+  try {
+    await prepare(v);
+    await click(v.host.querySelector('dialog'), '취소');
+    failPrepare = true;
+    await click(v.host, '검증 패키지 준비');
+    assert.match(v.host.textContent, /변경사항을 먼저 커밋하세요/);
+    assert.equal(
+      [...v.host.querySelectorAll('button')].find(
+        (b) => b.textContent.trim() === '대회 등록 · 업데이트',
+      ).disabled,
+      true,
+    );
+    assert.equal(
+      calls.some((c) => c.url.endsWith('/publish-zoj')),
       false,
     );
   } finally {

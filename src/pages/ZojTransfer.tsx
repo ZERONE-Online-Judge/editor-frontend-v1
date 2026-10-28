@@ -114,6 +114,7 @@ export default function ZojTransfer() {
   async function prepare() {
     if (!selected || busy || active) return;
     setBusy(true);
+    setJob(null);
     setError('');
     try {
       setJob(
