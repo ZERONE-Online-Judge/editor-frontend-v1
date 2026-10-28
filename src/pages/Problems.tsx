@@ -239,6 +239,9 @@ export default function Problems() {
           <p>문제를 작성하고 폴더별로 관리합니다.</p>
         </div>
         <div className="actions">
+          <Link className="button" to="/problems/zoj-transfer">
+            대회 등록 · 업데이트
+          </Link>
           <button
             className="button"
             disabled={!creatable}

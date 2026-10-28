@@ -2,7 +2,7 @@ import Pagination from '../../components/Pagination';
 import { useRemotePage } from '../../lib/useRemotePage';
 import { requesterName } from '../../lib/jobHistory';
 import Select from '../../components/Select';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, post, time } from '../../lib/api';
 import { useAuth } from '../../lib/authContext';
 import type { Job, Publication, ZojContest } from '../../lib/types';
@@ -14,11 +14,15 @@ export default function ZojPublishing({
   editable,
   job,
   stale,
+  initialContestId = '',
+  initialDivisionId = '',
 }: {
   problemId: string;
   editable: boolean;
   job: Job | null;
   stale: boolean;
+  initialContestId?: string;
+  initialDivisionId?: string;
 }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -27,6 +31,11 @@ export default function ZojPublishing({
   const [contestId, setContestId] = useState('');
   const [divisionId, setDivisionId] = useState('');
   const [code, setCode] = useState('');
+  const [targetId, setTargetId] = useState('');
+  const [targets, setTargets] = useState<
+    { id: string; title: string; code: string; division_id: string }[]
+  >([]);
+  const [targetsReady, setTargetsReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [published, setPublished] = useState<Publication | null>(null);
@@ -48,6 +57,30 @@ export default function ZojPublishing({
     job.result.package.verified &&
     !stale;
   const contest = contests.find((c) => c.id === contestId);
+  useEffect(() => {
+    if (!open || !contestId) return;
+    const controller = new AbortController();
+    api<{ problems: typeof targets }>(`/zoj/contests/${contestId}/problems`, {
+      signal: controller.signal,
+    })
+      .then((value) => {
+        if (!controller.signal.aborted) {
+          setTargets(value.problems);
+          setTargetsReady(true);
+        }
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setError(error.message);
+          setTargetsReady(false);
+        }
+      });
+    return () => controller.abort();
+  }, [open, contestId]);
+  const target = targets.find((p) => p.id === targetId);
+  const duplicate =
+    !targetId &&
+    targets.some((p) => p.division_id === divisionId && p.code === code.trim());
   async function show() {
     setOpen(true);
     setBusy(true);
@@ -57,6 +90,9 @@ export default function ZojPublishing({
     setContests([]);
     setContestId('');
     setDivisionId('');
+    setTargetId('');
+    setTargets([]);
+    setTargetsReady(false);
     setCode('');
     try {
       const result = await api<{
@@ -66,6 +102,16 @@ export default function ZojPublishing({
       }>('/zoj/contests');
       setConfigured(result.configured);
       setContests(result.contests);
+      const initial = result.contests.find((c) => c.id === initialContestId);
+      if (initial) {
+        setContestId(initial.id);
+        if (initial.divisions.some((d) => d.id === initialDivisionId))
+          setDivisionId(initialDivisionId);
+      } else if (initialContestId) {
+        setError(
+          '연결된 대회의 문제 등록 권한이 없거나 대회를 찾을 수 없습니다. 등록할 대회를 다시 선택하세요.',
+        );
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -77,11 +123,26 @@ export default function ZojPublishing({
       !job ||
       !ready ||
       !contest ||
-      contest.locked ||
+      (contest.locked && !targetId) ||
+      !targetsReady ||
+      duplicate ||
       !divisionId ||
       !code.trim()
     )
       return;
+    if (target) {
+      setOpen(false);
+      setUpdateTarget({
+        contest_id: contestId,
+        problem_code: target.code,
+        result: {
+          problem_id: target.id,
+          title: target.title,
+          url: `https://zoj.kr/operator/contests/${contestId}/problems`,
+        },
+      } as Publication);
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -108,7 +169,7 @@ export default function ZojPublishing({
       <div className="section-heading">
         <div>
           <span className="eyebrow">READY FOR ZOJ</span>
-          <h2>내 문제를 대회로 보내기</h2>
+          <h2>대회에 문제 등록 · 업데이트</h2>
           <p>
             같은 이메일의 ZOJ 운영자 계정으로 등록할 수 있는 대회를 선택하세요.
           </p>
@@ -119,7 +180,7 @@ export default function ZojPublishing({
           onClick={() => void show()}
         >
           <Icon name="upload" />
-          ZOJ에 바로 등록
+          대회 등록 · 업데이트
         </button>
       </div>
       {!editable ? (
@@ -197,6 +258,7 @@ export default function ZojPublishing({
       )}
       {updateTarget && job && (
         <ZojPackageUpdate
+          key={`${problemId}:${job.id}:${updateTarget.contest_id}:${updateTarget.result.problem_id}`}
           problemId={problemId}
           jobId={job.id}
           target={updateTarget}
@@ -208,7 +270,7 @@ export default function ZojPublishing({
       )}
       {open && (
         <Modal
-          title="ZOJ 대회에 문제 등록"
+          title="ZOJ 대회에 문제 등록 · 업데이트"
           onClose={() => {
             if (!busy) setOpen(false);
           }}
@@ -242,14 +304,20 @@ export default function ZojPublishing({
                     busy ||
                     !configured ||
                     !contest ||
-                    contest.locked ||
+                    (contest.locked && !targetId) ||
+                    !targetsReady ||
+                    duplicate ||
                     !divisionId ||
                     !code.trim() ||
                     !ready
                   }
                   onClick={() => void publish()}
                 >
-                  {busy ? '처리 중…' : '이 대회에 새 문제 등록'}
+                  {busy
+                    ? '처리 중…'
+                    : targetId
+                      ? '변경 내용 확인'
+                      : '이 대회에 새 문제 등록'}
                 </button>
               </>
             )
@@ -301,22 +369,71 @@ export default function ZojPublishing({
                       onChange={(e) => {
                         setContestId(e.target.value);
                         setDivisionId('');
+                        setTargetId('');
+                        setTargets([]);
+                        setTargetsReady(false);
+                        setError('');
                       }}
                     >
                       <option value="">대회를 선택하세요</option>
                       {contests.map((c) => (
-                        <option key={c.id} value={c.id} disabled={c.locked}>
+                        <option key={c.id} value={c.id}>
                           {c.title}
-                          {c.locked ? ' · 진행 중, 등록 불가' : ''}
+                          {c.locked ? ' · 진행 중, 업데이트만 가능' : ''}
                         </option>
                       ))}
                     </Select>
                   </label>
+                  {contest && (
+                    <label>
+                      등록 방식
+                      <Select
+                        aria-label="등록 방식"
+                        value={targetId}
+                        disabled={busy || !targetsReady}
+                        onChange={(e) => {
+                          setTargetId(e.target.value);
+                          const item = targets.find(
+                            (p) => p.id === e.target.value,
+                          );
+                          if (item) {
+                            setDivisionId(item.division_id);
+                            setCode(item.code);
+                          } else setCode('');
+                        }}
+                      >
+                        <option value="">새 문제로 등록</option>
+                        {targets.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.code}. {p.title} 업데이트
+                          </option>
+                        ))}
+                      </Select>
+                    </label>
+                  )}
+                  {contest && !targetsReady && (
+                    <p className="muted">
+                      대회 문제 목록을 확인하고 있습니다. 오류가 발생했다면 창을
+                      닫고 다시 시도하세요.
+                    </p>
+                  )}
+                  {duplicate && (
+                    <Notice tone="error">
+                      같은 참가 유형에 해당 문제 번호가 있습니다. 다른 번호를
+                      입력하거나 기존 문제 업데이트를 선택하세요.
+                    </Notice>
+                  )}
+                  {contest?.locked && !targetId && (
+                    <Notice>
+                      진행 중에는 새 문제를 등록할 수 없습니다. 기존 문제
+                      업데이트를 선택하세요.
+                    </Notice>
+                  )}
                   <label>
                     참가 유형
                     <Select
                       value={divisionId}
-                      disabled={busy || !contest}
+                      disabled={busy || !contest || !!targetId}
                       onChange={(e) => setDivisionId(e.target.value)}
                     >
                       <option value="">참가 유형을 선택하세요</option>
@@ -334,16 +451,16 @@ export default function ZojPublishing({
                     문제 번호
                     <input
                       value={code}
-                      disabled={busy}
+                      disabled={busy || !!targetId}
                       maxLength={16}
                       placeholder="예: A"
                       onChange={(e) => setCode(e.target.value)}
                     />
                   </label>
                   <p className="muted">
-                    선택한 대회에 리비전 r{job?.revision}을 새 문제로
-                    등록합니다. 동일한 문제 번호가 있으면 등록을 중단하며,
-                    재시도한 전송 요청은 중복 생성하지 않습니다.
+                    {targetId
+                      ? '기존 문제의 변경 내용을 먼저 확인하고, 이유를 입력한 뒤 적용합니다. 기존 제출·판정과 이전 패키지는 보존됩니다.'
+                      : `선택한 대회에 리비전 r${job?.revision}을 새 문제로 등록합니다. 같은 요청을 재시도해도 중복 생성하지 않습니다.`}
                   </p>
                   <Notice>
                     {job?.result.package?.verified

@@ -152,11 +152,24 @@ test('Package import intent survives the shared login redirect', () => {
     window.history.replaceState(
       null,
       '',
-      '/login?' + new URLSearchParams({ next: '/problems?action=import' }),
+      '/login?' +
+        new URLSearchParams({
+          next: '/problems/zoj-transfer?contest=contest&division=division',
+        }),
     );
     const redirect = new URL(helpers.sharedLoginUrl(), window.location.origin);
-    assert.equal(redirect.searchParams.get('next'), '/problems?action=import');
-    assert.equal(helpers.editorReturnPath(), '/problems?action=import');
+    assert.equal(
+      redirect.searchParams.get('next'),
+      '/problems/zoj-transfer?contest=contest&division=division',
+    );
+    assert.equal(
+      helpers.editorReturnPath(),
+      '/problems/zoj-transfer?contest=contest&division=division',
+    );
+    assert.equal(
+      helpers.safeEditorPath('/problems?action=import'),
+      '/problems?action=import',
+    );
   } finally {
     window.history.replaceState(null, '', previous);
   }
