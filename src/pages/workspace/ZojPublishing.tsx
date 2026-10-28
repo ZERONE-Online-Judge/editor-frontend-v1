@@ -7,7 +7,7 @@ import { api, post, time } from '../../lib/api';
 import { useAuth } from '../../lib/authContext';
 import type { Job, Publication, ZojContest } from '../../lib/types';
 import { Badge, Icon, Modal, Notice } from '../../components/ui';
-import ZojPackageUpdate from './ZojPackageUpdate';
+import ZojPackageUpdate, { type ZojUpdateTarget } from './ZojPackageUpdate';
 
 export default function ZojPublishing({
   problemId,
@@ -50,7 +50,9 @@ export default function ZojPublishing({
     page,
   );
   const history = historyPage?.items || [];
-  const [updateTarget, setUpdateTarget] = useState<Publication | null>(null);
+  const [updateTarget, setUpdateTarget] = useState<ZojUpdateTarget | null>(
+    null,
+  );
   const ready =
     job?.status === 'completed' &&
     job.result.package?.format === 'zoj' &&
@@ -140,7 +142,7 @@ export default function ZojPublishing({
           title: target.title,
           url: `https://zoj.kr/operator/contests/${contestId}/problems`,
         },
-      } as Publication);
+      });
       return;
     }
     setBusy(true);
@@ -405,7 +407,10 @@ export default function ZojPublishing({
                         <option value="">새 문제로 등록</option>
                         {targets.map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.code}. {p.title} 업데이트
+                            {contest.divisions.find(
+                              (d) => d.id === p.division_id,
+                            )?.name || '참가 유형 확인'}{' '}
+                            · {p.code}. {p.title} 업데이트
                           </option>
                         ))}
                       </Select>

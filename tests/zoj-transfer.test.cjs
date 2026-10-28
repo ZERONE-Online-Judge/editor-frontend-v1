@@ -61,7 +61,10 @@ async function api(url, options = {}) {
           id: 'contest',
           title: '대회',
           locked: false,
-          divisions: [{ id: 'division', name: '일반부', code: 'D' }],
+          divisions: [
+            { id: 'division', name: '일반부', code: 'D' },
+            { id: 'junior', name: '초등부', code: 'J' },
+          ],
         },
       ],
     };
@@ -74,6 +77,12 @@ async function api(url, options = {}) {
           title: '기존 문제',
           code: 'A',
           division_id: 'division',
+        },
+        {
+          id: 'junior-target',
+          title: '기존 문제',
+          code: 'A',
+          division_id: 'junior',
         },
       ],
     };
@@ -209,6 +218,10 @@ test('The picker and the existing Editor publishing modal use one publish API wi
     const selects = d.querySelectorAll('select');
     assert.equal(selects[0].value, 'contest');
     assert.equal(selects[2].value, 'division');
+    const choices = [...selects[1].options].map((option) => option.textContent);
+    assert.ok(choices.includes('일반부 · A. 기존 문제 업데이트'));
+    assert.ok(choices.includes('초등부 · A. 기존 문제 업데이트'));
+
     await input(d.querySelector('input'), 'A');
     assert.equal(
       [...d.querySelectorAll('button')].find(

@@ -5,6 +5,13 @@ import type { Publication, ZojPackageUpdatePreview } from '../../lib/types';
 import { Modal, Notice } from '../../components/ui';
 import './ZojPackageUpdate.css';
 
+export type ZojUpdateTarget = Pick<
+  Publication,
+  'contest_id' | 'problem_code'
+> & {
+  result: Pick<Publication['result'], 'problem_id' | 'title' | 'url'>;
+};
+
 export default function ZojPackageUpdate({
   problemId,
   jobId,
@@ -14,7 +21,7 @@ export default function ZojPackageUpdate({
 }: {
   problemId: string;
   jobId: string;
-  target: Publication;
+  target: ZojUpdateTarget;
   onClose: () => void;
   onUpdated: () => void;
 }) {
