@@ -68,6 +68,7 @@ const fieldLabels: Record<string, string> = {
   sample: '지문 예제 표시',
   verify_statement_io: '표시용 입출력 검사',
   script: '생성 스크립트',
+  order: '테스트 실행 순서',
   groups_enabled: '그룹 사용',
   groups: '테스트 그룹',
   tests: '등록 테스트',
@@ -213,7 +214,7 @@ export function revisionChanges(
         after: b ? { exists: '등록됨' } : undefined,
       },
     ];
-    for (const key of ['script', 'groups', 'groups_enabled']) {
+    for (const key of ['script', 'groups', 'groups_enabled', 'order']) {
       if (JSON.stringify(a?.[key]) === JSON.stringify(b?.[key])) continue;
       rows.push({
         ...change,

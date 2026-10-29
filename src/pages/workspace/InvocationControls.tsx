@@ -1,3 +1,4 @@
+import { orderedTests } from '../../lib/testOrder';
 import Select from '../../components/Select';
 import { useEffect, useState } from 'react';
 import { api, tags } from '../../lib/api';
@@ -89,9 +90,7 @@ export default function InvocationControls({
   const selectedSolutions = solutions.filter((key) =>
     availableSolutions.includes(key),
   );
-  const tests = Object.values(source?.testsets[testset]?.tests || {}).sort(
-    (a, b) => a.index - b.index,
-  );
+  const tests = orderedTests(source?.testsets[testset]);
   let selectedIndices: number[] = [];
   let scopeError = '';
   if (!multipleSets && testMode === 'range') {

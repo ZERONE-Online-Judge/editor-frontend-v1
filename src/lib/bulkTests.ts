@@ -1,3 +1,4 @@
+import { orderedTests } from './testOrder';
 import type { ProblemDocument } from './types';
 export type BulkAction =
   | 'group'
@@ -26,10 +27,13 @@ export function bulkTests(
   if (!source) throw new Error('테스트 세트가 없습니다.');
   if (source.script.trim())
     throw new Error('입력·정답 생성 결과를 반영한 뒤 일괄 작업을 사용하세요.');
+  const ranks = new Map(
+    orderedTests(source).map((test, rank) => [test.index, rank]),
+  );
   const selected = new Set(indices),
     entries = Object.entries(source.tests)
       .filter(([, test]) => selected.has(test.index))
-      .sort((a, b) => a[1].index - b[1].index);
+      .sort((a, b) => ranks.get(a[1].index)! - ranks.get(b[1].index)!);
   if (!entries.length || entries.length !== selected.size)
     throw new Error('현재 존재하는 테스트를 선택하세요.');
   const group = (target: typeof source, value: string) => {
@@ -40,6 +44,7 @@ export function bulkTests(
   if (action === 'renumber') {
     if (entries.length !== Object.keys(source.tests).length)
       throw new Error('번호 정렬은 전체 테스트에 적용하세요.');
+    delete source.order;
     source.tests = Object.fromEntries(
       entries.map(([, test], index) => [
         String(index + 1),
@@ -50,6 +55,9 @@ export function bulkTests(
     const target = next.testsets[options.target || ''];
     if (!target || target === source || target.script.trim())
       throw new Error('생성 결과가 반영된 다른 테스트 세트를 선택하세요.');
+    const targetOrder = target.order
+      ? orderedTests(target).map((test) => test.index)
+      : null;
     const used = new Set(Object.values(target.tests).map((test) => test.index));
     const hashes = new Set(
       Object.values(target.tests)
@@ -77,9 +85,11 @@ export function bulkTests(
         group: group(target, options.group ?? test.group),
       };
       used.add(index);
+      targetOrder?.push(index);
       if (test.input_sha) hashes.add(test.input_sha);
       if (action === 'move') delete source.tests[key];
     }
+    if (targetOrder) target.order = targetOrder;
   } else
     for (const [key, test] of entries) {
       if (action === 'group') test.group = group(source, options.group || '');
@@ -92,5 +102,7 @@ export function bulkTests(
         test.sample = action === 'sample-on';
       if (action === 'delete') delete source.tests[key];
     }
+  if (source.order)
+    source.order = orderedTests(source).map((test) => test.index);
   return next;
 }
