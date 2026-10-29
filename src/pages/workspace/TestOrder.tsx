@@ -22,6 +22,9 @@ export default function TestOrder({
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const paging = usePagination(order, 'test-order', 50);
+  const changed = order.some(
+    (index, position) => index !== tests[position]?.index,
+  );
   const lookup = new Map(tests.map((test) => [test.index, test]));
   function move(index: number, destination: number) {
     try {
@@ -45,7 +48,11 @@ export default function TestOrder({
           <button className="button" onClick={onClose}>
             취소
           </button>
-          <button className="button primary" onClick={() => onApply(order)}>
+          <button
+            className="button primary"
+            disabled={!changed}
+            onClick={() => onApply(order)}
+          >
             작업 사본에 반영
           </button>
         </>

@@ -969,6 +969,12 @@ test('test order dialog edits locally until applied and provides accessible adja
     );
   assert.deepEqual(listed(), ['#4', '#1', '#9']);
   assert.equal(
+    [...view.host.querySelectorAll('button')].find(
+      (b) => b.textContent === '작업 사본에 반영',
+    ).disabled,
+    true,
+  );
+  assert.equal(
     view.host.querySelector('[aria-label="테스트 4 위로 이동"]').disabled,
     true,
   );
