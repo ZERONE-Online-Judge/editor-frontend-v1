@@ -8,6 +8,8 @@ import { blobPreview, upload } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
 import GeneratorLoop from './GeneratorLoop';
 import BulkTests from './BulkTests';
+import TestOrder from './TestOrder';
+import { orderedTests } from '../../lib/testOrder';
 import { BlobDownload, DownloadActions } from '../../components/Downloads';
 import { testDownloads } from '../../lib/downloads';
 import type { Test } from '../../lib/types';
@@ -31,6 +33,7 @@ export default function Tests() {
   const [newSet, setNewSet] = useState('');
   const [editing, setEditing] = useState<Test | null | false>(false);
   const [groups, setGroups] = useState(false);
+  const [reordering, setReordering] = useState(false);
   const [busy, setBusy] = useState(false);
   const [autoApply, setAutoApply] = useState(false);
   const [allSets, setAllSets] = useState(false);
@@ -41,9 +44,7 @@ export default function Tests() {
     indices: number[];
   }>({ name: '', indices: [] });
   const set = doc.testsets[selected];
-  const rows = Object.values(set?.tests || {}).sort(
-    (a, b) => a.index - b.index,
-  );
+  const rows = orderedTests(set);
   const paging = usePagination(rows, `${data.problem.id}/${selected}`, 50);
   const availableIndices = new Set(rows.map((test) => test.index));
   const selectedIndices =
@@ -358,6 +359,14 @@ export default function Tests() {
                 </p>
               </div>
               <div className="actions">
+                <button
+                  className="button"
+                  disabled={!editable || busy || rows.length < 2}
+                  onClick={() => setReordering(true)}
+                >
+                  <Icon name="menu" />
+                  순서 변경
+                </button>
                 <button className="button" onClick={() => setGroups(true)}>
                   <Icon name="folder" />
                   그룹 관리
@@ -477,6 +486,9 @@ export default function Tests() {
                           </td>
                           <td>
                             <Badge>#{test.index}</Badge>
+                            <div className="subtext">
+                              {rows.indexOf(test) + 1}번째
+                            </div>
                           </td>
                           <td>
                             <strong className="small">
@@ -582,6 +594,12 @@ export default function Tests() {
                                   ))
                                     if (value.index === test.index)
                                       delete d.testsets[selected].tests[key];
+                                  if (d.testsets[selected].order)
+                                    d.testsets[selected].order = d.testsets[
+                                      selected
+                                    ].order.filter(
+                                      (index) => index !== test.index,
+                                    );
                                 })
                               }
                             >
@@ -604,6 +622,34 @@ export default function Tests() {
             )}
           </section>
         </>
+      )}
+      {reordering && set && (
+        <TestOrder
+          key={selected}
+          testset={set}
+          onClose={() => setReordering(false)}
+          onApply={(order) => {
+            if (
+              !editable ||
+              order.length !== rows.length ||
+              order.some((index) => !availableIndices.has(index))
+            ) {
+              notify(
+                '테스트 목록이 변경되었습니다. 순서 변경 창을 다시 열어 주세요.',
+                true,
+              );
+              setReordering(false);
+              return;
+            }
+            mutate((d) => {
+              d.testsets[selected].order = order;
+            });
+            setReordering(false);
+            notify(
+              '테스트 순서를 작업 사본에 반영했습니다. 저장 후 실행하면 적용됩니다.',
+            );
+          }}
+        />
       )}
       {editing !== false && (
         <TestEditor
@@ -737,6 +783,10 @@ export function TestEditor({
             if (value.index === test.index)
               delete d.testsets[testset].tests[key];
         d.testsets[testset].tests[String(index)] = item;
+        if (test && d.testsets[testset].order)
+          d.testsets[testset].order = d.testsets[testset].order.map((value) =>
+            value === test.index ? index : value,
+          );
       });
       onClose();
     } catch (e) {

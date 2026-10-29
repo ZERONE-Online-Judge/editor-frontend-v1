@@ -86,6 +86,7 @@ export type TestGroup = {
   dependencies: string[];
 };
 export type TestSet = {
+  order?: number[];
   script: string;
   tests: Record<string, Test>;
   groups_enabled: boolean;

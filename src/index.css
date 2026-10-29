@@ -5397,3 +5397,88 @@ svg {
   color: var(--zoj-muted);
   font-size: 11px;
 }
+
+/* Testcase execution order editor. */
+.test-order-jump {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7.5rem auto;
+  align-items: end;
+  gap: 1rem;
+  margin: 1.5rem 0 1rem;
+}
+.test-order-jump label {
+  min-width: 0;
+}
+.test-order-status {
+  min-height: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--zoj-muted);
+  font-size: 0.875rem;
+}
+.test-order-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 24rem;
+  overflow-y: auto;
+  border-block: 1px solid var(--zoj-border);
+}
+.test-order-list li {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0.25rem;
+  border-bottom: 1px solid var(--zoj-border);
+}
+.test-order-list li:last-child {
+  border-bottom: 0;
+}
+.test-order-number {
+  width: 2.25rem;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--zoj-muted);
+  font-variant-numeric: tabular-nums;
+}
+.test-order-label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+.test-order-label strong {
+  flex-shrink: 0;
+}
+.test-order-label span {
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+}
+.test-order-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.test-order-buttons .icon-button {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+.test-order-up svg {
+  transform: rotate(180deg);
+}
+@media (max-width: 540px) {
+  .test-order-jump {
+    grid-template-columns: minmax(0, 1fr) 6rem;
+    gap: 0.75rem;
+  }
+  .test-order-jump > button {
+    grid-column: 1 / -1;
+  }
+  .test-order-label {
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .test-order-list li {
+    gap: 0.5rem;
+  }
+}

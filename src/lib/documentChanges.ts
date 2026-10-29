@@ -193,11 +193,11 @@ export function documentChanges(
       add(`testsets/${name}`, '테스트', `${name} 테스트 세트`, a, b);
       continue;
     }
-    for (const key of ['script', 'groups_enabled', 'groups'] as const)
+    for (const key of ['script', 'groups_enabled', 'groups', 'order'] as const)
       add(
         `testsets/${name}/${key}`,
         '테스트 설정',
-        `${name} · ${key === 'script' ? '생성 스크립트' : key === 'groups' ? '그룹' : '그룹 사용'}`,
+        `${name} · ${key === 'order' ? '테스트 실행 순서' : key === 'script' ? '생성 스크립트' : key === 'groups' ? '그룹' : '그룹 사용'}`,
         a[key],
         b[key],
       );

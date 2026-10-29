@@ -879,3 +879,217 @@ test('Closing a pending test preview aborts both reads instead of continuing to 
   }
   assert.ok(signals.every((signal) => signal.aborted));
 });
+
+test('test ordering keeps sparse identities and appends new tests without modifying generation rules', () => {
+  const { orderedTests, moveTest } = source('lib/testOrder.ts');
+  const set = {
+    script: 'repeat seed in 1..3\ngen {seed} > $\nend',
+    order: [9, 2, 88],
+    tests: Object.fromEntries(
+      [2, 5, 9].map((index) => [
+        index,
+        {
+          index,
+          input_sha: `in-${index}`,
+          answer_sha: `out-${index}`,
+          group: 'g',
+          sample: index === 2,
+        },
+      ]),
+    ),
+  };
+  const original = global.structuredClone(set);
+  assert.deepEqual(
+    orderedTests(set).map((test) => test.index),
+    [9, 2, 5],
+  );
+  assert.deepEqual(moveTest([9, 2, 5], 5, 1), [5, 9, 2]);
+  assert.deepEqual(moveTest([9, 2, 5], 9, 3), [2, 5, 9]);
+  for (const position of [0, 4, 1.5, NaN])
+    assert.throws(() => moveTest([9, 2, 5], 9, position), /정수/);
+  assert.deepEqual(set, original);
+});
+
+test('bulk renumber follows the chosen execution order and keeps each input and answer paired', () => {
+  const doc = fixture();
+  doc.testsets.tests.order = [3, 1, 2];
+  doc.testsets.tests.tests = Object.fromEntries(
+    [1, 2, 3].map((index) => [
+      index,
+      {
+        index,
+        input_sha: `in-${index}`,
+        answer_sha: `out-${index}`,
+        group: 'g',
+        sample: index === 2,
+      },
+    ]),
+  );
+  const next = bulkTests(doc, 'tests', [1, 2, 3], 'renumber');
+  assert.equal(next.testsets.tests.order, undefined);
+  assert.deepEqual(
+    Object.values(next.testsets.tests.tests).map((test) => [
+      test.index,
+      test.input_sha,
+      test.answer_sha,
+    ]),
+    [
+      [1, 'in-3', 'out-3'],
+      [2, 'in-1', 'out-1'],
+      [3, 'in-2', 'out-2'],
+    ],
+  );
+  assert.deepEqual(doc.testsets.tests.order, [3, 1, 2]);
+  assert.deepEqual(
+    bulkTests(doc, 'tests', [1], 'delete').testsets.tests.order,
+    [3, 2],
+  );
+});
+
+test('test order dialog edits locally until applied and provides accessible adjacent moves', async () => {
+  const set = {
+    tests: {
+      1: { index: 1, description: '예제' },
+      4: { index: 4, description: '경계값' },
+      9: { index: 9, description: '최댓값' },
+    },
+    order: [4, 1, 9],
+  };
+  let applied = null;
+  const view = await mount(source('pages/workspace/TestOrder.tsx').default, {
+    testset: set,
+    onApply: (order) => {
+      applied = order;
+    },
+    onClose: () => {},
+  });
+  const listed = () =>
+    [...view.host.querySelectorAll('.test-order-label strong')].map(
+      (node) => node.textContent,
+    );
+  assert.deepEqual(listed(), ['#4', '#1', '#9']);
+  assert.equal(
+    view.host.querySelector('[aria-label="테스트 4 위로 이동"]').disabled,
+    true,
+  );
+  assert.equal(
+    view.host.querySelector('[aria-label="테스트 9 아래로 이동"]').disabled,
+    true,
+  );
+  await act(async () =>
+    view.host.querySelector('[aria-label="테스트 1 위로 이동"]').click(),
+  );
+  assert.deepEqual(listed(), ['#1', '#4', '#9']);
+  assert.deepEqual(set.order, [4, 1, 9]);
+  assert.equal(applied, null);
+  await act(async () =>
+    [...view.host.querySelectorAll('button')]
+      .find((b) => b.textContent === '작업 사본에 반영')
+      .click(),
+  );
+  assert.deepEqual(applied, [1, 4, 9]);
+  await view.close();
+});
+
+test('test order dialog supports cross-page position moves and cancel leaves the source unchanged', async () => {
+  const set = {
+    tests: Object.fromEntries(
+      Array.from({ length: 53 }, (_, i) => [
+        i + 1,
+        { index: i + 1, description: `case ${i + 1}` },
+      ]),
+    ),
+  };
+  let cancelled = false;
+  const view = await mount(source('pages/workspace/TestOrder.tsx').default, {
+    testset: set,
+    onApply: () => assert.fail('must not apply'),
+    onClose: () => {
+      cancelled = true;
+    },
+  });
+  await act(async () =>
+    view.host.querySelector('[aria-label="테스트 순서 2페이지"]').click(),
+  );
+  await act(async () =>
+    view.host.querySelector('[aria-label="테스트 51 위로 이동"]').click(),
+  );
+  assert.equal(view.host.querySelectorAll('.test-order-list li').length, 50);
+  assert.equal(
+    [...view.host.querySelectorAll('.test-order-label strong')].at(-1)
+      .textContent,
+    '#51',
+  );
+  // Choosing #53 fills its current position; move #53 to the first position.
+  await act(async () => {
+    const select = view.host.querySelector('select');
+    select.value = '53';
+    select.dispatchEvent(new window.Event('change', { bubbles: true }));
+  });
+  await act(async () => {
+    const input = view.host.querySelector('[aria-label="이동할 위치"]');
+    Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    ).set.call(input, '1');
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  await act(async () =>
+    view.host
+      .querySelector('form')
+      .dispatchEvent(
+        new window.Event('submit', { bubbles: true, cancelable: true }),
+      ),
+  );
+  assert.equal(
+    view.host.querySelector('.test-order-label strong').textContent,
+    '#53',
+  );
+  await act(async () =>
+    [...view.host.querySelectorAll('button')]
+      .find((b) => b.textContent === '취소')
+      .click(),
+  );
+  assert.equal(cancelled, true);
+  assert.equal(set.order, undefined);
+  await view.close();
+});
+
+test('workspace exposes the saved order, applies moves without renumbering, and records an order-only diff', async () => {
+  const doc = workspace();
+  doc.testsets.tests.groups = {};
+  doc.testsets.tests.groups_enabled = false;
+  const base = global.structuredClone(doc);
+  doc.testsets.tests.tests.two = {
+    ...doc.testsets.tests.tests.one,
+    index: 2,
+    input_sha: 'other',
+  };
+  doc.testsets.tests.order = [2, 1];
+  const view = await mount(source('pages/workspace/Tests.tsx').default);
+  assert.match(view.host.querySelector('tbody tr').textContent, /#2/);
+  await act(async () =>
+    [...view.host.querySelectorAll('button')]
+      .find((b) => b.textContent.includes('순서 변경'))
+      .click(),
+  );
+  await act(async () =>
+    view.host.querySelector('[aria-label="테스트 1 위로 이동"]').click(),
+  );
+  await act(async () =>
+    [...view.host.querySelectorAll('dialog button')]
+      .find((b) => b.textContent === '작업 사본에 반영')
+      .click(),
+  );
+  assert.deepEqual(doc.testsets.tests.order, [1, 2]);
+  assert.equal(
+    doc.testsets.tests.tests.one.input_sha,
+    base.testsets.tests.tests.one.input_sha,
+  );
+  const after = global.structuredClone(base);
+  after.testsets.tests.order = [2, 1];
+  const rows = documentChanges(base, after);
+  assert.equal(rows.length, 1);
+  assert.match(rows[0].label, /테스트 실행 순서/);
+  await view.close();
+});
