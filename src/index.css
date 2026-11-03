@@ -168,12 +168,13 @@ svg {
   flex-shrink: 0;
 }
 .editor-app {
+  --editor-header-height: 68px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 .app-header {
-  height: 72px;
+  height: var(--editor-header-height);
   background: #ffffffeb;
   border-bottom: 1px solid var(--zoj-border);
   display: flex;
@@ -182,7 +183,7 @@ svg {
   padding: 0 36px;
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 30;
   backdrop-filter: blur(16px);
 }
 .brand {
@@ -2988,7 +2989,6 @@ svg {
   .app-header {
     padding-inline: 22px;
     gap: 24px;
-    height: 64px;
   }
   .brand strong {
     font-size: 18px;
@@ -3057,11 +3057,13 @@ svg {
   }
 }
 @media (max-width: 600px) {
+  .editor-app {
+    --editor-header-height: 104px;
+  }
   h1 {
     font-size: 26px;
   }
   .app-header {
-    height: 100px;
     padding: 14px 16px 0;
     flex-wrap: wrap;
     gap: 0 14px;
@@ -5072,9 +5074,10 @@ svg {
     grid-template-columns: 64px minmax(0, 1fr);
   }
   .workspace-navigation {
+    --workspace-navigation-top: calc(var(--editor-header-height) + 16px);
     position: sticky;
-    top: 88px;
-    z-index: 20;
+    top: var(--workspace-navigation-top);
+    z-index: 10;
     overflow: visible;
   }
   .workspace-navigation .problem-sidebar {
@@ -5086,7 +5089,7 @@ svg {
     display: flex;
     flex-direction: column;
     width: 248px;
-    max-height: calc(100dvh - 108px);
+    max-height: calc(100dvh - var(--workspace-navigation-top) - 20px);
     overflow: hidden;
     border: 1px solid #e2e6ed;
     border-radius: 12px;

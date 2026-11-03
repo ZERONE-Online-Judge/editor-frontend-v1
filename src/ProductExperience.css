@@ -5,8 +5,7 @@
   color: #1d2433;
 }
 .editor-app .app-header {
-  height: 68px;
-  background: #ffffffed;
+  background: #fff;
   border-bottom-color: var(--zoj-border);
   backdrop-filter: blur(16px);
   gap: 36px;
@@ -348,7 +347,6 @@
 }
 @media (max-width: 600px) {
   .editor-app .app-header {
-    height: 104px;
     padding-inline: 16px;
     gap: 8px 14px;
     padding-top: 12px;
