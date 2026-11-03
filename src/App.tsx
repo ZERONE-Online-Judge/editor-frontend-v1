@@ -1,5 +1,6 @@
 import ZojTransfer from './pages/ZojTransfer';
-import { useEffect, useState, lazy, Suspense } from 'react';
+import './ProductExperience.css';
+import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import {
   createBrowserRouter,
   Link,
@@ -9,6 +10,7 @@ import {
   RouterProvider,
   useNavigate,
   useLocation,
+  useNavigationType,
   useParams,
 } from 'react-router-dom';
 import { api, patch } from './lib/api';
@@ -22,6 +24,14 @@ import PasswordSetupGuidance from './components/PasswordSetupGuidance';
 import Problems from './pages/Problems';
 const ProblemWorkspace = lazy(() => import('./pages/Workspace'));
 function Layout() {
+  const { pathname, hash } = useLocation();
+  const navigationType = useNavigationType();
+  const previousPath = useRef(pathname);
+  useEffect(() => {
+    if (previousPath.current !== pathname && navigationType !== 'POP' && !hash)
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    previousPath.current = pathname;
+  }, [pathname, hash, navigationType]);
   const { user, setUser } = useAuth();
   const [profile, setProfile] = useState(false);
   const [sharedAuth, setSharedAuth] = useState(true);

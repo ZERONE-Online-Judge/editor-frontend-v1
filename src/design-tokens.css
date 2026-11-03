@@ -2,24 +2,24 @@
    Use a soft outer card, white inner surfaces, and an accent border for selection.
    Semantic result colors and dark presentation/hero artwork remain independent. */
 :root {
-  --zoj-surface: #f7f8fd;
+  --zoj-surface: #f6f7f9;
   --zoj-surface-raised: #ffffff;
-  --zoj-surface-hover: #eef2ff;
-  --zoj-border: #e0e5f3;
-  --zoj-border-selected: #a5b4fc;
+  --zoj-surface-hover: #f0effb;
+  --zoj-border: #e4e7ec;
+  --zoj-border-selected: #b7b0ee;
   --zoj-accent: #4f46e5;
   --zoj-accent-hover: #4338ca;
   --zoj-ink: #0f172a;
-  --zoj-muted: #5b6b82;
+  --zoj-muted: #667085;
   --zoj-focus: #818cf8;
-  --zoj-radius-card: 1rem;
+  --zoj-radius-card: 0.875rem;
   --zoj-radius-inset: 0.75rem;
   --zoj-radius-control: 0.625rem;
   --zoj-card-padding: clamp(1rem, 2vw, 1.5rem);
   --zoj-card-title: 1rem;
   --zoj-card-copy: 0.875rem;
   --zoj-card-hint: 0.75rem;
-  --zoj-card-shadow: 0 1px 3px #312e810a;
+  --zoj-card-shadow: 0 1px 2px #10182804;
   --zoj-control-height: 42px;
   --zoj-control-height-small: 34px;
   --zoj-control-gap: 10px;

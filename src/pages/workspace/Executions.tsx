@@ -380,7 +380,7 @@ export default function Executions({
               ? '생성기와 기준 풀이를 사용해 비교할 풀이의 유효한 반례를 찾습니다.'
               : verification
                 ? '풀이와 테스트 범위를 선택해 검증을 요청합니다. 진행 상황과 기록은 실행 결과에서 확인합니다.'
-                : '각 탭에서 요청한 작업의 진행 상황과 완료 결과를 확인합니다. 아래 작업 기록에서 확인할 실행을 선택하세요.'
+                : '요청한 작업의 진행 상태와 결과를 확인하세요.'
         }
         actions={
           <>
@@ -553,13 +553,6 @@ export default function Executions({
       ) : null}
       {showResults && (
         <>
-          <div className="execution-history-heading">
-            <Icon name="history" />
-            <div>
-              <h3>작업 기록 · 결과 보기</h3>
-              <p>기록을 선택하면 해당 작업의 진행 상황과 결과가 표시됩니다.</p>
-            </div>
-          </div>
           <div className="history-filters">
             <div
               className="history-relations"
@@ -604,13 +597,15 @@ export default function Executions({
               </label>
             )}
           </div>
-          <p className="muted small" aria-live="polite">
-            {
-              executionCategories.find(
-                (category) => category.id === historyKind,
-              )?.description
-            }
-          </p>
+          {historyKind !== 'all' && (
+            <p className="muted small" aria-live="polite">
+              {
+                executionCategories.find(
+                  (category) => category.id === historyKind,
+                )?.description
+              }
+            </p>
+          )}
           {dirty && (
             <Notice>
               저장하지 않은 변경이 있습니다. 자료 기준 표시는 마지막으로 저장한

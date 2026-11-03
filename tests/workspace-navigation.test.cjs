@@ -5,7 +5,10 @@ const path = require('node:path');
 const Module = require('node:module');
 const ts = require('typescript');
 const { JSDOM } = require('jsdom');
-const dom = new JSDOM('<body></body>', { pretendToBeVisual: true });
+const dom = new JSDOM('<body></body>', {
+  pretendToBeVisual: true,
+  url: 'https://editor.example.test/',
+});
 global.window = dom.window;
 global.document = dom.window.document;
 global.IS_REACT_ACT_ENVIRONMENT = true;
@@ -15,13 +18,28 @@ window.HTMLDialogElement.prototype.showModal = function () {
 window.HTMLDialogElement.prototype.close = function () {
   this.open = false;
 };
-const desktopListeners = new Set();
-const desktop = {
-  matches: false,
-  addEventListener: (type, callback) => desktopListeners.add(callback),
-  removeEventListener: (type, callback) => desktopListeners.delete(callback),
+function mediaQuery(matches) {
+  const listeners = new Set();
+  return {
+    matches,
+    listeners,
+    addEventListener: (type, callback) => listeners.add(callback),
+    removeEventListener: (type, callback) => listeners.delete(callback),
+    set(matches) {
+      this.matches = matches;
+      for (const listener of listeners) listener({ matches });
+    },
+  };
+}
+const desktop = mediaQuery(false);
+const hover = mediaQuery(false);
+const reducedMotion = mediaQuery(true);
+window.matchMedia = (query) => {
+  if (query === '(min-width: 768px)') return desktop;
+  if (query === '(hover: hover) and (pointer: fine)') return hover;
+  if (query === '(prefers-reduced-motion: reduce)') return reducedMotion;
+  throw new Error(`Unexpected media query: ${query}`);
 };
-window.matchMedia = () => desktop;
 const React = require('react');
 const { act, createElement: h } = React;
 const { createRoot } = require('react-dom/client');
@@ -53,7 +71,11 @@ const cleanup = new Set();
 afterEach(async () => {
   for (const close of [...cleanup]) await close();
   desktop.matches = false;
-  assert.equal(desktopListeners.size, 0);
+  hover.matches = false;
+  reducedMotion.matches = true;
+  window.localStorage.clear();
+  for (const query of [desktop, hover, reducedMotion])
+    assert.equal(query.listeners.size, 0);
   assert.equal(document.body.style.overflow, '');
 });
 after(() => dom.window.close());
@@ -65,7 +87,6 @@ async function mount(overrides = {}) {
   function Page() {
     const { problemId, tab } = Router.useParams();
     return h(Navigation, {
-      key: `${problemId}/${tab}`,
       problemId,
       tab,
       required: 2,
@@ -103,6 +124,9 @@ async function mount(overrides = {}) {
     host,
     close,
     toggle,
+    rail: () => host.querySelector('.workspace-navigation-rail'),
+    navigation: () => host.querySelector('.workspace-navigation'),
+    pin: () => host.querySelector('.workspace-sidebar-toggle'),
     discarded: () => discarded,
     open: async () => {
       await act(async () => {
@@ -116,7 +140,10 @@ async function mount(overrides = {}) {
 
 test('Hamburger identifies the current work and opens grouped, active navigation', async () => {
   const v = await mount();
-  assert.match(v.toggle().textContent, /테스트 · 검증.*테스트 · 생성 스크립트/);
+  assert.equal(
+    v.toggle().getAttribute('aria-label'),
+    '작업 메뉴 열기 · 테스트 · 생성 스크립트',
+  );
   assert.equal(v.toggle().getAttribute('aria-expanded'), 'false');
   assert.equal(v.host.querySelector('dialog'), null);
   const dialog = await v.open();
@@ -141,7 +168,7 @@ test('Choosing a task navigates and dismisses the menu, including the current ta
     dialog.querySelector('a[href$="/verification"]').click(),
   );
   assert.equal(v.host.querySelector('dialog'), null);
-  assert.match(v.toggle().textContent, /전체 검증/);
+  assert.match(v.toggle().getAttribute('aria-label'), /전체 검증/);
   assert.equal(document.body.style.overflow, '');
   dialog = await v.open();
   await act(async () => dialog.querySelector('a[aria-current=page]').click());
@@ -163,7 +190,7 @@ test('Escape and the close button restore focus without changing the selected ta
   );
   assert.equal(v.host.querySelector('dialog'), null);
   assert.equal(document.activeElement, v.toggle());
-  assert.match(v.toggle().textContent, /테스트 · 생성 스크립트/);
+  assert.match(v.toggle().getAttribute('aria-label'), /테스트 · 생성 스크립트/);
 });
 
 test('Returning to desktop dismisses the drawer and releases background scrolling', async () => {
@@ -171,13 +198,132 @@ test('Returning to desktop dismisses the drawer and releases background scrollin
   document.body.style.overflow = 'clip';
   await v.open();
   await act(async () => {
-    desktop.matches = true;
-    for (const listener of desktopListeners) listener();
+    desktop.set(true);
   });
   assert.equal(v.host.querySelector('dialog'), null);
   assert.equal(document.body.style.overflow, 'clip');
   document.body.style.overflow = '';
   assert.equal(v.host.querySelectorAll('.problem-sidebar a').length, 17);
+});
+
+function pointer(target, type, pointerType = 'mouse', relatedTarget = null) {
+  const event = new window.MouseEvent(type, {
+    bubbles: true,
+    relatedTarget,
+  });
+  Object.defineProperty(event, 'pointerType', { value: pointerType });
+  target.dispatchEvent(event);
+}
+
+async function press(target, pointerType = 'touch') {
+  await act(async () => {
+    pointer(target, 'pointerdown', pointerType);
+    target.focus();
+    pointer(target, 'pointerup', pointerType);
+    target.click();
+  });
+}
+
+test('Desktop icon navigation opens on fine-pointer hover and closes on exit', async () => {
+  desktop.matches = true;
+  hover.matches = true;
+  const v = await mount();
+  assert.equal(v.navigation().getAttribute('data-expanded'), 'false');
+  assert.equal(v.pin().getAttribute('aria-pressed'), 'false');
+  assert.equal(v.pin().getAttribute('aria-label'), '작업 메뉴 고정');
+  await act(async () => pointer(v.rail(), 'pointerover'));
+  assert.equal(v.navigation().getAttribute('data-expanded'), 'true');
+  await act(async () =>
+    pointer(v.rail(), 'pointerout', 'mouse', document.body),
+  );
+  assert.equal(v.navigation().getAttribute('data-expanded'), 'false');
+  assert.equal(
+    window.localStorage.getItem('zoj.editor.sidebarCollapsed'),
+    null,
+  );
+});
+
+test('Touch-only tablet navigation pins and collapses by click without hover', async () => {
+  desktop.matches = true;
+  const v = await mount();
+  await act(async () => pointer(v.rail(), 'pointerover', 'touch'));
+  assert.equal(v.navigation().getAttribute('data-expanded'), 'false');
+  await act(async () => pointer(v.rail(), 'pointerover', 'mouse'));
+  assert.equal(v.navigation().getAttribute('data-expanded'), 'false');
+  await press(v.pin());
+  assert.equal(v.navigation().getAttribute('data-expanded'), 'true');
+  assert.equal(v.pin().getAttribute('aria-label'), '작업 메뉴 접기');
+  assert.equal(v.pin().getAttribute('aria-pressed'), 'true');
+  assert.equal(
+    window.localStorage.getItem('zoj.editor.sidebarCollapsed'),
+    'false',
+  );
+  await press(v.pin());
+  assert.equal(v.pin().getAttribute('aria-pressed'), 'false');
+  assert.equal(v.navigation().getAttribute('data-expanded'), 'false');
+  assert.equal(
+    window.localStorage.getItem('zoj.editor.sidebarCollapsed'),
+    'true',
+  );
+  const link = v.rail().querySelector('a[aria-current="page"]');
+  await act(async () => {
+    v.pin().dispatchEvent(
+      new window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }),
+    );
+    link.focus();
+  });
+  assert.equal(v.navigation().getAttribute('data-expanded'), 'true');
+  assert.equal(v.pin().getAttribute('aria-pressed'), 'false');
+});
+
+test('Pinned navigation survives remount while hover never changes the preference', async () => {
+  desktop.matches = true;
+  hover.matches = true;
+  let v = await mount();
+  await press(v.pin(), 'mouse');
+  await v.close();
+  v = await mount();
+  assert.equal(v.pin().getAttribute('aria-pressed'), 'true');
+  await act(async () =>
+    pointer(v.rail(), 'pointerout', 'mouse', document.body),
+  );
+  assert.equal(v.navigation().getAttribute('data-expanded'), 'true');
+});
+
+test('Keyboard focus expands the icon navigation until focus leaves it', async () => {
+  desktop.matches = true;
+  const v = await mount();
+  await act(async () => v.pin().focus());
+  assert.equal(v.navigation().getAttribute('data-expanded'), 'true');
+  assert.equal(v.pin().getAttribute('aria-pressed'), 'false');
+  const link = v.rail().querySelector('a[aria-current="page"]');
+  await act(async () => link.focus());
+  assert.equal(v.navigation().getAttribute('data-expanded'), 'true');
+  await act(async () => link.blur());
+  assert.equal(v.navigation().getAttribute('data-expanded'), 'false');
+});
+
+test('Mobile closing animates while keeping the background locked, then restores focus', async () => {
+  reducedMotion.matches = false;
+  const v = await mount();
+  const dialog = await v.open();
+  await act(async () =>
+    dialog.querySelector('button[aria-label="닫기"]').click(),
+  );
+  assert.equal(v.toggle().getAttribute('aria-expanded'), 'false');
+  assert.equal(
+    v.host
+      .querySelector('.workspace-menu-modal')
+      .classList.contains('is-closing'),
+    true,
+  );
+  assert.equal(document.body.style.overflow, 'hidden');
+  await act(
+    async () => new Promise((resolve) => window.setTimeout(resolve, 220)),
+  );
+  assert.equal(v.host.querySelector('dialog'), null);
+  assert.equal(document.body.style.overflow, '');
+  assert.equal(document.activeElement, v.toggle());
 });
 
 test('Revert stays available in the menu and respects the busy state', async () => {

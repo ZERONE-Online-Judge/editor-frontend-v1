@@ -38,6 +38,7 @@ export default function Problems() {
   const folderId = location === 'all' || location === 'root' ? null : location;
   const [rows, setRows] = useState<Problem[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [folderMenuOpen, setFolderMenuOpen] = useState(false);
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [hideTags, setHideTags] = useState(() => {
@@ -138,6 +139,7 @@ export default function Problems() {
     setParams(id === 'all' ? {} : { folder: id });
     setQuery('');
     setSelection([]);
+    setFolderMenuOpen(false);
   }
   async function move(
     ids: string[],
@@ -231,12 +233,12 @@ export default function Problems() {
       ));
   }
   return (
-    <div className="page-container">
+    <div className="page-container problem-library">
       <div className="page-heading">
         <div>
           <span className="eyebrow">ZOJ EDITOR</span>
-          <h1>문제 작업 공간</h1>
-          <p>문제를 작성하고 폴더별로 관리합니다.</p>
+          <h1>내 문제</h1>
+          <p>문제 제작부터 검증, 대회 등록까지 한곳에서 관리하세요.</p>
         </div>
         <div className="actions">
           <Link className="button" to="/problems/zoj-transfer">
@@ -268,9 +270,22 @@ export default function Problems() {
           void refresh();
         }}
       />
+      <button
+        type="button"
+        className="button library-folder-toggle"
+        aria-expanded={folderMenuOpen}
+        aria-controls="problem-folder-navigation"
+        onClick={() => setFolderMenuOpen((open) => !open)}
+      >
+        <Icon name="folder" size={17} />
+        <span>폴더 탐색</span>
+        <Icon name="down" size={16} />
+      </button>
       <div className="project-layout">
         <aside
           className={`card folder-sidebar ${dragging ? 'accepts-drop' : ''}`}
+          id="problem-folder-navigation"
+          data-expanded={folderMenuOpen}
           aria-label="내 프로젝트 폴더"
         >
           <div className="folder-sidebar-heading">
@@ -341,6 +356,9 @@ export default function Problems() {
                   </button>
                 </span>
               ))}
+              <span className="folder-problem-count">
+                {visible.length}개 문제
+              </span>
             </nav>
             <div className="actions">
               <button
@@ -467,62 +485,57 @@ export default function Problems() {
                     </button>
                   ))}
                 </div>
-                <label className="search-field">
-                  <Icon name="search" />
-                  <input
-                    aria-label="문제 검색"
-                    placeholder="모든 폴더에서 검색"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                </label>
+                <div className="problem-view-tools">
+                  <label className="search-field">
+                    <Icon name="search" />
+                    <input
+                      aria-label="문제 검색"
+                      placeholder="모든 폴더에서 검색"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
+                  </label>
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={hideTags}
+                      onChange={(e) => {
+                        const hidden = e.target.checked;
+                        setHideTags(hidden);
+                        try {
+                          window.localStorage.setItem(
+                            'zoj-editor.hide-problem-tags',
+                            String(hidden),
+                          );
+                        } catch {
+                          // The current view still works when storage is disabled.
+                        }
+                      }}
+                    />
+                    태그 숨기기
+                  </label>
+                  <button
+                    className="text-button"
+                    onClick={() => void refresh()}
+                  >
+                    새로고침
+                  </button>
+                </div>
               </div>
               <section className="card problem-list">
-                <div className="list-caption">
-                  <span>
-                    {visible.length}개 문제 {query && '· 모든 폴더 검색'}
-                  </span>
-                  <div className="actions">
-                    <label className="checkbox">
-                      <input
-                        type="checkbox"
-                        checked={hideTags}
-                        onChange={(e) => {
-                          const hidden = e.target.checked;
-                          setHideTags(hidden);
-                          try {
-                            window.localStorage.setItem(
-                              'zoj-editor.hide-problem-tags',
-                              String(hidden),
-                            );
-                          } catch {
-                            // The current view still works when storage is disabled.
-                          }
-                        }}
-                      />
-                      태그 숨기기
-                    </label>
-                    {selection.length > 0 && (
-                      <>
-                        <strong>{selection.length}개 선택</strong>
-                        <button
-                          className="button small"
-                          disabled={busy}
-                          onClick={() => setMoveIds(selection)}
-                        >
-                          <Icon name="folder" size={15} />
-                          선택한 문제 이동
-                        </button>
-                      </>
-                    )}
+                {selection.length > 0 && (
+                  <div className="list-caption">
+                    <strong>{selection.length}개 선택</strong>
                     <button
-                      className="text-button"
-                      onClick={() => void refresh()}
+                      className="button small"
+                      disabled={busy}
+                      onClick={() => setMoveIds(selection)}
                     >
-                      새로고침
+                      <Icon name="folder" size={15} />
+                      선택한 문제 이동
                     </button>
                   </div>
-                </div>
+                )}
                 {loading ? (
                   <div className="loading">문제를 불러오고 있습니다.</div>
                 ) : visible.length ? (

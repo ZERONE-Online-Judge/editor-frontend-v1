@@ -1,0 +1,483 @@
+/* Shared product rhythm with ZOJ: neutral chrome, a clear working surface,
+   stable controls and color reserved for active actions or real results. */
+.editor-app {
+  background: #f8f9fb;
+  color: #1d2433;
+}
+.editor-app .app-header {
+  height: 68px;
+  background: #ffffffed;
+  border-bottom-color: var(--zoj-border);
+  backdrop-filter: blur(16px);
+  gap: 36px;
+}
+.editor-app .brand strong {
+  font-size: 19px;
+  font-weight: 750;
+}
+.editor-app .brand strong span {
+  color: #645b99;
+  font-weight: 550;
+}
+.editor-app .brand-label {
+  color: #939baa;
+}
+.editor-app .app-header nav {
+  gap: 6px;
+}
+.editor-app .app-header nav a {
+  height: 36px;
+  padding: 8px 14px;
+  border-radius: 7px;
+}
+.editor-app .app-header nav a.active {
+  background: #f0effb;
+  color: #4f46c9;
+}
+.editor-app .app-header nav a.active::after {
+  display: none;
+}
+.editor-app .account-button > span {
+  background: #f2f1f7;
+  color: #746b97;
+  border-color: #e6e3f0;
+}
+.editor-app .app-main {
+  background: #f8f9fb;
+}
+.editor-app .page-container {
+  padding-top: 44px;
+}
+.editor-app .page-heading {
+  align-items: end;
+  margin-bottom: 32px;
+}
+.editor-app .page-heading h1 {
+  font-size: 32px;
+  font-weight: 650;
+  letter-spacing: -0.045em;
+  margin-top: 10px;
+}
+.editor-app .page-heading p {
+  font-size: 13px;
+  color: var(--zoj-muted);
+}
+.editor-app .eyebrow {
+  font-size: 10px;
+  color: #79739d;
+  letter-spacing: 0.1em;
+}
+.editor-app .button {
+  border-radius: 8px;
+  font-weight: 550;
+  border-color: #dfe3e9;
+  color: #4b5565;
+  box-shadow: 0 1px 2px #10182803;
+  transition:
+    background 160ms,
+    border-color 160ms,
+    box-shadow 160ms;
+}
+.editor-app .button:hover:not(:disabled) {
+  background: #f7f8fa;
+  border-color: #c4c9d4;
+}
+.editor-app .button.primary {
+  background: #5146d8;
+  border-color: #5146d8;
+  color: white;
+  box-shadow: 0 2px 3px #4338ca14;
+}
+.editor-app .button.primary:hover:not(:disabled) {
+  background: #4438c2;
+  border-color: #4438c2;
+}
+.editor-app .button.danger {
+  background: #fff7f8;
+  color: #be123c;
+  border-color: #fecdd3;
+}
+.editor-app .icon-button:hover {
+  background: #f0f1f5;
+  color: #5146d8;
+}
+.editor-app :is(input, textarea) {
+  caret-color: #5146d8;
+}
+.editor-app :is(button, a, input, textarea, select):focus-visible {
+  outline-offset: 3px;
+}
+.editor-app .card {
+  border-radius: 12px;
+  border-color: var(--zoj-border);
+  box-shadow: 0 1px 2px #10182803;
+}
+.editor-app .card-heading {
+  background: #fff;
+  padding: 20px 24px;
+  border-bottom-color: #edf0f3;
+}
+.editor-app .card-heading :is(h2, h3),
+.editor-app .section-heading :is(h2, h3) {
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.editor-app .project-layout {
+  gap: 28px;
+}
+.editor-app .folder-sidebar.card {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 4px 0;
+}
+.editor-app .folder-sidebar-heading {
+  padding-inline: 12px;
+  color: #778292;
+  font-size: 11px;
+}
+.editor-app .folder-nav-item {
+  min-height: 40px;
+  border-radius: 7px;
+  margin-block: 3px;
+  color: #667085;
+}
+.editor-app .folder-nav-item.selected {
+  background: #ebe9f7;
+  color: #5146c1;
+}
+.editor-app .folder-nav-item:not(.selected):hover {
+  background: #edeff3;
+}
+.editor-app .folder-hint {
+  color: #778292;
+  font-size: 11px;
+  line-height: 1.8;
+  padding-inline: 12px;
+}
+.editor-app .folder-heading {
+  padding-bottom: 18px;
+}
+.editor-app .folder-breadcrumb {
+  font-size: 13px;
+  color: #667085;
+}
+.editor-app .segmented {
+  background: #eceef2;
+  border-radius: 8px;
+}
+.editor-app .segmented button {
+  border-radius: 5px;
+  font-size: 12px;
+  padding-inline: 14px;
+}
+.editor-app .segmented button.selected {
+  color: #303747;
+  box-shadow: 0 1px 3px #1018280c;
+}
+.editor-app .search-field {
+  border-radius: 8px;
+}
+.editor-app .data-table th {
+  background: #fafbfc;
+  color: #778292;
+  font-weight: 550;
+  font-size: 11px;
+  border-bottom-color: #edf0f3;
+}
+.editor-app .data-table td {
+  padding-top: 19px;
+  padding-bottom: 19px;
+  border-bottom-color: #edf0f3;
+}
+.editor-app .data-table tbody tr:hover {
+  background: #fafbfc;
+}
+.editor-app .problem-title {
+  color: #303747;
+  font-size: 14px;
+  font-weight: 650;
+}
+.editor-app .subtext {
+  color: #778292;
+}
+.editor-app .workspace-guide {
+  border: 0;
+  border-top: 1px solid var(--zoj-border);
+  border-radius: 0;
+  background: transparent;
+  padding-inline: 4px;
+}
+.editor-app .workspace-guide strong {
+  color: #667085;
+}
+.editor-app .workspace-guide p {
+  color: #778292;
+}
+.editor-app .workspace-page {
+  padding-top: 28px;
+}
+.editor-app .problem-heading {
+  padding-bottom: 24px;
+}
+.editor-app .problem-heading-title h1 {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+.editor-app .working-state {
+  margin-top: 12px;
+  color: #778292;
+  font-size: 11px;
+  gap: 8px;
+}
+.editor-app .workspace-layout {
+  gap: 28px;
+  padding-top: 28px;
+}
+.editor-app .sidebar-group > div {
+  color: #979dab;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+.editor-app .sidebar-group a {
+  min-height: 40px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 7px;
+  color: #667085;
+}
+.editor-app .sidebar-group a:hover {
+  background: #edeff3;
+  color: #3b4352;
+}
+.editor-app .sidebar-group a.active {
+  background: #ebe9f7;
+  color: #5146c1;
+}
+.editor-app .nav-count {
+  background: #dfdcf3;
+  color: #7468ad;
+}
+.editor-app .workspace-main {
+  gap: 24px;
+}
+.editor-app .form-grid {
+  gap: 24px;
+}
+.editor-app .section-heading p {
+  color: #778292;
+}
+.editor-app .scoped-expectations {
+  background: #fafbfc;
+  border-color: #edf0f3;
+  border-radius: 9px;
+  padding: 18px;
+}
+.editor-app .invocation-select-list {
+  background: #fafbfc;
+  border-color: #edf0f3;
+  border-radius: 9px;
+}
+.editor-app .execution-layout {
+  gap: 24px;
+  grid-template-columns: 310px minmax(0, 1fr);
+}
+.editor-app .execution-list .card-heading {
+  padding: 18px 20px;
+}
+.editor-app .job-row {
+  padding: 18px 20px;
+  gap: 9px;
+  border-bottom-color: #edf0f3;
+  transition: background 150ms;
+}
+.editor-app .job-row:hover {
+  background: #fafbfc;
+}
+.editor-app .job-row.selected {
+  background: #f3f2fa;
+  box-shadow: inset 3px 0 0 #8f83d0;
+}
+.editor-app .job-row strong {
+  color: #374151;
+  font-weight: 600;
+}
+.editor-app .job-row > .job-scope-summary {
+  color: #9199a7;
+}
+.editor-app .execution-detail {
+  gap: 24px;
+}
+.editor-app .job-outcome:not(.is-compact) {
+  background: #fafbfc;
+  border-color: #edf0f3;
+  border-radius: 9px;
+}
+.editor-app .editor-modal {
+  box-shadow: 0 20px 72px #10182826;
+  border-radius: 16px;
+}
+.editor-app .modal-heading {
+  border-bottom-color: #edf0f3;
+}
+.editor-app .app-footer {
+  background: white;
+  border-top-color: var(--zoj-border);
+}
+@media (max-width: 1100px) {
+  .editor-app .execution-layout {
+    grid-template-columns: 270px minmax(0, 1fr);
+    gap: 18px;
+  }
+}
+@media (max-width: 900px) {
+  .editor-app .app-header {
+    gap: 18px;
+    padding-inline: 24px;
+  }
+  .editor-app .page-heading {
+    align-items: start;
+  }
+  .editor-app .execution-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .editor-app .workspace-layout {
+    gap: 18px;
+  }
+}
+@media (max-width: 600px) {
+  .editor-app .app-header {
+    height: 104px;
+    padding-inline: 16px;
+    gap: 8px 14px;
+    padding-top: 12px;
+    padding-bottom: 10px;
+  }
+  .editor-app .app-header nav {
+    gap: 0;
+    height: 36px;
+    padding-top: 0;
+  }
+  .editor-app .app-header nav a {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .editor-app .page-container {
+    padding: 28px 16px 40px;
+  }
+  .editor-app .page-heading {
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+  .editor-app .page-heading h1 {
+    font-size: 28px;
+  }
+  .editor-app .page-heading > .actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+  .editor-app .page-heading > .actions > :last-child {
+    grid-column: 1/-1;
+  }
+  .editor-app .problem-heading-title h1 {
+    font-size: 22px;
+  }
+  .editor-app .workspace-page {
+    padding-inline: 16px;
+  }
+  .editor-app .card {
+    padding: 20px;
+  }
+  .editor-app .card.no-padding {
+    padding: 0;
+  }
+  .editor-app .card-heading {
+    padding: 18px;
+  }
+  .editor-app .form-grid {
+    gap: 20px;
+  }
+  .editor-app .workspace-main {
+    gap: 18px;
+  }
+  .editor-app .data-table td {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .editor-app :is(.button, .job-row) {
+    transition: none;
+  }
+}
+.editor-app .search-field:focus-within {
+  outline: 2px solid var(--zoj-focus);
+  outline-offset: 2px;
+}
+.editor-app .search-field input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.editor-app .problem-list.card {
+  padding: 0;
+  overflow: hidden;
+}
+.editor-app .problem-view-tools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.editor-app .problem-view-tools .search-field {
+  width: 230px;
+}
+.editor-app .problem-view-tools .checkbox {
+  white-space: nowrap;
+}
+.editor-app .folder-problem-count {
+  margin-left: 8px;
+  font-size: 11px;
+  color: #778292;
+}
+.editor-app .problem-list .list-caption {
+  padding: 10px 20px;
+}
+@media (max-width: 700px) {
+  .editor-app .problem-view-tools {
+    width: 100%;
+    gap: 12px;
+  }
+  .editor-app .problem-view-tools .search-field {
+    width: 100%;
+  }
+}
+.editor-app .library-folder-toggle {
+  display: none;
+}
+@media (max-width: 700px) {
+  .editor-app .library-folder-toggle {
+    display: flex;
+    width: 100%;
+    gap: 10px;
+    margin-bottom: 18px;
+    justify-content: start;
+  }
+  .editor-app .library-folder-toggle > span {
+    flex: 1;
+    text-align: left;
+  }
+  .editor-app .library-folder-toggle[aria-expanded='true'] > svg:last-child {
+    transform: rotate(180deg);
+  }
+  .editor-app .folder-sidebar[data-expanded='false'] {
+    display: none;
+  }
+}
+/* A narrow-screen first-column rule must not widen selection checkboxes. */
+.editor-app .problems-table td.check-cell {
+  width: 38px;
+  min-width: 32px;
+}
