@@ -57,7 +57,7 @@ function source(relative) {
         api: get,
         post: post,
         blobPreview: async (problem, sha) => ({
-          text: sha === 'actual' ? 'Wrong\n' : '1 2\n',
+          text: unitBlobs.get(sha) ?? (sha === 'actual' ? 'Wrong\n' : '1 2\n'),
           truncated: false,
           binary: false,
         }),
@@ -1206,6 +1206,67 @@ test('validator mismatches explain both rejecting valid inputs and accepting inv
   );
   assert.equal(feedback.querySelectorAll('.badge.danger').length, 2);
   assert.equal(feedback.querySelector('.passed'), null);
+});
+
+test('validator EOLN feedback explains newline repair and links to this problem self-tests', async () => {
+  validatorResult('completed', [
+    {
+      id: 'line-format',
+      expected: 'VALID',
+      actual: 'INVALID',
+      matched: false,
+      comment: 'FAIL Expected EOLN (stdin, line 1)',
+    },
+  ]);
+  await mount('invocations?job=validator-feedback');
+  const feedback = host.querySelector('.validation-results');
+  assert.match(feedback.textContent, /입력의 줄바꿈 형식을 확인하세요/);
+  assert.match(feedback.textContent, /CRLF\/LF 표시와 마지막 줄바꿈/);
+  assert.match(feedback.textContent, /해당 줄의 값 개수와 공백도 확인/);
+  const link = [...feedback.querySelectorAll('a')].find(
+    (item) => item.textContent === 'Validator 자체 테스트를 열어 확인',
+  );
+  assert.ok(link);
+  assert.equal(link.getAttribute('href'), '/problems/p/validator');
+  assert.deepEqual(requests, []);
+});
+
+test('an intentionally invalid newline test does not suggest repairing a passing case', async () => {
+  validatorResult('completed', [
+    {
+      id: 'intentional-missing-newline',
+      expected: 'INVALID',
+      actual: 'INVALID',
+      matched: true,
+      comment: 'FAIL Expected EOLN (stdin, line 1)',
+    },
+  ]);
+  await mount('invocations?job=validator-feedback');
+  const feedback = host.querySelector('.validation-results');
+  assert.match(feedback.textContent, /모두 예상대로 동작/);
+  assert.doesNotMatch(feedback.textContent, /입력의 줄바꿈 형식을 확인하세요/);
+  assert.equal(feedback.querySelector('a[href="/problems/p/validator"]'), null);
+});
+
+test('checker EOLN feedback for OK and WRONG_ANSWER does not suggest editing Validator self-tests', async () => {
+  const result = job(
+    'checker-feedback',
+    'checker-tests',
+    'Checker 자체 테스트',
+  );
+  result.result.unit_tests = ['OK', 'WRONG_ANSWER'].map((expected) => ({
+    id: expected,
+    expected,
+    actual: 'CRASHED',
+    matched: false,
+    comment: 'FAIL Expected EOLN (output, line 1)',
+  }));
+  jobs.unshift(result);
+  await mount('invocations?job=checker-feedback');
+  const feedback = host.querySelector('.validation-results');
+  assert.match(feedback.textContent, /Expected EOLN/);
+  assert.doesNotMatch(feedback.textContent, /입력의 줄바꿈 형식을 확인하세요/);
+  assert.equal(feedback.querySelector('a[href="/problems/p/validator"]'), null);
 });
 
 for (const status of ['running', 'cancelled', 'failed']) {
@@ -3496,6 +3557,165 @@ async function editUnitText(label, value) {
   });
   await flush();
 }
+function newlineSettings(label) {
+  const settings = host.querySelector(`[aria-label="${label} 줄바꿈 설정"]`);
+  assert.ok(settings, `${label} 줄바꿈 설정`);
+  return settings;
+}
+async function changeNewline(label, action) {
+  const button = [...newlineSettings(label).querySelectorAll('button')].find(
+    (item) => item.textContent.trim() === action,
+  );
+  assert.ok(button, `${label}: ${action}`);
+  assert.equal(button.disabled, false);
+  await act(() => button.click());
+  await flush();
+}
+
+for (const input of ['2\r\n7 8\r\n', '2\n7 8']) {
+  test(`saving a validator self-test without text edits preserves ${input.includes('\r') ? 'CRLF' : 'missing final LF'} and INVALID expectation`, async () => {
+    existingUnit('validator');
+    unitBlobs.set('unit-input', input);
+    saveEnabled = true;
+    await mount('validator');
+    await click('내용 보기·수정');
+    assert.match(
+      newlineSettings('테스트 입력').textContent,
+      input.includes('\r') ? /줄바꿈 CRLF · Windows/ : /마지막 줄바꿈 없음/,
+    );
+    await click('수정');
+    await click('작업 사본 저장');
+    assert.deepEqual(unitUploads, [input]);
+    assert.equal(state.document.validator_tests.original.expected, 'INVALID');
+  });
+}
+
+test('validator self-test converts CRLF explicitly without trimming input or changing its expected verdict', async () => {
+  existingUnit('validator');
+  const input = '2  \r\n7 8\t';
+  unitBlobs.set('unit-input', input);
+  state.document.validator_tests.original.expected = 'VALID';
+  saveEnabled = true;
+  await mount('validator');
+  await click('내용 보기·수정');
+  assert.match(
+    newlineSettings('테스트 입력').textContent,
+    /줄바꿈 CRLF · Windows/,
+  );
+  assert.match(
+    newlineSettings('테스트 입력').textContent,
+    /마지막 줄바꿈 없음/,
+  );
+  await changeNewline('테스트 입력', 'LF로 변환');
+  assert.doesNotMatch(newlineSettings('테스트 입력').textContent, /CRLF/);
+  assert.match(
+    newlineSettings('테스트 입력').textContent,
+    /마지막 줄바꿈 없음/,
+  );
+  assert.equal(control('기대 판정').value, 'VALID');
+  await click('수정');
+  await click('작업 사본 저장');
+  assert.deepEqual(unitUploads, ['2  \n7 8\t']);
+  assert.equal(state.document.validator_tests.original.expected, 'VALID');
+});
+
+test('validator self-test adds a final newline only when requested and keeps INVALID expectation', async () => {
+  existingUnit('validator');
+  unitBlobs.set('unit-input', '2\n7 8  ');
+  saveEnabled = true;
+  await mount('validator');
+  await click('내용 보기·수정');
+  assert.match(
+    newlineSettings('테스트 입력').textContent,
+    /마지막 줄바꿈 없음/,
+  );
+  await changeNewline('테스트 입력', '마지막 줄바꿈 추가');
+  assert.match(
+    newlineSettings('테스트 입력').textContent,
+    /마지막 줄바꿈 있음/,
+  );
+  assert.equal(control('기대 판정').value, 'INVALID');
+  await click('수정');
+  await click('작업 사본 저장');
+  assert.deepEqual(unitUploads, ['2\n7 8  \n']);
+  assert.equal(state.document.validator_tests.original.expected, 'INVALID');
+});
+
+test('checker newline actions affect only the selected input or output field', async () => {
+  existingUnit('checker');
+  unitBlobs.set('unit-input', '1  \r\n2');
+  unitBlobs.set('unit-answer', '3\r\n');
+  unitBlobs.set('unit-output', '4\r\n5');
+  saveEnabled = true;
+  await mount('checker');
+  await click('내용 보기·수정');
+  for (const label of ['테스트 입력', '기대 출력', '검사할 참가자 출력'])
+    assert.match(newlineSettings(label).textContent, /줄바꿈 CRLF · Windows/);
+  await changeNewline('기대 출력', 'LF로 변환');
+  assert.doesNotMatch(newlineSettings('기대 출력').textContent, /CRLF/);
+  assert.match(newlineSettings('테스트 입력').textContent, /CRLF/);
+  assert.match(newlineSettings('검사할 참가자 출력').textContent, /CRLF/);
+  await changeNewline('검사할 참가자 출력', 'LF로 변환');
+  assert.equal(control('기대 판정').value, 'WRONG_ANSWER');
+  await click('수정');
+  await click('작업 사본 저장');
+  assert.deepEqual(unitUploads, ['1  \r\n2', '4\n5', '3\n']);
+  assert.equal(state.document.checker_tests.original.expected, 'WRONG_ANSWER');
+});
+
+test('oversized self-test content cannot be transformed or overwritten by its visible prefix', async () => {
+  existingUnit('validator');
+  const input = '1\r\n'.repeat(5001);
+  unitBlobs.set('unit-input', input);
+  saveEnabled = true;
+  await mount('validator');
+  await click('내용 보기·수정');
+  assert.ok(host.querySelector('textarea[aria-label="테스트 입력"]').readOnly);
+  assert.equal(
+    host.querySelector('[aria-label="테스트 입력 줄바꿈 설정"]'),
+    null,
+  );
+  await click('수정');
+  await click('작업 사본 저장');
+  assert.deepEqual(unitUploads, [input]);
+  assert.equal(state.document.validator_tests.original.expected, 'INVALID');
+});
+
+test('registered test input newline conversion updates the judging input without changing its answer or statement example', async () => {
+  const test = {
+    index: 1,
+    input_sha: 'unit-input',
+    answer_sha: 'unit-answer',
+    command: 'gen 1',
+    group: '',
+    points: 0,
+    description: 'Windows 입력',
+    sample: true,
+    statement_input: '1\n',
+    statement_output: '2\n',
+    verify_statement_io: true,
+  };
+  state.document.testsets.tests.tests['1'] = test;
+  unitBlobs.set('unit-input', '1  \r\n2');
+  unitBlobs.set('unit-answer', '2\r\n');
+  saveEnabled = true;
+  await mount('tests');
+  await click('입력·출력 보기');
+  assert.match(
+    newlineSettings('테스트 입력').textContent,
+    /줄바꿈 CRLF · Windows/,
+  );
+  await changeNewline('테스트 입력', 'LF로 변환');
+  await click('작업 사본에 반영');
+  await click('작업 사본 저장');
+  assert.deepEqual(unitUploads, ['1  \n2']);
+  assert.deepEqual(state.document.testsets.tests.tests['1'], {
+    ...test,
+    input_sha: 'uploaded-1',
+    command: '',
+  });
+});
+
 for (const kind of ['validator', 'checker']) {
   test(`${kind} existing self-test loads its saved content and edits the same case`, async () => {
     const key = existingUnit(kind);
@@ -3583,6 +3803,10 @@ test('read-only users can inspect every checker field without editing or uploadi
   await click('내용 보기');
   for (const label of ['테스트 입력', '기대 출력', '검사할 참가자 출력']) {
     assert.ok(host.querySelector(`[aria-label="${label}"]`).readOnly);
+    for (const button of newlineSettings(label).querySelectorAll('button')) {
+      assert.ok(button.disabled);
+      await act(() => button.click());
+    }
   }
   assert.ok(control('기대 판정').disabled);
   assert.equal(

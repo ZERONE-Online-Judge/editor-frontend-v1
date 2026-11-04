@@ -1746,6 +1746,38 @@ svg {
   white-space: nowrap;
   font-size: 9px;
 }
+.code-editor-format {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e6eaf4;
+  background: #fff;
+}
+.code-editor-format-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  color: #65738e;
+  font-size: 11px;
+}
+.code-editor-format-info span[data-non-lf] {
+  color: #956119;
+  font-weight: 600;
+}
+.code-editor-format-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.code-editor-format-actions .button {
+  min-height: 32px;
+  white-space: normal;
+  text-align: center;
+}
 .code-editor textarea {
   display: block;
   width: 100%;

@@ -8,6 +8,7 @@ import {
   type HTMLAttributes,
 } from 'react';
 import { textPreview } from '../lib/largeText';
+import { appendFinalNewline, textFormat, toLf } from '../lib/textFormat';
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
     menu: <path d="M4 6h16M4 12h16M4 18h16" />,
@@ -242,14 +243,27 @@ export function CodeEditor({
   label = '코드',
   readOnly = false,
   rows = 18,
+  textFormatTools = false,
 }: {
   value: string;
   onChange?: (value: string) => void;
   label?: string;
   readOnly?: boolean;
   rows?: number;
+  textFormatTools?: boolean;
 }) {
   const preview = useMemo(() => textPreview(value), [value]);
+  const format = useMemo(
+    () => (textFormatTools && !preview.truncated ? textFormat(value) : null),
+    [textFormatTools, preview.truncated, value],
+  );
+  const lineEndingLabels = {
+    none: '없음',
+    lf: 'LF · Linux',
+    crlf: 'CRLF · Windows',
+    cr: 'CR',
+    mixed: '혼합',
+  };
   const [rejected, setRejected] = useState(false);
   const lines = useMemo(() => {
     let count = 1;
@@ -274,6 +288,41 @@ export function CodeEditor({
           {lines}행{preview.truncated ? ' · 일부' : ''}
         </span>
       </div>
+      {format && (
+        <div className="code-editor-format" aria-label={`${label} 줄바꿈 설정`}>
+          <div className="code-editor-format-info" role="status">
+            <span data-non-lf={format.needsLfConversion || undefined}>
+              줄바꿈 {lineEndingLabels[format.lineEnding]}
+            </span>
+            <span>
+              마지막 줄바꿈 {format.hasFinalNewline ? '있음' : '없음'}
+            </span>
+          </div>
+          {!readOnly && onChange && (
+            <div className="code-editor-format-actions">
+              {format.needsLfConversion && (
+                <button
+                  type="button"
+                  className="button small"
+                  onClick={() => onChange(toLf(value))}
+                  title="숫자와 공백, 마지막 줄바꿈 유무는 유지하고 LF로 변환합니다."
+                >
+                  LF로 변환
+                </button>
+              )}
+              {value.length > 0 && !format.hasFinalNewline && (
+                <button
+                  type="button"
+                  className="button small"
+                  onClick={() => onChange(appendFinalNewline(value))}
+                >
+                  마지막 줄바꿈 추가
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       <textarea
         aria-label={label}
         spellCheck={false}

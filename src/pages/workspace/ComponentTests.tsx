@@ -402,6 +402,7 @@ function UnitModal({
             </Select>
           </label>
           <CodeEditor
+            textFormatTools
             value={input}
             onChange={setInput}
             label="테스트 입력"
@@ -411,6 +412,7 @@ function UnitModal({
           {kind === 'checker' && (
             <div className="form-grid">
               <CodeEditor
+                textFormatTools
                 value={answer}
                 onChange={setAnswer}
                 label="기대 출력"
@@ -418,6 +420,7 @@ function UnitModal({
                 rows={6}
               />
               <CodeEditor
+                textFormatTools
                 value={output}
                 onChange={setOutput}
                 label="검사할 참가자 출력"

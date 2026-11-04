@@ -112,8 +112,22 @@ test('The editor bounds the mounted textarea and refuses huge pasted text before
   const filename = path.resolve(__dirname, '../src/components/ui.tsx');
   const loaded = new Module(filename, module);
   loaded.paths = module.paths;
+  const formatFilename = path.resolve(__dirname, '../src/lib/textFormat.ts');
+  const format = new Module(formatFilename, module);
+  format.paths = module.paths;
+  format._compile(
+    ts.transpileModule(fs.readFileSync(formatFilename, 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS },
+    }).outputText,
+    formatFilename,
+  );
   const native = loaded.require.bind(loaded);
-  loaded.require = (id) => (id === '../lib/largeText' ? m.exports : native(id));
+  loaded.require = (id) =>
+    id === '../lib/largeText'
+      ? m.exports
+      : id === '../lib/textFormat'
+        ? format.exports
+        : native(id);
   loaded._compile(
     ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
       compilerOptions: {

@@ -1,4 +1,5 @@
 import { PaginatedList } from '../../components/Pagination';
+import { Link } from 'react-router-dom';
 import { Badge, Icon, Notice } from '../../components/ui';
 import type { Job } from '../../lib/types';
 import {
@@ -24,6 +25,13 @@ export default function ValidationResults({ job }: { job: Job }) {
     completed && total > 0 && passed === total && !job.result.error;
   const mismatch = completed && total > 0 && passed < total;
   const failed = job.status === 'failed' || Boolean(job.result.error);
+  const hasValidatorEolError = rows.some(
+    (test) =>
+      test.expected === 'VALID' &&
+      test.actual === 'INVALID' &&
+      !test.matched &&
+      test.comment?.includes('Expected EOLN'),
+  );
   const interrupted = job.status === 'cancelled';
   const label = inputs
     ? '입력 검사'
@@ -98,6 +106,25 @@ export default function ValidationResults({ job }: { job: Job }) {
       {job.result.error && (
         <Notice tone="error">
           <pre className="validation-message">{job.result.error}</pre>
+        </Notice>
+      )}
+      {hasValidatorEolError && (
+        <Notice>
+          <div>
+            <strong>입력의 줄바꿈 형식을 확인하세요.</strong>
+            <p>
+              Expected EOLN은 줄바꿈을 예상한 위치에서 확인하지 못했다는
+              뜻입니다. 자체 테스트 입력창의 CRLF/LF 표시와 마지막 줄바꿈을
+              확인하고, 필요한 경우 ‘LF로 변환’을 누르세요. 해당 줄의 값 개수와
+              공백도 확인해야 합니다.
+            </p>
+            <Link
+              className="text-link"
+              to={`/problems/${job.problem_id}/validator`}
+            >
+              Validator 자체 테스트를 열어 확인
+            </Link>
+          </div>
         </Notice>
       )}
       {inputs && tests.length > 0 ? (

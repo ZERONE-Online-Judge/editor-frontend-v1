@@ -21,7 +21,11 @@ function load(relative, mocks = {}) {
   const native = m.require.bind(m);
   m.require = (id) =>
     mocks[id] ||
-    (id.endsWith('/largeText') ? load('lib/largeText.ts') : native(id));
+    (id.endsWith('/largeText')
+      ? load('lib/largeText.ts')
+      : id.endsWith('/textFormat')
+        ? load('lib/textFormat.ts')
+        : native(id));
   m._compile(
     ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
       compilerOptions: {

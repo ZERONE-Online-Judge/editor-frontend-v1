@@ -885,6 +885,7 @@ export function TestEditor({
             <>
               <div className="form-grid">
                 <CodeEditor
+                  textFormatTools
                   label="지문 표시용 입력"
                   value={displayInput}
                   onChange={setDisplayInput}
@@ -892,6 +893,7 @@ export function TestEditor({
                   readOnly={!editable || busy}
                 />
                 <CodeEditor
+                  textFormatTools
                   label="지문 표시용 출력"
                   value={displayOutput}
                   onChange={setDisplayOutput}
@@ -923,6 +925,7 @@ export function TestEditor({
       )}
       <div className="form-grid">
         <CodeEditor
+          textFormatTools={!limited.input}
           value={input}
           onChange={(value) => {
             setInput(value);
@@ -933,6 +936,7 @@ export function TestEditor({
           readOnly={!editable || busy || limited.input}
         />
         <CodeEditor
+          textFormatTools={!limited.answer}
           value={answer}
           onChange={(value) => {
             setAnswer(value);
