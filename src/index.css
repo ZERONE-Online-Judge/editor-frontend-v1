@@ -5511,7 +5511,49 @@ svg {
   min-width: 180px;
 }
 .component-tests-table {
-  min-width: 620px;
+  min-width: 760px;
+}
+.component-format-warning {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #f1e0b8;
+  border-bottom: 1px solid #f1e0b8;
+  color: #89601c;
+  background: #fffbf0;
+  font-size: 12px;
+}
+.component-format-warning > svg {
+  flex: none;
+  margin-top: 2px;
+}
+.component-format-warning p {
+  margin: 6px 0 0;
+  line-height: 1.7;
+}
+.component-test-formats {
+  display: grid;
+  gap: 10px;
+}
+.component-test-format {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 11px;
+}
+.component-test-format > span {
+  min-width: 60px;
+  color: #738099;
+}
+.component-test-format > div {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+.component-test-format small {
+  color: #738099;
+  white-space: nowrap;
+  font-size: 10px;
 }
 .component-tests-table .button,
 .component-tests-table .text-link {

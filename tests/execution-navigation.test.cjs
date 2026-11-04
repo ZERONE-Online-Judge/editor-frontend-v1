@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const Module = require('node:module');
+const { Buffer } = require('node:buffer');
 const { URL } = require('node:url');
 const ts = require('typescript');
 const { JSDOM } = require('jsdom');
@@ -39,6 +40,12 @@ let revisionRequests,
   updateSnapshot,
   updateFailure;
 let unitBlobs, unitBlobFailure, unitUploads, unitUploadFailure;
+let formatRequests,
+  formatFailure,
+  formatGate,
+  normalizeRequests,
+  normalizeFailure,
+  normalizeGate;
 const cache = new Map();
 function source(relative) {
   const file = path.resolve(__dirname, '../src', relative);
@@ -71,6 +78,7 @@ function source(relative) {
           assert.equal(problem, 'p');
           if (unitUploadFailure) throw unitUploadFailure;
           unitUploads.push(text);
+          unitBlobs.set(`uploaded-${unitUploads.length}`, text);
           return {
             sha256: `uploaded-${unitUploads.length}`,
             size: text.length,
@@ -235,6 +243,32 @@ async function get(url, options = {}) {
   throw new Error('Unexpected GET ' + url);
 }
 async function post(url, body) {
+  if (url === '/problems/p/blobs/text-formats') {
+    formatRequests.push(global.structuredClone(body));
+    if (formatGate) await formatGate.promise;
+    if (formatFailure) throw formatFailure;
+    return { items: body.sha256.map(blobFormat) };
+  }
+  if (url === '/problems/p/blobs/normalize-lf') {
+    normalizeRequests.push(global.structuredClone(body));
+    if (normalizeGate) await normalizeGate.promise;
+    const failure =
+      typeof normalizeFailure === 'function'
+        ? normalizeFailure(body, normalizeRequests.length)
+        : normalizeFailure;
+    if (failure) throw failure;
+    return {
+      items: body.sha256.map((sha) => {
+        const profile = blobFormat(sha);
+        const normalized = profile.needs_lf_conversion
+          ? `normalized-${sha}`
+          : sha;
+        if (profile.needs_lf_conversion)
+          unitBlobs.set(normalized, unitBlobs.get(sha).replace(/\r\n?/g, '\n'));
+        return { ...profile, normalized_sha256: normalized };
+      }),
+    };
+  }
   requests.push({ url, body });
   if (url === '/problems/p/update') {
     if (updateFailure) throw updateFailure;
@@ -274,6 +308,25 @@ async function post(url, body) {
   jobs.unshift(result);
   return result;
 }
+function blobFormat(sha) {
+  const text = unitBlobs.get(sha);
+  assert.equal(typeof text, 'string', `Missing format blob ${sha}`);
+  const binary = text.includes('\0');
+  const endings = new Set(text.match(/\r\n|\r|\n/g) || []);
+  const lineEnding = binary
+    ? null
+    : endings.size > 1
+      ? 'mixed'
+      : ({ '\r\n': 'crlf', '\r': 'cr', '\n': 'lf' }[[...endings][0]] ?? 'none');
+  return {
+    sha256: sha,
+    size: Buffer.byteLength(text),
+    line_ending: lineEnding,
+    has_final_newline: binary ? null : /[\r\n]$/.test(text),
+    needs_lf_conversion: !binary && /\r/.test(text),
+    binary,
+  };
+}
 async function putWorking(url, body) {
   if (!saveEnabled) throw new Error('Unexpected save');
   assert.equal(url, '/problems/p/working-copy');
@@ -294,6 +347,12 @@ beforeEach(() => {
   unitBlobFailure = null;
   unitUploads = [];
   unitUploadFailure = null;
+  formatRequests = [];
+  formatFailure = null;
+  formatGate = null;
+  normalizeRequests = [];
+  normalizeFailure = null;
+  normalizeGate = null;
   revisionRequests = [];
   historyReads = 0;
   workspaceReads = 0;
@@ -3545,6 +3604,331 @@ function existingUnit(kind) {
   unitBlobs.set('unit-output', '5\n');
   return key;
 }
+function componentFormatCases(kind, count = 1) {
+  const key = kind === 'checker' ? 'checker_tests' : 'validator_tests';
+  for (let index = 0; index < count; index++) {
+    const id = `format-case-${index + 1}`;
+    const test = {
+      input_sha: `${id}-input`,
+      answer_sha: kind === 'checker' ? `${id}-answer` : null,
+      output_sha: kind === 'checker' ? `${id}-output` : null,
+      expected:
+        kind === 'checker'
+          ? index % 2
+            ? 'WRONG_ANSWER'
+            : 'OK'
+          : index % 2
+            ? 'INVALID'
+            : 'VALID',
+    };
+    state.document[key][id] = test;
+    unitBlobs.set(test.input_sha, `${index + 1}  \r\n7 8\t`);
+    if (kind === 'checker') {
+      unitBlobs.set(test.answer_sha, '3\n');
+      unitBlobs.set(test.output_sha, '4\r\n');
+    }
+  }
+  return key;
+}
+
+test('Validator self-test list shows server newline metadata without changing its saved input', async () => {
+  const key = componentFormatCases('validator');
+  const before = global.structuredClone(state.document[key]);
+  await mount('validator');
+  const row = host.querySelector('.component-tests-table tbody tr');
+  assert.match(row.textContent, /CRLF/);
+  assert.match(row.textContent, /마지막 줄바꿈 없음/);
+  assert.deepEqual(formatRequests, [{ sha256: ['format-case-1-input'] }]);
+  assert.deepEqual(state.document[key], before);
+  assert.deepEqual(normalizeRequests, []);
+  assert.deepEqual(requests, []);
+});
+
+test('Checker self-test list distinguishes newline metadata for input, answer and contestant output', async () => {
+  componentFormatCases('checker');
+  await mount('checker');
+  const row = host.querySelector('.component-tests-table tbody tr');
+  assert.match(row.textContent, /입력/);
+  assert.match(row.textContent, /기대 출력/);
+  assert.match(row.textContent, /참가자 출력/);
+  assert.match(row.textContent, /CRLF/);
+  assert.match(row.textContent, /LF/);
+  assert.match(row.textContent, /마지막 줄바꿈 없음/);
+  assert.match(row.textContent, /마지막 줄바꿈 있음/);
+  assert.deepEqual(
+    new Set(formatRequests.flatMap((body) => body.sha256)),
+    new Set([
+      'format-case-1-input',
+      'format-case-1-answer',
+      'format-case-1-output',
+    ]),
+  );
+  assert.deepEqual(requests, []);
+});
+
+test('whole self-test LF conversion requires confirmation and includes records outside the visible page', async () => {
+  const key = componentFormatCases('validator', 105);
+  const before = global.structuredClone(state.document[key]);
+  saveEnabled = true;
+  await mount('validator');
+  assert.equal(
+    host.querySelectorAll('.component-tests-table tbody tr').length,
+    20,
+  );
+  assert.ok(formatRequests.length > 1);
+  assert.ok(formatRequests.every((body) => body.sha256.length <= 100));
+  await click('전체 LF 변환');
+  assert.match(
+    host.querySelector('dialog').textContent,
+    /전체 자체 테스트를 LF로 변환/,
+  );
+  assert.deepEqual(normalizeRequests, []);
+  assert.deepEqual(state.document[key], before);
+  await click('LF로 변환하기');
+  await click('작업 사본 저장');
+  assert.ok(normalizeRequests.length > 1);
+  assert.ok(normalizeRequests.every((body) => body.sha256.length <= 100));
+  const converted = state.document[key];
+  assert.equal(Object.keys(converted).length, 105);
+  for (const [id, test] of Object.entries(before)) {
+    assert.deepEqual(converted[id], {
+      ...test,
+      input_sha: `normalized-${test.input_sha}`,
+    });
+    assert.equal(
+      unitBlobs.get(converted[id].input_sha),
+      unitBlobs.get(test.input_sha).replace(/\r\n/g, '\n'),
+    );
+    assert.ok(unitBlobs.get(converted[id].input_sha).endsWith('7 8\t'));
+  }
+  assert.deepEqual(unitUploads, []);
+});
+
+test('whole Checker LF conversion includes all three file fields while retaining expectations and existing LF blobs', async () => {
+  const key = componentFormatCases('checker', 2);
+  const before = global.structuredClone(state.document[key]);
+  saveEnabled = true;
+  await mount('checker');
+  await click('전체 LF 변환');
+  await click('LF로 변환하기');
+  await click('작업 사본 저장');
+  for (const [id, test] of Object.entries(before)) {
+    assert.deepEqual(state.document[key][id], {
+      ...test,
+      input_sha: `normalized-${test.input_sha}`,
+      output_sha: `normalized-${test.output_sha}`,
+    });
+    assert.equal(
+      unitBlobs.get(state.document[key][id].input_sha).endsWith('\t'),
+      true,
+    );
+    assert.equal(unitBlobs.get(state.document[key][id].output_sha), '4\n');
+    assert.equal(state.document[key][id].answer_sha, test.answer_sha);
+  }
+});
+
+test('pre-run CRLF warning lets authors execute original self-test bytes without conversion', async () => {
+  const key = componentFormatCases('validator');
+  const before = global.structuredClone(state.document[key]);
+  await mount('validator');
+  await click('테스트 실행');
+  const dialog = host.querySelector('dialog');
+  assert.match(dialog.textContent, /자체 테스트 실행 전 줄바꿈 확인/);
+  assert.match(dialog.textContent, /CRLF/);
+  assert.deepEqual(requests, []);
+  await click('원본으로 실행');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.kind, 'validator-tests');
+  assert.deepEqual(normalizeRequests, []);
+  assert.deepEqual(state.document[key], before);
+  assert.match(
+    host.querySelector('#location').textContent,
+    /invocations\?job=new-validator-tests/,
+  );
+});
+
+test('self-tests with confirmed LF metadata start directly without a conversion warning', async () => {
+  componentFormatCases('validator');
+  unitBlobs.set('format-case-1-input', '2\n7 8\n');
+  await mount('validator');
+  await click('테스트 실행');
+  assert.equal(host.querySelector('dialog'), null);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.kind, 'validator-tests');
+  assert.deepEqual(normalizeRequests, []);
+});
+
+test('pre-run LF conversion saves the converted working copy before starting self-tests', async () => {
+  const key = componentFormatCases('validator');
+  saveEnabled = true;
+  await mount('validator');
+  await click('테스트 실행');
+  await click('LF로 변환 후 실행');
+  assert.deepEqual(
+    requests.map((row) => row.url),
+    ['/problems/p/working-copy', '/problems/p/jobs'],
+  );
+  assert.equal(
+    requests[0].body.document[key]['format-case-1'].input_sha,
+    'normalized-format-case-1-input',
+  );
+  assert.equal(
+    requests[0].body.document[key]['format-case-1'].expected,
+    'VALID',
+  );
+  assert.equal(requests[1].body.kind, 'validator-tests');
+  assert.match(
+    host.querySelector('#location').textContent,
+    /invocations\?job=new-validator-tests/,
+  );
+});
+
+test('failed newline metadata remains unknown and never claims LF before an explicit original-byte run', async () => {
+  componentFormatCases('validator');
+  formatFailure = new Error('줄바꿈 정보를 불러오지 못했습니다.');
+  await mount('validator');
+  const row = host.querySelector('.component-tests-table tbody tr');
+  assert.match(row.textContent, /확인|알 수 없|불러오/);
+  assert.doesNotMatch(row.textContent, /줄바꿈 LF|LF · Unix/);
+  await click('테스트 실행');
+  assert.match(
+    host.querySelector('dialog').textContent,
+    /자체 테스트 실행 전 줄바꿈 확인/,
+  );
+  assert.deepEqual(requests, []);
+  await click('원본으로 실행');
+  assert.equal(requests[0].body.kind, 'validator-tests');
+  assert.deepEqual(normalizeRequests, []);
+});
+
+test('a later batch normalization failure never applies an earlier partial LF conversion', async () => {
+  const key = componentFormatCases('validator', 105);
+  const before = global.structuredClone(state.document[key]);
+  normalizeFailure = (body, call) =>
+    call > 1 ? new Error('두 번째 변환 요청이 실패했습니다.') : null;
+  saveEnabled = true;
+  await mount('validator');
+  await click('전체 LF 변환');
+  await click('LF로 변환하기');
+  assert.equal(normalizeRequests.length, 2);
+  assert.match(host.textContent, /두 번째 변환 요청이 실패/);
+  await click('작업 사본 저장');
+  assert.deepEqual(state.document[key], before);
+});
+
+test('read-only self-test lists retain newline information without offering an active bulk conversion', async () => {
+  componentFormatCases('checker');
+  state.problem.role = 'READ';
+  await mount('checker');
+  assert.match(
+    host.querySelector('.component-tests-table tbody tr').textContent,
+    /CRLF/,
+  );
+  const conversion = [...host.querySelectorAll('button')].find(
+    (button) => button.textContent.trim() === '전체 LF 변환',
+  );
+  assert.ok(!conversion || conversion.disabled);
+  if (conversion) await act(() => conversion.click());
+  assert.deepEqual(normalizeRequests, []);
+  assert.deepEqual(requests, []);
+});
+
+test('an LF conversion completed after leaving the component page cannot modify its working copy', async () => {
+  const key = componentFormatCases('validator');
+  const before = global.structuredClone(state.document[key]);
+  let resolve;
+  normalizeGate = {
+    promise: new Promise((done) => {
+      resolve = done;
+    }),
+  };
+  saveEnabled = true;
+  await mount('validator');
+  await click('전체 LF 변환');
+  await click('LF로 변환하기');
+  const link = host.querySelector('a[href="/problems/p/checker"]');
+  assert.ok(link);
+  await act(() => link.click());
+  await flush();
+  await act(() => resolve());
+  await flush();
+  assert.equal(
+    host.querySelector('#location').textContent,
+    '/problems/p/checker',
+  );
+  await click('작업 사본 저장');
+  assert.deepEqual(state.document[key], before);
+});
+
+test('a source change during LF conversion preserves the new source and cancels the whole conversion and pending run', async () => {
+  const key = componentFormatCases('validator');
+  const before = global.structuredClone(state.document[key]);
+  state.document.files['alternate-validator.cpp'] = {
+    ...state.document.files['validator.cpp'],
+    name: 'alternate-validator.cpp',
+    sha256: 'alternate-validator',
+  };
+  let resolve;
+  normalizeGate = {
+    promise: new Promise((done) => {
+      resolve = done;
+    }),
+  };
+  saveEnabled = true;
+  await mount('validator');
+  await click('테스트 실행');
+  await click('LF로 변환 후 실행');
+  assert.equal(normalizeRequests.length, 1);
+  assert.deepEqual(requests, []);
+  // Represent a same-view document update while the request is in flight.
+  // Native dialog focus normally prevents a direct click on this control.
+  await setControl('사용할 Validator 프로그램', 'alternate-validator.cpp');
+  assert.equal(
+    control('사용할 Validator 프로그램').value,
+    'alternate-validator.cpp',
+  );
+  await act(() => resolve());
+  await flush();
+  assert.match(host.textContent, /변환 중 자체 테스트 자료가 변경/);
+  assert.doesNotMatch(host.textContent, /줄바꿈을 LF로 변환했습니다/);
+  assert.deepEqual(requests, []);
+  assert.equal(normalizeRequests.length, 1);
+  await click('작업 사본 저장');
+  assert.deepEqual(state.document[key], before);
+  assert.equal(state.document.validator, 'alternate-validator.cpp');
+  assert.deepEqual(
+    requests.map((row) => row.url),
+    ['/problems/p/working-copy'],
+  );
+});
+
+test('late newline metadata for a replaced input cannot overwrite the new saved input format', async () => {
+  existingUnit('validator');
+  unitBlobs.set('unit-input', '2\r\n7 8\r\n');
+  let resolve;
+  formatGate = {
+    promise: new Promise((done) => {
+      resolve = done;
+    }),
+  };
+  saveEnabled = true;
+  await mount('validator');
+  await click('내용 보기·수정');
+  await editUnitText('테스트 입력', '3\n7 8 9\n');
+  formatGate = null;
+  await click('수정');
+  await act(() => resolve());
+  await flush();
+  const row = host.querySelector('.component-tests-table tbody tr');
+  assert.doesNotMatch(row.textContent, /CRLF/);
+  assert.match(row.textContent, /LF/);
+  assert.match(row.textContent, /마지막 줄바꿈 있음/);
+  await click('작업 사본 저장');
+  assert.equal(state.document.validator_tests.original.input_sha, 'uploaded-1');
+  assert.equal(state.document.validator_tests.original.expected, 'INVALID');
+  assert.deepEqual(unitUploads, ['3\n7 8 9\n']);
+});
+
 async function editUnitText(label, value) {
   const textarea = host.querySelector(`textarea[aria-label="${label}"]`);
   assert.ok(textarea, label);

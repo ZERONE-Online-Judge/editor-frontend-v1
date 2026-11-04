@@ -115,8 +115,9 @@ export default function ValidationResults({ job }: { job: Job }) {
             <p>
               Expected EOLN은 줄바꿈을 예상한 위치에서 확인하지 못했다는
               뜻입니다. 자체 테스트 입력창의 CRLF/LF 표시와 마지막 줄바꿈을
-              확인하고, 필요한 경우 ‘LF로 변환’을 누르세요. 해당 줄의 값 개수와
-              공백도 확인해야 합니다.
+              확인하세요. CRLF·CR로 저장된 정상 입력은 ‘LF로 변환’ 또는 목록의
+              ‘전체 LF 변환’을 누른 뒤 다시 실행하세요. 이미 LF라면 해당 줄의 값
+              개수와 공백도 확인해야 합니다.
             </p>
             <Link
               className="text-link"

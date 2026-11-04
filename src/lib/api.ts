@@ -34,8 +34,12 @@ export async function api<T>(
   }
   return response.json();
 }
-export function post<T>(path: string, body: unknown = {}) {
-  return api<T>(path, { method: 'POST', body: JSON.stringify(body) });
+export function post<T>(
+  path: string,
+  body: unknown = {},
+  signal?: AbortSignal,
+) {
+  return api<T>(path, { method: 'POST', body: JSON.stringify(body), signal });
 }
 export function put<T>(path: string, body: unknown) {
   return api<T>(path, { method: 'PUT', body: JSON.stringify(body) });
