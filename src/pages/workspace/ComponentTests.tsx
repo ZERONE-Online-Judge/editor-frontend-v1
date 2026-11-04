@@ -14,6 +14,7 @@ import { blobText, upload } from '../../lib/api';
 import { useWorkspace } from '../../lib/workspace';
 import type { UnitTest } from '../../lib/types';
 import { sourceRoles } from '../../lib/sourceRoles';
+import { automaticToLf } from '../../lib/textFormat';
 import {
   normalizeBlobLf,
   type BlobTextFormat,
@@ -107,14 +108,28 @@ function ComponentTestsPage({
     run: boolean;
     count: number;
   } | null>(null);
-  const candidates = Object.values(formats.values).filter(
-    (file) => file.needs_lf_conversion && !file.binary,
+  const automaticHashes = new Set(
+    tests
+      .filter(([, test]) => !test.preserve_line_endings)
+      .flatMap(([, test]) =>
+        fields
+          .map(([field]) => test[field])
+          .filter((hash): hash is string => !!hash),
+      ),
   );
-  const nonLfTests = tests.filter(([, test]) =>
-    fields.some(([field]) => {
-      const hash = test[field];
-      return !!hash && formats.values[hash]?.needs_lf_conversion;
-    }),
+  const candidates = Object.values(formats.values).filter(
+    (file) =>
+      automaticHashes.has(file.sha256) &&
+      file.needs_lf_conversion &&
+      !file.binary,
+  );
+  const nonLfTests = tests.filter(
+    ([, test]) =>
+      !test.preserve_line_endings &&
+      fields.some(([field]) => {
+        const hash = test[field];
+        return !!hash && formats.values[hash]?.needs_lf_conversion;
+      }),
   );
   const missingFinal =
     kind === 'validator'
@@ -124,13 +139,7 @@ function ComponentTestsPage({
             formats.values[test.input_sha]?.has_final_newline === false,
         )
       : [];
-  const unknown = Object.values(formats.values).some((file) => file.binary);
-  const needsWarning =
-    formats.loading ||
-    !!formats.error ||
-    unknown ||
-    nonLfTests.length > 0 ||
-    missingFinal.length > 0;
+  const needsWarning = missingFinal.length > 0;
   const execute = useCallback(async () => {
     if (actionLocked.current || !active.current) return;
     actionLocked.current = true;
@@ -199,11 +208,13 @@ function ComponentTestsPage({
           '변환 중 자체 테스트 자료가 변경되었습니다. 새 자료를 확인하고 다시 변환하세요.',
         );
       const updated = structuredClone(doc[unitKey]);
-      for (const test of Object.values(updated))
+      for (const test of Object.values(updated)) {
+        if (test.preserve_line_endings) continue;
         for (const [field] of fields) {
           const hash = test[field];
           if (hash && mapping[hash]) test[field] = mapping[hash];
         }
+      }
       mutate((document) => {
         if (
           JSON.stringify([
@@ -324,7 +335,8 @@ function ComponentTestsPage({
             <div>
               <h3>{title} 자체 테스트</h3>
               <p>
-                프로그램 자체가 유효·무효 자료를 정확히 구분하는지 확인합니다.
+                저장·실행 시 LF로 자동 보정합니다. 마지막 줄바꿈은 추가하지
+                않습니다.
               </p>
             </div>
             <div className="actions">
@@ -393,12 +405,12 @@ function ComponentTestsPage({
                     </>
                   ) : (
                     <>
-                      <strong>실행 전에 입력의 줄바꿈을 확인하세요.</strong>
+                      <strong>저장·실행 시 LF로 자동 보정합니다.</strong>
                       <p>
                         {nonLfTests.length > 0 && (
                           <>
                             CRLF·CR 또는 혼합 줄바꿈이 있는 테스트{' '}
-                            {nonLfTests.length}개가 있습니다.{' '}
+                            {nonLfTests.length}개는 자동 보정됩니다.{' '}
                           </>
                         )}
                         {missingFinal.length > 0 && (
@@ -451,6 +463,9 @@ function ComponentTestsPage({
                           >
                             {test.expected}
                           </Badge>
+                          {test.preserve_line_endings && (
+                            <Badge>원본 유지</Badge>
+                          )}
                         </td>
                         <td>
                           <a
@@ -556,7 +571,7 @@ function ComponentTestsPage({
           title={
             prompt === 'convert'
               ? '전체 자체 테스트를 LF로 변환'
-              : '자체 테스트 실행 전 줄바꿈 확인'
+              : '자체 테스트 실행 전 마지막 줄바꿈 확인'
           }
           onClose={() => {
             if (!actionBusy && !pendingConversion) setPrompt(null);
@@ -579,23 +594,22 @@ function ComponentTestsPage({
                     void execute();
                   }}
                 >
-                  원본으로 실행
+                  마지막 줄바꿈 없이 실행
                 </button>
               )}
-              {editable &&
+              {prompt === 'convert' &&
+                editable &&
                 candidates.length > 0 &&
                 !formats.loading &&
                 !formats.error && (
                   <button
                     className="button primary"
                     disabled={actionBusy || !!pendingConversion}
-                    onClick={() => void convert(prompt === 'run')}
+                    onClick={() => void convert(false)}
                   >
                     {actionBusy || pendingConversion
                       ? 'LF 변환 중…'
-                      : prompt === 'run'
-                        ? 'LF로 변환 후 실행'
-                        : 'LF로 변환하기'}
+                      : 'LF로 변환하기'}
                   </button>
                 )}
             </>
@@ -604,7 +618,7 @@ function ComponentTestsPage({
           {prompt === 'convert' ? (
             <>
               <p>
-                현재 페이지와 관계없이 전체 {tests.length}개 자체 테스트에
+                현재 페이지와 관계없이 원본 유지가 꺼진 전체 자체 테스트에
                 적용합니다. 변환이 필요한 테스트는 {nonLfTests.length}개입니다.
               </p>
               <p>
@@ -613,51 +627,21 @@ function ComponentTestsPage({
                 판정은 유지합니다.
               </p>
               <Notice>
-                {kind === 'validator'
-                  ? 'INVALID 자체 테스트가 잘못된 줄바꿈을 거부하는지 확인하려는 입력이라면 전체 변환하지 말고 필요한 항목만 변환하세요.'
-                  : '줄바꿈에 따른 출력 형식 오류를 확인하려는 테스트라면 전체 변환하지 말고 필요한 항목만 변환하세요.'}
+                ‘원본 줄바꿈 유지’를 선택한 자체 테스트는 전체 LF 변환에서도
+                제외합니다.
               </Notice>
             </>
           ) : (
             <>
-              {formats.loading ? (
-                <p>
-                  줄바꿈 형식을 확인하고 있습니다. 확인이 끝난 뒤 변환하거나
-                  원본으로 실행할 수 있습니다.
-                </p>
-              ) : formats.error ? (
-                <Notice>
-                  줄바꿈 형식을 확인하지 못했습니다. 원본으로 실행하면 형식
-                  오류가 발생할 수 있습니다. {formats.error}
-                </Notice>
-              ) : (
-                <>
-                  <p>
-                    CRLF·CR 또는 혼합 줄바꿈이 있는 테스트 {nonLfTests.length}개
-                    {kind === 'validator' && (
-                      <>
-                        , 마지막 줄바꿈이 없는 정상 입력 {missingFinal.length}개
-                      </>
-                    )}
-                    가 있습니다.
-                  </p>
-                  <p>
-                    {kind === 'validator'
-                      ? 'Linux Validator에서 Expected EOLN 오류가 나면 입력을 LF로 변환하고 마지막 줄바꿈을 확인하세요. 값 개수·공백 문제도 같은 오류를 낼 수 있습니다.'
-                      : '줄바꿈을 구분하는 Checker에서는 비교 결과가 달라질 수 있습니다. 입력·기대 출력·참가자 출력의 형식을 확인하세요.'}
-                  </p>
-                  {unknown && (
-                    <p>
-                      텍스트로 확인할 수 없는 자료가 있습니다. 해당 원본 파일을
-                      별도로 확인하세요.
-                    </p>
-                  )}
-                  <p>
-                    LF 변환은 마지막 줄바꿈을 자동으로 추가하지 않습니다.
-                    의도적으로 만든 형식 오류도 바뀔 수 있습니다.
-                  </p>
-                </>
-              )}
+              <p>
+                마지막 줄바꿈이 없는 정상 입력 {missingFinal.length}개가
+                있습니다.
+              </p>
+              <p>
+                LF로 자동 보정해도 마지막 줄바꿈은 추가하지 않습니다.
+                Validator가 마지막 줄바꿈을 요구하면 실패할 수 있습니다. 입력을
+                수정하거나 그대로 실행하세요.
+              </p>
             </>
           )}
           {actionError && <Notice tone="error">{actionError}</Notice>}
@@ -714,9 +698,24 @@ function UnitModal({
   onClose: () => void;
 }) {
   const { data, mutate, editable } = useWorkspace();
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [answer, setAnswer] = useState('');
+  const originalText = useRef<{
+    input: string;
+    output: string;
+    answer: string;
+  } | null>(null);
+  const [preserveLineEndings, setPreserveLineEndings] = useState(
+    existing?.test.preserve_line_endings === true,
+  );
   const [expected, setExpected] = useState(
     existing?.test.expected || (kind === 'checker' ? 'OK' : 'VALID'),
   );
@@ -737,6 +736,7 @@ function UnitModal({
     ]).then(
       ([input, output, answer]) => {
         if (!active) return;
+        originalText.current = { input, output, answer };
         setInput(input);
         setOutput(output);
         setAnswer(answer);
@@ -758,16 +758,33 @@ function UnitModal({
     setBusy(true);
     setError('');
     try {
-      const inp = await upload(data.problem.id, input);
+      const normalize = preserveLineEndings
+        ? (value: string) => value
+        : automaticToLf;
+      const store = (
+        field: 'input' | 'output' | 'answer',
+        value: string,
+        sha?: string | null,
+      ) =>
+        sha && value.includes('\0') && originalText.current?.[field] === value
+          ? Promise.resolve({ sha256: sha })
+          : upload(data.problem.id, normalize(value));
+      const inp = await store('input', input, existing?.test.input_sha);
       const out =
-        kind === 'checker' ? await upload(data.problem.id, output) : null;
+        kind === 'checker'
+          ? await store('output', output, existing?.test.output_sha)
+          : null;
       const ans =
-        kind === 'checker' ? await upload(data.problem.id, answer) : null;
+        kind === 'checker'
+          ? await store('answer', answer, existing?.test.answer_sha)
+          : null;
+      if (!mounted.current) return;
       const test: UnitTest = {
         input_sha: inp.sha256,
         output_sha: out?.sha256 || null,
         answer_sha: ans?.sha256 || null,
         expected,
+        ...(preserveLineEndings ? { preserve_line_endings: true } : {}),
       };
       mutate((d) => {
         d[kind === 'checker' ? 'checker_tests' : 'validator_tests'][
@@ -776,9 +793,9 @@ function UnitModal({
       });
       onClose();
     } catch (e) {
-      setError((e as Error).message);
+      if (mounted.current) setError((e as Error).message);
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   }
   return (
@@ -840,8 +857,22 @@ function UnitModal({
               ))}
             </Select>
           </label>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={preserveLineEndings}
+              disabled={!editable || busy}
+              onChange={(event) => setPreserveLineEndings(event.target.checked)}
+            />
+            원본 줄바꿈 유지
+          </label>
+          <p className="muted small">
+            줄바꿈 오류를 의도적으로 검사할 때만 사용하세요. 기본값은 저장·실행
+            시 LF로 자동 보정하며 마지막 줄바꿈을 추가하지 않습니다.
+          </p>
           <CodeEditor
             textFormatTools
+            preserveLineEndings={preserveLineEndings}
             value={input}
             onChange={setInput}
             label="테스트 입력"
@@ -852,6 +883,7 @@ function UnitModal({
             <div className="form-grid">
               <CodeEditor
                 textFormatTools
+                preserveLineEndings={preserveLineEndings}
                 value={answer}
                 onChange={setAnswer}
                 label="기대 출력"
@@ -860,6 +892,7 @@ function UnitModal({
               />
               <CodeEditor
                 textFormatTools
+                preserveLineEndings={preserveLineEndings}
                 value={output}
                 onChange={setOutput}
                 label="검사할 참가자 출력"

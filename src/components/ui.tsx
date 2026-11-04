@@ -8,7 +8,12 @@ import {
   type HTMLAttributes,
 } from 'react';
 import { textPreview } from '../lib/largeText';
-import { appendFinalNewline, textFormat, toLf } from '../lib/textFormat';
+import {
+  appendFinalNewline,
+  preserveEditedLineEndings,
+  textFormat,
+  toLf,
+} from '../lib/textFormat';
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
     menu: <path d="M4 6h16M4 12h16M4 18h16" />,
@@ -244,6 +249,7 @@ export function CodeEditor({
   readOnly = false,
   rows = 18,
   textFormatTools = false,
+  preserveLineEndings = false,
 }: {
   value: string;
   onChange?: (value: string) => void;
@@ -251,6 +257,7 @@ export function CodeEditor({
   readOnly?: boolean;
   rows?: number;
   textFormatTools?: boolean;
+  preserveLineEndings?: boolean;
 }) {
   const preview = useMemo(() => textPreview(value), [value]);
   const format = useMemo(
@@ -331,12 +338,15 @@ export function CodeEditor({
         wrap="off"
         readOnly={readOnly || preview.truncated}
         onChange={(e) => {
-          if (textPreview(e.target.value).truncated) {
+          const edited = preserveLineEndings
+            ? preserveEditedLineEndings(value, e.target.value)
+            : e.target.value;
+          if (textPreview(edited).truncated) {
             setRejected(true);
             return;
           }
           setRejected(false);
-          onChange?.(e.target.value);
+          onChange?.(edited);
         }}
       />
       {(preview.truncated || rejected) && (

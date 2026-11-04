@@ -93,6 +93,7 @@ export type TestSet = {
   groups: Record<string, TestGroup>;
 };
 export type UnitTest = {
+  preserve_line_endings?: boolean;
   input_sha: string;
   output_sha: string | null;
   answer_sha: string | null;

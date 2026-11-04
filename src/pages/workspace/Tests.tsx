@@ -2,9 +2,11 @@ import Pagination from '../../components/Pagination';
 import { usePagination } from '../../lib/pagination';
 import Select from '../../components/Select';
 import { can } from '../../lib/permissions';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { blobPreview, upload } from '../../lib/api';
+import { normalizeTestBlobs } from '../../lib/componentTextFormats';
+import { automaticToLf } from '../../lib/textFormat';
 import { useWorkspace } from '../../lib/workspace';
 import GeneratorLoop from './GeneratorLoop';
 import BulkTests from './BulkTests';
@@ -24,6 +26,17 @@ import {
 } from '../../components/ui';
 export default function Tests() {
   const { data, document: doc, mutate, editable, run, notify } = useWorkspace();
+  const active = useRef(true);
+  const latestDocument = useRef(doc);
+  useLayoutEffect(() => {
+    latestDocument.current = doc;
+  }, [doc]);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
   const [selectedName, setSelected] = useState(
     Object.keys(doc.testsets)[0] || 'tests',
   );
@@ -68,6 +81,9 @@ export default function Tests() {
     }
   }
   async function importFiles(files: File[]) {
+    if (!editable || busy || !files.length) return;
+    const target = selected;
+    const signature = JSON.stringify(doc.testsets[target]);
     setBusy(true);
     try {
       const pairs = new Map<string, { input?: File; answer?: File }>();
@@ -82,10 +98,12 @@ export default function Tests() {
         else pair.answer = file;
         pairs.set(match[1], pair);
       }
-      let index = Math.max(0, ...rows.map((t) => t.index)) + 1;
-      for (const [name, pair] of pairs) {
+      for (const [name, pair] of pairs)
         if (!pair.input) throw new Error(`${name}: 입력 파일이 없습니다.`);
-        const inp = await upload(data.problem.id, pair.input);
+      let index = Math.max(0, ...rows.map((t) => t.index)) + 1;
+      const prepared: Test[] = [];
+      for (const [name, pair] of pairs) {
+        const inp = await upload(data.problem.id, pair.input!);
         const ans = pair.answer
           ? await upload(data.problem.id, pair.answer)
           : null;
@@ -99,22 +117,45 @@ export default function Tests() {
           description: name,
           sample: false,
         };
-        mutate((d) => {
-          d.testsets[selected].tests[String(test.index)] = test;
-        });
+        prepared.push(test);
       }
-      notify('테스트 파일을 작업 사본에 추가했습니다.');
+      const normalized = await normalizeTestBlobs(
+        data.problem.id,
+        prepared.flatMap((test) =>
+          [test.input_sha, test.answer_sha].filter(
+            (hash): hash is string => !!hash,
+          ),
+        ),
+      );
+      if (!active.current) return;
+      if (JSON.stringify(latestDocument.current.testsets[target]) !== signature)
+        throw new Error(
+          '파일을 준비하는 동안 테스트 자료가 변경되었습니다. 다시 업로드하세요.',
+        );
+      mutate((d) => {
+        if (JSON.stringify(d.testsets[target]) !== signature) return;
+        for (const test of prepared) {
+          if (test.input_sha)
+            test.input_sha = normalized[test.input_sha] ?? test.input_sha;
+          if (test.answer_sha)
+            test.answer_sha = normalized[test.answer_sha] ?? test.answer_sha;
+          d.testsets[target].tests[String(test.index)] = test;
+        }
+      });
+      notify(
+        '테스트 파일의 텍스트 줄바꿈을 LF로 보정해 작업 사본에 추가했습니다.',
+      );
     } catch (e) {
-      notify((e as Error).message, true);
+      if (active.current) notify((e as Error).message, true);
     } finally {
-      setBusy(false);
+      if (active.current) setBusy(false);
     }
   }
   return (
     <div className="section-stack">
       <SectionHeading
         title="테스트 · 생성 스크립트"
-        description="테스트 세트를 선택하고 생성 규칙을 작성한 뒤, 입력 검사나 정답 생성을 실행하세요."
+        description="테스트 세트를 선택하고 생성 규칙을 작성한 뒤, 입력 검사나 정답 생성을 실행하세요. 입력·정답과 표시용 예제는 저장·실행 시 LF로 자동 보정합니다."
         actions={
           <Link
             className="button"
@@ -674,6 +715,17 @@ export function TestEditor({
   onClose: () => void;
 }) {
   const { data, document: doc, editable, mutate } = useWorkspace();
+  const active = useRef(true);
+  const latestTests = useRef(doc.testsets[testset].tests);
+  useLayoutEffect(() => {
+    latestTests.current = doc.testsets[testset].tests;
+  }, [doc, testset]);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
   const [index, setIndex] = useState(
     test?.index ||
       Math.max(
@@ -736,6 +788,8 @@ export function TestEditor({
     };
   }, [test, data.problem.id]);
   async function submit() {
+    if (!editable || busy) return;
+    const signature = JSON.stringify(doc.testsets[testset].tests);
     if (!Number.isInteger(index) || index < 1 || index > 1000) {
       setError('테스트 번호는 1~1000의 정수여야 합니다.');
       return;
@@ -753,17 +807,26 @@ export function TestEditor({
       const inp =
         test?.input_sha && !changed
           ? { sha256: test.input_sha }
-          : await upload(data.problem.id, input);
+          : await upload(data.problem.id, automaticToLf(input));
       const ans =
         test?.answer_sha && !answerChanged
           ? { sha256: test.answer_sha }
           : answer
-            ? await upload(data.problem.id, answer)
+            ? await upload(data.problem.id, automaticToLf(answer))
             : null;
+      const normalized = await normalizeTestBlobs(
+        data.problem.id,
+        [inp.sha256, ans?.sha256].filter((hash): hash is string => !!hash),
+      );
+      if (!active.current) return;
+      if (JSON.stringify(latestTests.current) !== signature)
+        throw new Error(
+          '편집하는 동안 테스트 자료가 변경되었습니다. 창을 다시 열어 주세요.',
+        );
       const item: Test = {
         index,
-        input_sha: inp.sha256,
-        answer_sha: ans?.sha256 || null,
+        input_sha: normalized[inp.sha256] ?? inp.sha256,
+        answer_sha: ans ? (normalized[ans.sha256] ?? ans.sha256) : null,
         command: changed ? '' : test?.command || '',
         group: test?.group || '',
         points: test?.points || 0,
@@ -771,13 +834,14 @@ export function TestEditor({
         sample,
         ...(displayOnly
           ? {
-              statement_input: displayInput,
-              statement_output: displayOutput,
+              statement_input: automaticToLf(displayInput),
+              statement_output: automaticToLf(displayOutput),
               verify_statement_io: verifyDisplay,
             }
           : {}),
       };
       mutate((d) => {
+        if (JSON.stringify(d.testsets[testset].tests) !== signature) return;
         if (test)
           for (const [key, value] of Object.entries(d.testsets[testset].tests))
             if (value.index === test.index)
@@ -790,19 +854,21 @@ export function TestEditor({
       });
       onClose();
     } catch (e) {
-      setError((e as Error).message);
+      if (active.current) setError((e as Error).message);
     } finally {
-      setBusy(false);
+      if (active.current) setBusy(false);
     }
   }
   return (
     <Modal
       wide
       title={test ? `테스트 #${test.index} · 입력·출력` : '직접 입력 테스트'}
-      onClose={onClose}
+      onClose={() => {
+        if (!busy) onClose();
+      }}
       footer={
         <>
-          <button className="button" onClick={onClose}>
+          <button className="button" disabled={busy} onClick={onClose}>
             닫기
           </button>
           {editable && (
@@ -817,6 +883,11 @@ export function TestEditor({
         </>
       }
     >
+      <p className="muted small">
+        입력·기대 출력과 표시용 입출력의 CRLF·CR은 저장할 때 LF로 자동
+        보정합니다. 공백과 마지막 줄바꿈 유무는 유지하며 바이너리 파일은
+        변경하지 않습니다.
+      </p>
       {test && (
         <div className="actions">
           <BlobDownload

@@ -31,6 +31,47 @@ export function toLf(value: string) {
   return value.replace(/\r\n|\r/g, '\n');
 }
 
+/** Automatic judging-data formatting leaves binary content untouched. */
+export function automaticToLf(value: string) {
+  return value.includes('\0') ? value : toLf(value);
+}
+
+/** Apply textarea edits without normalizing unchanged raw line separators. */
+export function preserveEditedLineEndings(original: string, edited: string) {
+  const before = toLf(original);
+  const after = toLf(edited);
+  let prefix = 0;
+  while (
+    prefix < before.length &&
+    prefix < after.length &&
+    before[prefix] === after[prefix]
+  )
+    prefix++;
+  let suffix = 0;
+  while (
+    suffix < before.length - prefix &&
+    suffix < after.length - prefix &&
+    before[before.length - 1 - suffix] === after[after.length - 1 - suffix]
+  )
+    suffix++;
+  const rawOffset = (normalizedOffset: number) => {
+    let raw = 0;
+    for (let offset = 0; offset < normalizedOffset; offset++) {
+      raw += original[raw] === '\r' && original[raw + 1] === '\n' ? 2 : 1;
+    }
+    return raw;
+  };
+  const ending = original.match(/\r\n|\r|\n/)?.[0] ?? '\n';
+  const insertion = after
+    .slice(prefix, after.length - suffix)
+    .replace(/\n/g, ending);
+  return (
+    original.slice(0, rawOffset(prefix)) +
+    insertion +
+    original.slice(rawOffset(before.length - suffix))
+  );
+}
+
 export function appendFinalNewline(value: string) {
   const format = textFormat(value);
   if (!value || format.hasFinalNewline) return value;

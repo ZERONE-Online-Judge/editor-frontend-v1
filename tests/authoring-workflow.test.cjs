@@ -41,6 +41,19 @@ function source(relative) {
     if (id.endsWith('/api'))
       return {
         ...source('lib/api.ts'),
+        post: async (url, body) => {
+          assert.match(url, /\/blobs\/text-formats$/);
+          return {
+            items: body.sha256.map((sha256) => ({
+              sha256,
+              size: 100000000,
+              line_ending: 'lf',
+              has_final_newline: true,
+              needs_lf_conversion: false,
+              binary: false,
+            })),
+          };
+        },
         upload: async (...args) => {
           uploads.push(args);
           return { sha256: 'new', size: 20 };

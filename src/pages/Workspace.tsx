@@ -207,17 +207,25 @@ export default function ProblemWorkspace() {
         document_hash: string;
         cautions: WorkspaceData['cautions'];
         modified: boolean;
+        document?: ProblemDocument;
       }>(`/problems/${problemId}/working-copy`, {
         version: current.data.version,
         document: current.doc,
       });
+      const savedDocument = structuredClone(result.document ?? current.doc);
       const next = {
         ...current.data,
         ...result,
-        document: structuredClone(current.doc),
+        document: savedDocument,
         problem: { ...current.data.problem, modified: result.modified },
       };
+      if (activeProblem.current !== problemId) return result.version;
       setData(next);
+      setDoc((previous) =>
+        JSON.stringify(previous) === JSON.stringify(current.doc)
+          ? structuredClone(savedDocument)
+          : previous,
+      );
       notify('내 작업 사본에 저장했습니다. 공유하려면 커밋하세요.');
       return result.version;
     } catch (e) {

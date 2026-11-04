@@ -18,7 +18,13 @@ loaded._compile(
   }).outputText,
   filename,
 );
-const { textFormat, toLf, appendFinalNewline } = loaded.exports;
+const {
+  textFormat,
+  toLf,
+  automaticToLf,
+  appendFinalNewline,
+  preserveEditedLineEndings,
+} = loaded.exports;
 
 test('line ending detection distinguishes CRLF pairs from separate CR and LF', () => {
   for (const [input, lineEnding, hasFinalNewline, needsLfConversion] of [
@@ -83,6 +89,13 @@ test('LF conversion preserves intentionally invalid numbers, spacing and EOF', (
   }
 });
 
+test('automatic LF formatting skips NUL data while explicit conversion remains intentional', () => {
+  const binary = 'a\0\r\nb\r';
+  assert.equal(automaticToLf(binary), binary);
+  assert.equal(toLf(binary), 'a\0\nb\n');
+  assert.equal(automaticToLf('a  \r\nb\t'), 'a  \nb\t');
+});
+
 test('conversion preserves Unicode and treats Unicode separators as content', () => {
   const original = '\uFEFF테스트 🎲\r\n둘째 줄\r끝\n\u2028\u2029';
   assert.equal(toLf(original), '\uFEFF테스트 🎲\n둘째 줄\n끝\n\u2028\u2029');
@@ -115,4 +128,17 @@ test('appending a final newline preserves existing line style and content', () =
     assert.equal(appendFinalNewline(original), expected);
     assert.equal(appendFinalNewline(expected), expected);
   }
+});
+
+test('raw textarea edits preserve original separators outside the edited range', () => {
+  for (const [before, edited, expected] of [
+    ['2\r\n7 8', '3\n7 8', '3\r\n7 8'],
+    ['2\r7 8\r', '2\n7 9\n', '2\r7 9\r'],
+    ['a\r\nb\nc\rd', 'a\nbb\nc\nd', 'a\r\nbb\nc\rd'],
+    ['a\r\nb', 'a\nnew\nb', 'a\r\nnew\r\nb'],
+    ['a\rb', 'a\nnew\nb', 'a\rnew\rb'],
+    ['a\r\nb\nc', 'a\nb\nc', 'a\r\nb\nc'],
+    ['a\nb', 'a\nchanged', 'a\nchanged'],
+  ])
+    assert.equal(preserveEditedLineEndings(before, edited), expected);
 });

@@ -40,6 +40,7 @@ let revisionRequests,
   updateSnapshot,
   updateFailure;
 let unitBlobs, unitBlobFailure, unitUploads, unitUploadFailure;
+let saveTransform;
 let formatRequests,
   formatFailure,
   formatGate,
@@ -63,25 +64,36 @@ function source(relative) {
         ...source('lib/api.ts'),
         api: get,
         post: post,
-        blobPreview: async (problem, sha) => ({
-          text: unitBlobs.get(sha) ?? (sha === 'actual' ? 'Wrong\n' : '1 2\n'),
-          truncated: false,
-          binary: false,
-        }),
+        blobPreview: async (problem, sha) =>
+          Buffer.isBuffer(unitBlobs.get(sha))
+            ? { text: '', truncated: false, binary: true }
+            : {
+                text:
+                  unitBlobs.get(sha) ??
+                  (sha === 'actual' ? 'Wrong\n' : '1 2\n'),
+                truncated: false,
+                binary: false,
+              },
         blobText: async (problem, sha) => {
           assert.equal(problem, 'p');
           if (unitBlobFailure) throw unitBlobFailure;
           assert.ok(unitBlobs.has(sha), `Missing blob ${sha}`);
+          if (Buffer.isBuffer(unitBlobs.get(sha)))
+            throw new Error(
+              '전체 내용을 편집창에 불러올 수 없습니다. 원본 파일을 다운로드해 확인하세요.',
+            );
           return unitBlobs.get(sha);
         },
         upload: async (problem, text) => {
           assert.equal(problem, 'p');
           if (unitUploadFailure) throw unitUploadFailure;
-          unitUploads.push(text);
-          unitBlobs.set(`uploaded-${unitUploads.length}`, text);
+          const content = typeof text === 'string' ? text : text.testContent;
+          assert.equal(typeof content, 'string');
+          unitUploads.push(content);
+          unitBlobs.set(`uploaded-${unitUploads.length}`, content);
           return {
             sha256: `uploaded-${unitUploads.length}`,
-            size: text.length,
+            size: content.length,
           };
         },
         put: putWorking,
@@ -310,6 +322,15 @@ async function post(url, body) {
 }
 function blobFormat(sha) {
   const text = unitBlobs.get(sha);
+  if (Buffer.isBuffer(text))
+    return {
+      sha256: sha,
+      size: text.length,
+      line_ending: null,
+      has_final_newline: null,
+      needs_lf_conversion: false,
+      binary: true,
+    };
   assert.equal(typeof text, 'string', `Missing format blob ${sha}`);
   const binary = text.includes('\0');
   const endings = new Set(text.match(/\r\n|\r|\n/g) || []);
@@ -332,13 +353,18 @@ async function putWorking(url, body) {
   assert.equal(url, '/problems/p/working-copy');
   requests.push({ url, body: global.structuredClone(body) });
   assert.equal(body.version, state.version);
-  state.document = global.structuredClone(body.document);
+  state.document = saveTransform
+    ? saveTransform(global.structuredClone(body.document))
+    : global.structuredClone(body.document);
   state.version++;
   return {
     version: state.version,
     document_hash: 'saved-draft',
     cautions: [],
     modified: true,
+    ...(saveTransform
+      ? { document: global.structuredClone(state.document) }
+      : {}),
   };
 }
 let root, host;
@@ -347,6 +373,7 @@ beforeEach(() => {
   unitBlobFailure = null;
   unitUploads = [];
   unitUploadFailure = null;
+  saveTransform = null;
   formatRequests = [];
   formatFailure = null;
   formatGate = null;
@@ -3727,24 +3754,18 @@ test('whole Checker LF conversion includes all three file fields while retaining
   }
 });
 
-test('pre-run CRLF warning lets authors execute original self-test bytes without conversion', async () => {
+test('default CRLF self-tests with a final newline execute without a manual conversion prompt', async () => {
   const key = componentFormatCases('validator');
+  unitBlobs.set('format-case-1-input', '2\r\n7 8\r\n');
   const before = global.structuredClone(state.document[key]);
   await mount('validator');
+  assert.match(host.textContent, /저장·실행 시 LF로 자동 보정/);
   await click('테스트 실행');
-  const dialog = host.querySelector('dialog');
-  assert.match(dialog.textContent, /자체 테스트 실행 전 줄바꿈 확인/);
-  assert.match(dialog.textContent, /CRLF/);
-  assert.deepEqual(requests, []);
-  await click('원본으로 실행');
+  assert.equal(host.querySelector('dialog'), null);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].body.kind, 'validator-tests');
   assert.deepEqual(normalizeRequests, []);
   assert.deepEqual(state.document[key], before);
-  assert.match(
-    host.querySelector('#location').textContent,
-    /invocations\?job=new-validator-tests/,
-  );
 });
 
 test('self-tests with confirmed LF metadata start directly without a conversion warning', async () => {
@@ -3758,32 +3779,18 @@ test('self-tests with confirmed LF metadata start directly without a conversion 
   assert.deepEqual(normalizeRequests, []);
 });
 
-test('pre-run LF conversion saves the converted working copy before starting self-tests', async () => {
-  const key = componentFormatCases('validator');
-  saveEnabled = true;
+test('missing final newline still requires an explicit choice and never adds EOF automatically', async () => {
+  componentFormatCases('validator');
   await mount('validator');
   await click('테스트 실행');
-  await click('LF로 변환 후 실행');
-  assert.deepEqual(
-    requests.map((row) => row.url),
-    ['/problems/p/working-copy', '/problems/p/jobs'],
-  );
-  assert.equal(
-    requests[0].body.document[key]['format-case-1'].input_sha,
-    'normalized-format-case-1-input',
-  );
-  assert.equal(
-    requests[0].body.document[key]['format-case-1'].expected,
-    'VALID',
-  );
-  assert.equal(requests[1].body.kind, 'validator-tests');
-  assert.match(
-    host.querySelector('#location').textContent,
-    /invocations\?job=new-validator-tests/,
-  );
+  assert.match(host.querySelector('dialog').textContent, /마지막 줄바꿈 확인/);
+  assert.deepEqual(requests, []);
+  await click('마지막 줄바꿈 없이 실행');
+  assert.equal(requests[0].body.kind, 'validator-tests');
+  assert.deepEqual(normalizeRequests, []);
 });
 
-test('failed newline metadata remains unknown and never claims LF before an explicit original-byte run', async () => {
+test('failed newline metadata remains unknown without blocking automatic LF execution', async () => {
   componentFormatCases('validator');
   formatFailure = new Error('줄바꿈 정보를 불러오지 못했습니다.');
   await mount('validator');
@@ -3791,12 +3798,7 @@ test('failed newline metadata remains unknown and never claims LF before an expl
   assert.match(row.textContent, /확인|알 수 없|불러오/);
   assert.doesNotMatch(row.textContent, /줄바꿈 LF|LF · Unix/);
   await click('테스트 실행');
-  assert.match(
-    host.querySelector('dialog').textContent,
-    /자체 테스트 실행 전 줄바꿈 확인/,
-  );
-  assert.deepEqual(requests, []);
-  await click('원본으로 실행');
+  assert.equal(host.querySelector('dialog'), null);
   assert.equal(requests[0].body.kind, 'validator-tests');
   assert.deepEqual(normalizeRequests, []);
 });
@@ -3860,7 +3862,7 @@ test('an LF conversion completed after leaving the component page cannot modify 
   assert.deepEqual(state.document[key], before);
 });
 
-test('a source change during LF conversion preserves the new source and cancels the whole conversion and pending run', async () => {
+test('a source change during LF conversion preserves the new source and cancels the whole conversion', async () => {
   const key = componentFormatCases('validator');
   const before = global.structuredClone(state.document[key]);
   state.document.files['alternate-validator.cpp'] = {
@@ -3876,8 +3878,8 @@ test('a source change during LF conversion preserves the new source and cancels 
   };
   saveEnabled = true;
   await mount('validator');
-  await click('테스트 실행');
-  await click('LF로 변환 후 실행');
+  await click('전체 LF 변환');
+  await click('LF로 변환하기');
   assert.equal(normalizeRequests.length, 1);
   assert.deepEqual(requests, []);
   // Represent a same-view document update while the request is in flight.
@@ -3957,7 +3959,7 @@ async function changeNewline(label, action) {
 }
 
 for (const input of ['2\r\n7 8\r\n', '2\n7 8']) {
-  test(`saving a validator self-test without text edits preserves ${input.includes('\r') ? 'CRLF' : 'missing final LF'} and INVALID expectation`, async () => {
+  test(`saving a default validator self-test normalizes ${input.includes('\r') ? 'CRLF' : 'LF'} without changing EOF or INVALID expectation`, async () => {
     existingUnit('validator');
     unitBlobs.set('unit-input', input);
     saveEnabled = true;
@@ -3969,10 +3971,276 @@ for (const input of ['2\r\n7 8\r\n', '2\n7 8']) {
     );
     await click('수정');
     await click('작업 사본 저장');
-    assert.deepEqual(unitUploads, [input]);
+    assert.deepEqual(unitUploads, [input.replace(/\r\n?/g, '\n')]);
+    assert.equal(
+      'preserve_line_endings' in state.document.validator_tests.original,
+      false,
+    );
     assert.equal(state.document.validator_tests.original.expected, 'INVALID');
   });
 }
+
+test('Checker default saving normalizes every data field and omits the false preservation flag', async () => {
+  existingUnit('checker');
+  const sources = global.structuredClone(state.document.files);
+  unitBlobs.set('unit-input', '2  \r\n7 8\t');
+  unitBlobs.set('unit-output', '8\r');
+  unitBlobs.set('unit-answer', '9\r\n');
+  saveEnabled = true;
+  await mount('checker');
+  await click('내용 보기·수정');
+  assert.equal(control('원본 줄바꿈 유지').checked, false);
+  await click('수정');
+  await click('작업 사본 저장');
+  assert.deepEqual(unitUploads, ['2  \n7 8\t', '8\n', '9\n']);
+  assert.equal(state.document.checker_tests.original.expected, 'WRONG_ANSWER');
+  assert.equal(
+    'preserve_line_endings' in state.document.checker_tests.original,
+    false,
+  );
+  assert.deepEqual(state.document.files, sources);
+});
+
+test('original newline preservation survives editing and can be turned off to restore automatic LF', async () => {
+  existingUnit('checker');
+  state.document.checker_tests.original.preserve_line_endings = true;
+  unitBlobs.set('unit-input', '2\r\n7 8');
+  unitBlobs.set('unit-output', '8\r');
+  unitBlobs.set('unit-answer', '9\r\n');
+  saveEnabled = true;
+  await mount('checker');
+  assert.match(
+    host.querySelector('.component-tests-table tbody tr').textContent,
+    /원본 유지/,
+  );
+  await click('내용 보기·수정');
+  assert.equal(control('원본 줄바꿈 유지').checked, true);
+  await click('수정');
+  await click('작업 사본 저장');
+  assert.deepEqual(unitUploads, ['2\r\n7 8', '8\r', '9\r\n']);
+  assert.equal(
+    state.document.checker_tests.original.preserve_line_endings,
+    true,
+  );
+  await click('내용 보기·수정');
+  await act(() => control('원본 줄바꿈 유지').click());
+  await click('수정');
+  await click('작업 사본 저장');
+  assert.deepEqual(unitUploads.slice(3), ['2\n7 8', '8\n', '9\n']);
+  assert.equal(
+    'preserve_line_endings' in state.document.checker_tests.original,
+    false,
+  );
+});
+
+test('whole LF conversion excludes preserved tests even when they share a blob with an automatic test', async () => {
+  const key = componentFormatCases('validator', 2);
+  const original = state.document[key]['format-case-1'].input_sha;
+  state.document[key]['format-case-2'] = {
+    ...state.document[key]['format-case-2'],
+    input_sha: original,
+    preserve_line_endings: true,
+  };
+  saveEnabled = true;
+  await mount('validator');
+  await click('전체 LF 변환');
+  assert.match(
+    host.querySelector('dialog').textContent,
+    /원본 줄바꿈 유지.*제외/,
+  );
+  await click('LF로 변환하기');
+  await click('작업 사본 저장');
+  assert.equal(
+    state.document[key]['format-case-1'].input_sha,
+    `normalized-${original}`,
+  );
+  assert.equal(state.document[key]['format-case-2'].input_sha, original);
+  assert.equal(
+    state.document[key]['format-case-2'].preserve_line_endings,
+    true,
+  );
+});
+
+test('typing into a preserved self-test keeps mixed original line separators while explicit LF remains available', async () => {
+  existingUnit('validator');
+  state.document.validator_tests.original.preserve_line_endings = true;
+  unitBlobs.set('unit-input', 'a\r\nb\nc\rd');
+  saveEnabled = true;
+  await mount('validator');
+  await click('내용 보기·수정');
+  await editUnitText('테스트 입력', 'a\nbb\nc\nd');
+  assert.match(newlineSettings('테스트 입력').textContent, /혼합/);
+  await click('수정');
+  await click('작업 사본 저장');
+  assert.deepEqual(unitUploads, ['a\r\nbb\nc\rd']);
+  await click('내용 보기·수정');
+  await changeNewline('테스트 입력', 'LF로 변환');
+  await click('수정');
+  await click('작업 사본 저장');
+  assert.equal(unitUploads[1], 'a\nbb\nc\nd');
+  assert.equal(
+    state.document.validator_tests.original.preserve_line_endings,
+    true,
+  );
+});
+
+test('the normalized working-copy response becomes the local document without causing a second save', async () => {
+  existingUnit('validator');
+  saveEnabled = true;
+  saveTransform = (document) => {
+    unitBlobs.set('server-lf', '2\n7 8\n');
+    document.validator_tests.original.input_sha = 'server-lf';
+    return document;
+  };
+  await mount('validator');
+  await click('내용 보기·수정');
+  await setControl('기대 판정', 'VALID');
+  await click('수정');
+  await click('작업 사본 저장');
+  await click('작업 사본 저장');
+  assert.equal(requests.length, 1);
+  await click('내용 보기·수정');
+  assert.equal(
+    host.querySelector('textarea[aria-label="테스트 입력"]').value,
+    '2\n7 8\n',
+  );
+  await click('취소');
+  await click('테스트 실행');
+  assert.deepEqual(
+    requests.map((row) => row.url),
+    ['/problems/p/working-copy', '/problems/p/jobs'],
+  );
+});
+
+function testUpload(name, content) {
+  const file = new window.File([content], name);
+  file.testContent = content;
+  file.text = () => {
+    throw new Error('Large files must not be decoded in the browser');
+  };
+  return file;
+}
+async function uploadTests(files) {
+  const input = host.querySelector('input[type="file"][accept=".in,.out,.a"]');
+  assert.ok(input);
+  Object.defineProperty(input, 'files', { configurable: true, value: files });
+  await act(() =>
+    input.dispatchEvent(new window.Event('change', { bubbles: true })),
+  );
+  await flush();
+}
+
+test('test file import normalizes text on the server and preserves binary files without decoding them', async () => {
+  saveEnabled = true;
+  await mount('tests');
+  await uploadTests([
+    testUpload('first.in', '2  \r\n7 8\t'),
+    testUpload('first.out', '8\r'),
+    testUpload('binary.in', 'x\0\r\ny'),
+  ]);
+  await click('작업 사본 저장');
+  assert.deepEqual(unitUploads, ['2  \r\n7 8\t', '8\r', 'x\0\r\ny']);
+  assert.equal(
+    state.document.testsets.tests.tests['1'].input_sha,
+    'normalized-uploaded-1',
+  );
+  assert.equal(
+    state.document.testsets.tests.tests['1'].answer_sha,
+    'normalized-uploaded-2',
+  );
+  assert.equal(
+    state.document.testsets.tests.tests['2'].input_sha,
+    'uploaded-3',
+  );
+  assert.equal(unitBlobs.get('normalized-uploaded-1'), '2  \n7 8\t');
+  assert.equal(unitBlobs.get('uploaded-3'), 'x\0\r\ny');
+});
+
+test('failed automatic file normalization leaves every test unapplied', async () => {
+  normalizeFailure = new Error('서버 줄바꿈 보정 실패');
+  saveEnabled = true;
+  await mount('tests');
+  await uploadTests([
+    testUpload('first.in', '1\r\n'),
+    testUpload('second.in', '2\r\n'),
+  ]);
+  assert.match(host.textContent, /서버 줄바꿈 보정 실패/);
+  await click('작업 사본 저장');
+  assert.deepEqual(state.document.testsets.tests.tests, {});
+  assert.deepEqual(requests, []);
+});
+
+test('automatic self-test saving leaves NUL data byte-for-byte unchanged', async () => {
+  existingUnit('validator');
+  // A NUL beyond the bounded binary-sniff prefix can still arrive as UTF-8 text.
+  const original = 'x'.repeat(4096) + '\0\r\nz\r';
+  unitBlobs.set('unit-input', original);
+  saveEnabled = true;
+  await mount('validator');
+  await click('내용 보기·수정');
+  await click('수정');
+  await click('작업 사본 저장');
+  assert.deepEqual(unitUploads, []);
+  assert.equal(state.document.validator_tests.original.input_sha, 'unit-input');
+  assert.equal(unitBlobs.get('unit-input'), original);
+  assert.equal(state.document.validator_tests.original.expected, 'INVALID');
+  assert.equal(
+    'preserve_line_endings' in state.document.validator_tests.original,
+    false,
+  );
+});
+
+test('an existing invalid UTF-8 self-test cannot be overwritten by an empty decoded editor', async () => {
+  existingUnit('validator');
+  const original = Buffer.from([0xff, 0x0d, 0x0a]);
+  unitBlobs.set('unit-input', original);
+  await mount('validator');
+  await click('내용 보기·수정');
+  const save = [...host.querySelectorAll('dialog button')].find(
+    (button) => button.textContent === '수정',
+  );
+  assert.ok(save.disabled);
+  await act(() => save.click());
+  assert.deepEqual(unitUploads, []);
+  assert.equal(state.document.validator_tests.original.input_sha, 'unit-input');
+  assert.deepEqual(unitBlobs.get('unit-input'), original);
+});
+
+test('metadata-only edits preserve stored binary and invalid UTF-8 judging blobs with their original hashes', async () => {
+  const input = Buffer.from([0x61, 0, 0x0d, 0x0a, 0x62]);
+  const answer = Buffer.from([0xff, 0x0d, 0x0a]);
+  unitBlobs.set('binary-input', input);
+  unitBlobs.set('invalid-utf8-answer', answer);
+  state.document.testsets.tests.tests['1'] = {
+    index: 1,
+    input_sha: 'binary-input',
+    answer_sha: 'invalid-utf8-answer',
+    command: '',
+    group: '',
+    points: 0,
+    description: '',
+    sample: false,
+  };
+  saveEnabled = true;
+  await mount('tests');
+  await click('입력·출력 보기');
+  assert.ok(
+    [...host.querySelectorAll('dialog textarea')].every(
+      (field) => field.readOnly,
+    ),
+  );
+  await setControl('설명', '메타데이터 수정');
+  await click('작업 사본에 반영');
+  await click('작업 사본 저장');
+  const test = state.document.testsets.tests.tests['1'];
+  assert.equal(test.input_sha, 'binary-input');
+  assert.equal(test.answer_sha, 'invalid-utf8-answer');
+  assert.equal(test.description, '메타데이터 수정');
+  assert.deepEqual(unitUploads, []);
+  assert.deepEqual(normalizeRequests, []);
+  assert.deepEqual(unitBlobs.get('binary-input'), input);
+  assert.deepEqual(unitBlobs.get('invalid-utf8-answer'), answer);
+});
 
 test('validator self-test converts CRLF explicitly without trimming input or changing its expected verdict', async () => {
   existingUnit('validator');
@@ -4033,6 +4301,7 @@ test('checker newline actions affect only the selected input or output field', a
   saveEnabled = true;
   await mount('checker');
   await click('내용 보기·수정');
+  await act(() => control('원본 줄바꿈 유지').click());
   for (const label of ['테스트 입력', '기대 출력', '검사할 참가자 출력'])
     assert.match(newlineSettings(label).textContent, /줄바꿈 CRLF · Windows/);
   await changeNewline('기대 출력', 'LF로 변환');
@@ -4061,11 +4330,11 @@ test('oversized self-test content cannot be transformed or overwritten by its vi
   );
   await click('수정');
   await click('작업 사본 저장');
-  assert.deepEqual(unitUploads, [input]);
+  assert.deepEqual(unitUploads, [input.replace(/\r\n/g, '\n')]);
   assert.equal(state.document.validator_tests.original.expected, 'INVALID');
 });
 
-test('registered test input newline conversion updates the judging input without changing its answer or statement example', async () => {
+test('saving registered test data automatically normalizes input, answer and statement examples', async () => {
   const test = {
     index: 1,
     input_sha: 'unit-input',
@@ -4075,8 +4344,8 @@ test('registered test input newline conversion updates the judging input without
     points: 0,
     description: 'Windows 입력',
     sample: true,
-    statement_input: '1\n',
-    statement_output: '2\n',
+    statement_input: '1\r\n',
+    statement_output: '2\r',
     verify_statement_io: true,
   };
   state.document.testsets.tests.tests['1'] = test;
@@ -4089,14 +4358,15 @@ test('registered test input newline conversion updates the judging input without
     newlineSettings('테스트 입력').textContent,
     /줄바꿈 CRLF · Windows/,
   );
-  await changeNewline('테스트 입력', 'LF로 변환');
   await click('작업 사본에 반영');
   await click('작업 사본 저장');
-  assert.deepEqual(unitUploads, ['1  \n2']);
+  assert.deepEqual(unitUploads, []);
   assert.deepEqual(state.document.testsets.tests.tests['1'], {
     ...test,
-    input_sha: 'uploaded-1',
-    command: '',
+    input_sha: 'normalized-unit-input',
+    answer_sha: 'normalized-unit-answer',
+    statement_input: '1\n',
+    statement_output: '2\n',
   });
 });
 

@@ -60,3 +60,16 @@ export async function normalizeBlobLf(
   }
   return values;
 }
+
+/** Normalize judging data without decoding large or binary files in the browser. */
+export async function normalizeTestBlobs(
+  problemId: string,
+  hashes: string[],
+  signal?: AbortSignal,
+) {
+  const formats = await loadBlobTextFormats(problemId, hashes, signal);
+  const candidates = Object.values(formats)
+    .filter((file) => !file.binary && file.needs_lf_conversion)
+    .map((file) => file.sha256);
+  return normalizeBlobLf(problemId, candidates, signal);
+}
