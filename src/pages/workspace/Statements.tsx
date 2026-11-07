@@ -2,11 +2,12 @@ import { can } from '../../lib/permissions';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useWorkspace } from '../../lib/workspace';
-import { Icon, SectionHeading, CodeEditor } from '../../components/ui';
+import { Icon, SectionHeading } from '../../components/ui';
 import Markdown from '../../components/Markdown';
 import { statementAssets } from '../../lib/statementAssets';
 import type { Statement } from '../../lib/types';
 import SharedStatements from './SharedStatements';
+import StatementFieldEditor from './StatementFieldEditor';
 const fields: { key: keyof Statement; title: string; rows: number }[] = [
   { key: 'legend', title: '문제 지문', rows: 12 },
   { key: 'input', title: '입력 형식', rows: 6 },
@@ -150,7 +151,9 @@ export default function Statements() {
               <section className="statement-section" key={field.key}>
                 <div className="card">
                   <h3>{field.title}</h3>
-                  <CodeEditor
+                  <StatementFieldEditor
+                    key={`${language}/${field.key}`}
+                    identity={`${language}/${field.key}`}
                     label={`${field.title} · LaTeX`}
                     rows={field.rows}
                     value={String(statement[field.key])}

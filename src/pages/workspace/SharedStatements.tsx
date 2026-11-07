@@ -7,9 +7,10 @@ import {
   translationHash,
   statementCanonical,
 } from '../../lib/sharedStatements';
-import { CodeEditor, Badge } from '../../components/ui';
+import { Badge } from '../../components/ui';
 import Markdown from '../../components/Markdown';
 import { statementAssets } from '../../lib/statementAssets';
+import StatementFieldEditor from './StatementFieldEditor';
 
 export default function SharedStatements({ language }: { language: string }) {
   const { document: doc, data, mutate, editable, notify } = useWorkspace();
@@ -78,7 +79,8 @@ export default function SharedStatements({ language }: { language: string }) {
           ] as const
         ).map(([key, label]) => (
           <div className="statement-section" key={key}>
-            <CodeEditor
+            <StatementFieldEditor
+              identity={key}
               label={label}
               value={doc[key] || ''}
               readOnly={!editable}

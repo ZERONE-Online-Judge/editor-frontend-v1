@@ -2,6 +2,7 @@ import { defaultSchema } from 'rehype-sanitize';
 import type { Options } from 'rehype-sanitize';
 import { defaultUrlTransform } from 'react-markdown';
 import type { CSSProperties } from 'react';
+import { imageAlignment, normalizeImageWidth } from './statementImages';
 
 export const statementSchema: Options = {
   ...defaultSchema,
@@ -57,6 +58,8 @@ export const statementSchema: Options = {
       'dataTexWidth',
       'dataTexHeight',
       'dataTexScale',
+      ['dataZojAlign', 'left', 'center', 'right'],
+      'dataZojWidth',
     ],
   },
   protocols: {
@@ -91,10 +94,19 @@ export function statementImageStyle(
   const raw = Number(properties['data-tex-scale']);
   const scale =
     Number.isFinite(raw) && raw > 0 ? Math.min(4, Math.max(0.1, raw)) : 1;
+  const align = imageAlignment(properties['data-zoj-align']);
+  const width = normalizeImageWidth(properties['data-zoj-width']);
   return {
-    width: dimension(properties['data-tex-width']),
+    width: width ?? dimension(properties['data-tex-width']),
     height: dimension(properties['data-tex-height']),
     maxWidth: `${100 / Math.max(1, scale)}%`,
     zoom: scale === 1 ? undefined : scale,
+    ...(align
+      ? {
+          display: 'block',
+          marginLeft: align === 'left' ? '0' : 'auto',
+          marginRight: align === 'right' ? '0' : 'auto',
+        }
+      : {}),
   };
 }

@@ -1,4 +1,23 @@
 import type { SourceFile } from './types';
+import type { StatementImageAsset } from './statementImages';
+
+export function statementImageAssets(
+  problemId: string,
+  files: Record<string, SourceFile> = {},
+): StatementImageAsset[] {
+  return Object.values(files)
+    .filter(
+      (file) =>
+        file.kind === 'statement' &&
+        /\.(?:png|jpe?g|webp|gif|svg|avif)$/i.test(file.name),
+    )
+    .map((file) => ({
+      id: file.name,
+      source: file.name,
+      name: file.name,
+      previewUrl: `/api/problems/${encodeURIComponent(problemId)}/blobs/${file.sha256}`,
+    }));
+}
 
 export function statementAssets(
   problemId: string,
@@ -14,7 +33,7 @@ export function statementAssets(
   );
 }
 
-export function statementImageMime(bytes: Uint8Array, filename: string) {
+export function statementImageMime(bytes: Uint8Array) {
   const ascii = (start: number, length: number) =>
     String.fromCharCode(...bytes.slice(start, start + length));
   if (ascii(0, 8) === '\x89PNG\r\n\x1a\n') return 'image/png';
@@ -25,7 +44,6 @@ export function statementImageMime(bytes: Uint8Array, filename: string) {
   if (ascii(4, 4) === 'ftyp' && /^(avif|avis)$/.test(ascii(8, 4)))
     return 'image/avif';
   if (
-    /\.svg$/i.test(filename) &&
     /^\s*(?:<\?xml[\s\S]*?\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg(?:\s|>)/i.test(
       new TextDecoder().decode(bytes.slice(0, 2048)),
     )

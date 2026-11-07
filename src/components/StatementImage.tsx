@@ -28,7 +28,7 @@ export default function StatementImage({
         });
         if (!response.ok) throw new Error('image unavailable');
         const bytes = new Uint8Array(await response.arrayBuffer());
-        const mime = statementImageMime(bytes, alt);
+        const mime = statementImageMime(bytes);
         if (!mime || bytes.byteLength > 16 * 1024 * 1024)
           throw new Error('not a supported image');
         if (!active) return;
@@ -43,7 +43,7 @@ export default function StatementImage({
       controller.abort();
       if (url) URL.revokeObjectURL(url);
     };
-  }, [src, alt, internal]);
+  }, [src, internal]);
   if (!src) return null;
   if (internal && image.source !== src)
     return <span role="status">이미지 불러오는 중…</span>;

@@ -122,7 +122,7 @@ export default function Files({ solutions = false }: { solutions?: boolean }) {
         mutate((d) => {
           const entry = {
             name: file.name,
-            kind: (/\.(png|jpg|jpeg|gif|webp)$/i.test(file.name)
+            kind: (/\.(png|jpg|jpeg|gif|webp|svg|avif)$/i.test(file.name)
               ? 'statement'
               : inferLanguage(file.name) === 'text'
                 ? 'resource'
