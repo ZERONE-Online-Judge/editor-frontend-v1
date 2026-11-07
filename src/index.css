@@ -3905,6 +3905,20 @@ svg {
   min-width: 0;
   align-content: start;
 }
+.test-script-panel > *,
+.test-execution-panel > * {
+  min-width: 0;
+}
+.test-script-panel .section-heading,
+.test-execution-scope {
+  overflow-wrap: anywhere;
+}
+.test-execution-panel select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  text-overflow: ellipsis;
+}
 .test-set-heading {
   display: flex;
   align-items: flex-start;
@@ -3919,6 +3933,58 @@ svg {
 .test-set-heading p,
 .test-execution-panel p {
   margin: 0;
+}
+.test-set-heading-actions {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+.test-set-remove-action {
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+  max-width: 300px;
+}
+.test-set-removal-name {
+  overflow-wrap: anywhere;
+}
+.test-set-removal-impact {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 18px 0;
+}
+.test-set-removal-impact > div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 9px;
+  background: #f8fafc;
+}
+.test-set-removal-impact > div:last-child {
+  grid-column: 1 / -1;
+}
+.test-set-removal-impact dt {
+  margin-bottom: 6px;
+  color: #64748b;
+  font-size: 12px;
+}
+.test-set-removal-impact dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 480px) {
+  .test-set-removal-impact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .test-set-heading-actions {
+    width: 100%;
+  }
 }
 .test-set-create summary {
   list-style: none;

@@ -12,9 +12,14 @@ import GeneratorLoop from './GeneratorLoop';
 import BulkTests from './BulkTests';
 import TestOrder from './TestOrder';
 import { orderedTests } from '../../lib/testOrder';
+import {
+  removeTestset,
+  testsetRemovalImpact,
+  testsetRemovalIssue,
+} from '../../lib/testsetRemoval';
 import { BlobDownload, DownloadActions } from '../../components/Downloads';
 import { testDownloads } from '../../lib/downloads';
-import type { Test } from '../../lib/types';
+import type { ProblemDocument, Test } from '../../lib/types';
 import {
   Badge,
   CodeEditor,
@@ -25,7 +30,15 @@ import {
   SectionHeading,
 } from '../../components/ui';
 export default function Tests() {
-  const { data, document: doc, mutate, editable, run, notify } = useWorkspace();
+  const {
+    data,
+    document: doc,
+    mutate,
+    editable,
+    busy: workspaceBusy,
+    run,
+    notify,
+  } = useWorkspace();
   const active = useRef(true);
   const latestDocument = useRef(doc);
   useLayoutEffect(() => {
@@ -48,6 +61,24 @@ export default function Tests() {
   const [groups, setGroups] = useState(false);
   const [reordering, setReordering] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [panelContext, setPanelContext] = useState('');
+  const [removal, setRemoval] = useState<{
+    problemId: string;
+    name: string;
+    document: ProblemDocument;
+    signature: string;
+    scope: string;
+    version: number;
+    invalidated: boolean;
+  } | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<{
+    problemId: string;
+    name: string;
+    signature: string;
+    firstRemaining: string;
+  } | null>(null);
+  const removing = useRef(false);
+  const removalVersion = useRef(0);
   const [autoApply, setAutoApply] = useState(false);
   const [allSets, setAllSets] = useState(false);
   const setNames = Object.keys(doc.testsets);
@@ -64,6 +95,170 @@ export default function Tests() {
     selection.name === selected
       ? selection.indices.filter((index) => availableIndices.has(index))
       : [];
+  const contextKey = `${data.problem.id}/${selected}`;
+  const scopes = {
+    editTests: editable && can(data.problem, 'edit_tests'),
+    editSolutions: can(data.problem, 'edit_solutions'),
+    editMaterials: can(data.problem, 'edit_materials'),
+  };
+  const scopeSignature = JSON.stringify(scopes);
+  const removalIssue = testsetRemovalIssue(doc, selected, scopes);
+  const lastSet = setNames.length <= 1;
+  const deletionReason = lastSet
+    ? '마지막 테스트 세트는 삭제할 수 없습니다.'
+    : removalIssue;
+  const removalContext = useRef({
+    problemId: data.problem.id,
+    document: doc,
+    name: selected,
+    scope: scopeSignature,
+    busy: busy || workspaceBusy,
+    workspaceBusy,
+    scopes,
+  });
+  useLayoutEffect(() => {
+    const previous = removalContext.current;
+    if (
+      previous.problemId !== data.problem.id ||
+      previous.document !== doc ||
+      previous.name !== selected ||
+      previous.scope !== scopeSignature
+    )
+      removalVersion.current++;
+    removalContext.current = {
+      problemId: data.problem.id,
+      document: doc,
+      name: selected,
+      scope: scopeSignature,
+      busy: busy || workspaceBusy,
+      workspaceBusy,
+      scopes,
+    };
+  });
+  const removalContextChanged = Boolean(
+    removal &&
+    (removal.problemId !== data.problem.id ||
+      removal.document !== doc ||
+      removal.name !== selected ||
+      removal.scope !== scopeSignature),
+  );
+  if (removal && !removal.invalidated && removalContextChanged)
+    setRemoval({ ...removal, invalidated: true });
+  const removalChanged = Boolean(removal?.invalidated || removalContextChanged);
+  const impact = removal
+    ? testsetRemovalImpact(removal.document, removal.name)
+    : null;
+  function selectSet(name: string) {
+    setSelected(name);
+    setSelection({ name: '', indices: [] });
+    setEditing(false);
+    setGroups(false);
+    setReordering(false);
+    setPanelContext('');
+  }
+  function openPanel(
+    kind: 'editing' | 'groups' | 'reordering',
+    test: Test | null = null,
+  ) {
+    setPanelContext(contextKey);
+    if (kind === 'editing') setEditing(test);
+    if (kind === 'groups') setGroups(true);
+    if (kind === 'reordering') setReordering(true);
+  }
+  function closeRemoval() {
+    if (!removing.current) setRemoval(null);
+  }
+  function confirmRemoval() {
+    if (!removal || removing.current) return;
+    const current = removalContext.current;
+    const changed =
+      removal.invalidated ||
+      removal.version !== removalVersion.current ||
+      removal.problemId !== current.problemId ||
+      removal.document !== current.document ||
+      removal.name !== current.name ||
+      removal.scope !== current.scope;
+    if (changed) {
+      notify(
+        '문제, 테스트 자료 또는 권한이 변경되었습니다. 삭제할 내용을 다시 확인해 주세요.',
+        true,
+      );
+      setRemoval(null);
+      return;
+    }
+    const issue = testsetRemovalIssue(
+      current.document,
+      removal.name,
+      current.scopes,
+    );
+    if (issue || current.busy) {
+      if (issue) notify(issue, true);
+      return;
+    }
+    const next = removeTestset(current.document, removal.name);
+    removing.current = true;
+    setBusy(true);
+    setPendingRemoval({
+      problemId: current.problemId,
+      name: removal.name,
+      signature: JSON.stringify(next),
+      firstRemaining: Object.keys(next.testsets)[0],
+    });
+    mutate((draft) => {
+      const latest = removalContext.current;
+      if (
+        removal.version !== removalVersion.current ||
+        latest.problemId !== removal.problemId ||
+        latest.name !== removal.name ||
+        latest.scope !== removal.scope ||
+        latest.workspaceBusy ||
+        JSON.stringify(draft) !== removal.signature ||
+        testsetRemovalIssue(draft, removal.name, latest.scopes)
+      )
+        return;
+      const updated = removeTestset(draft, removal.name);
+      draft.testsets = updated.testsets;
+      draft.solutions = updated.solutions;
+      draft.materials = updated.materials;
+    });
+  }
+  useEffect(() => {
+    if (!pendingRemoval) return;
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (cancelled || !active.current) return;
+      const current = removalContext.current;
+      const applied =
+        current.problemId === pendingRemoval.problemId &&
+        JSON.stringify(current.document) === pendingRemoval.signature;
+      removing.current = false;
+      setBusy(false);
+      setPendingRemoval(null);
+      setRemoval(null);
+      if (!applied) {
+        notify(
+          '삭제를 반영하는 동안 작업 사본이 변경되었습니다. 자료를 확인한 뒤 다시 시도해 주세요.',
+          true,
+        );
+        return;
+      }
+      setSelected(pendingRemoval.firstRemaining);
+      setSelection({ name: '', indices: [] });
+      setEditing(false);
+      setGroups(false);
+      setReordering(false);
+      setPanelContext('');
+      setNewSet('');
+      setAutoApply(false);
+      setAllSets(false);
+      notify(
+        `${pendingRemoval.name} 세트를 작업 사본에서 삭제했습니다. 저장해야 적용됩니다.`,
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingRemoval, doc, notify]);
   async function execute(mode: 'full' | 'inputs') {
     setBusy(true);
     try {
@@ -174,43 +369,75 @@ export default function Tests() {
               세트마다 생성 스크립트와 등록 테스트를 따로 관리합니다.
             </p>
           </div>
-          <details className="test-set-create">
-            <summary className="button small">
-              <Icon name="plus" />새 세트
-            </summary>
-            <div className="inline-form">
-              <input
-                aria-label="새 테스트 세트 이름"
-                value={newSet}
-                disabled={!editable || busy}
-                onChange={(e) => setNewSet(e.target.value)}
-                placeholder="새 테스트 세트 이름"
-              />
+          <div className="test-set-heading-actions">
+            <details className="test-set-create">
+              <summary className="button small">
+                <Icon name="plus" />새 세트
+              </summary>
+              <div className="inline-form">
+                <input
+                  aria-label="새 테스트 세트 이름"
+                  value={newSet}
+                  disabled={!editable || busy}
+                  onChange={(e) => setNewSet(e.target.value)}
+                  placeholder="새 테스트 세트 이름"
+                />
+                <button
+                  className="button small"
+                  disabled={
+                    !editable ||
+                    busy ||
+                    !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(newSet) ||
+                    Boolean(doc.testsets[newSet])
+                  }
+                  onClick={() => {
+                    mutate((d) => {
+                      d.testsets[newSet] = {
+                        tests: {},
+                        script: '',
+                        groups_enabled: false,
+                        groups: {},
+                      };
+                    });
+                    selectSet(newSet);
+                    setNewSet('');
+                  }}
+                >
+                  세트 추가
+                </button>
+              </div>
+            </details>
+            <div className="test-set-remove-action">
               <button
-                className="button small"
-                disabled={
-                  !editable ||
-                  busy ||
-                  !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(newSet) ||
-                  Boolean(doc.testsets[newSet])
+                type="button"
+                className="button small danger"
+                disabled={Boolean(deletionReason) || busy || workspaceBusy}
+                aria-describedby={
+                  deletionReason ? 'test-set-removal-reason' : undefined
                 }
                 onClick={() => {
-                  mutate((d) => {
-                    d.testsets[newSet] = {
-                      tests: {},
-                      script: '',
-                      groups_enabled: false,
-                      groups: {},
-                    };
+                  if (deletionReason || busy || workspaceBusy) return;
+                  setRemoval({
+                    problemId: data.problem.id,
+                    name: selected,
+                    document: doc,
+                    signature: JSON.stringify(doc),
+                    scope: scopeSignature,
+                    version: removalVersion.current,
+                    invalidated: false,
                   });
-                  setSelected(newSet);
-                  setNewSet('');
                 }}
               >
-                세트 추가
+                <Icon name="trash" size={16} />
+                세트 삭제
               </button>
+              {deletionReason && (
+                <p id="test-set-removal-reason" className="muted small">
+                  {deletionReason}
+                </p>
+              )}
             </div>
-          </details>
+          </div>
         </div>
         <div
           className="tabs test-set-tabs"
@@ -223,7 +450,7 @@ export default function Tests() {
               aria-label={`${name} · 등록 테스트 ${Object.keys(doc.testsets[name].tests).length}개`}
               aria-pressed={name === selected}
               key={name}
-              onClick={() => setSelected(name)}
+              onClick={() => selectSet(name)}
             >
               <Icon name="folder" size={16} />
               <span>{name}</span>
@@ -262,7 +489,7 @@ export default function Tests() {
                 readOnly={!editable}
               />
               <GeneratorLoop
-                key={selected}
+                key={contextKey}
                 groups={set.groups_enabled ? Object.keys(set.groups) : []}
                 disabled={!editable}
                 append={(script) =>
@@ -403,12 +630,12 @@ export default function Tests() {
                 <button
                   className="button"
                   disabled={!editable || busy || rows.length < 2}
-                  onClick={() => setReordering(true)}
+                  onClick={() => openPanel('reordering')}
                 >
                   <Icon name="menu" />
                   순서 변경
                 </button>
-                <button className="button" onClick={() => setGroups(true)}>
+                <button className="button" onClick={() => openPanel('groups')}>
                   <Icon name="folder" />
                   그룹 관리
                 </button>
@@ -432,7 +659,7 @@ export default function Tests() {
                 <button
                   className="button"
                   disabled={!editable}
-                  onClick={() => setEditing(null)}
+                  onClick={() => openPanel('editing')}
                 >
                   <Icon name="plus" />
                   직접 입력
@@ -458,7 +685,7 @@ export default function Tests() {
                   />
                 </div>
                 <BulkTests
-                  key={selected}
+                  key={contextKey}
                   setName={selected}
                   indices={selectedIndices}
                   reset={() => setSelection({ name: selected, indices: [] })}
@@ -543,7 +770,7 @@ export default function Tests() {
                               className="button small test-content-button"
                               aria-label={`테스트 ${test.index} 입력·출력 보기`}
                               aria-haspopup="dialog"
-                              onClick={() => setEditing(test)}
+                              onClick={() => openPanel('editing', test)}
                             >
                               <Icon name="file" size={15} />
                               입력·출력 보기
@@ -664,9 +891,83 @@ export default function Tests() {
           </section>
         </>
       )}
-      {reordering && set && (
+      {removal && impact && (
+        <Modal
+          title="테스트 세트를 삭제할까요?"
+          className="test-set-removal-modal"
+          onClose={closeRemoval}
+          footer={
+            <>
+              <button
+                type="button"
+                className="button"
+                disabled={Boolean(pendingRemoval)}
+                onClick={closeRemoval}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="button danger"
+                disabled={
+                  Boolean(pendingRemoval) ||
+                  removalChanged ||
+                  Boolean(removalIssue) ||
+                  busy ||
+                  workspaceBusy
+                }
+                onClick={confirmRemoval}
+              >
+                세트 삭제 확인
+              </button>
+            </>
+          }
+        >
+          <p>
+            <strong className="test-set-removal-name">{removal.name}</strong>{' '}
+            세트를 내 작업 사본에서 삭제합니다.
+          </p>
+          <dl className="test-set-removal-impact">
+            <div>
+              <dt>등록 테스트</dt>
+              <dd>{impact.tests}개</dd>
+            </div>
+            <div>
+              <dt>테스트 그룹</dt>
+              <dd>{impact.groups}개</dd>
+            </div>
+            <div>
+              <dt>생성 스크립트</dt>
+              <dd>{impact.script ? '함께 삭제' : '없음'}</dd>
+            </div>
+            <div>
+              <dt>풀이의 그룹별 기대 판정</dt>
+              <dd>{impact.solutions}개 풀이 참조 정리</dd>
+            </div>
+            <div>
+              <dt>공개 자료</dt>
+              <dd>{impact.materials}개 자료의 세트 참조 정리</dd>
+            </div>
+          </dl>
+          {pendingRemoval ? (
+            <Notice>삭제를 작업 사본에 반영하고 있습니다.</Notice>
+          ) : removalChanged ? (
+            <Notice tone="error">
+              문제, 테스트 자료 또는 권한이 변경되었습니다. 취소한 뒤 삭제할
+              내용을 다시 확인해 주세요.
+            </Notice>
+          ) : removalIssue ? (
+            <Notice tone="error">{removalIssue}</Notice>
+          ) : null}
+          <p className="muted small">
+            저장해야 변경이 적용됩니다. 기존 실행 기록과 원본 입력·정답 파일은
+            삭제하지 않습니다.
+          </p>
+        </Modal>
+      )}
+      {reordering && set && panelContext === contextKey && (
         <TestOrder
-          key={selected}
+          key={contextKey}
           testset={set}
           onClose={() => setReordering(false)}
           onApply={(order) => {
@@ -692,15 +993,20 @@ export default function Tests() {
           }}
         />
       )}
-      {editing !== false && (
+      {editing !== false && set && panelContext === contextKey && (
         <TestEditor
+          key={contextKey}
           test={editing}
           testset={selected}
           onClose={() => setEditing(false)}
         />
       )}{' '}
-      {groups && (
-        <GroupEditor testset={selected} onClose={() => setGroups(false)} />
+      {groups && set && panelContext === contextKey && (
+        <GroupEditor
+          key={contextKey}
+          testset={selected}
+          onClose={() => setGroups(false)}
+        />
       )}
     </div>
   );
