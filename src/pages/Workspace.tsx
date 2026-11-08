@@ -25,6 +25,7 @@ import { Badge, Icon, Modal, Notice } from '../components/ui';
 import PreparationNotice from '../components/PreparationNotice';
 import RevisionNotice from '../components/RevisionNotice';
 import WorkspaceNavigation from '../components/WorkspaceNavigation';
+import WorkspaceBreadcrumb from '../components/WorkspaceBreadcrumb';
 import { useRevisionUpdates } from '../lib/useRevisionUpdates';
 import { preparationCautions } from '../lib/readiness';
 import { executionResultPath } from '../lib/executionNavigation';
@@ -405,11 +406,11 @@ export default function ProblemWorkspace() {
       <div className="workspace-page">
         <div className="problem-heading">
           <div>
-            <div className="breadcrumb">
-              <Link to="/problems">문제</Link>
-              <Icon name="arrow" size={12} />
-              <span title={data.problem.slug}>{data.problem.slug}</span>
-            </div>
+            <WorkspaceBreadcrumb
+              problemId={data.problem.id}
+              folderId={data.problem.folder_id}
+              title={doc.info.name}
+            />
             <div className="problem-heading-title">
               <h1>{doc.info.name}</h1>
               <Badge tone="accent">

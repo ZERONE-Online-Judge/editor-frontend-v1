@@ -1333,21 +1333,37 @@ svg {
   flex-shrink: 0;
 }
 .breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 9px;
+  min-width: 0;
   font-size: 11px;
   color: #8892a7;
   margin-bottom: 10px;
 }
-.breadcrumb > a {
-  flex-shrink: 0;
+.breadcrumb ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.breadcrumb > span {
+.breadcrumb li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   min-width: 0;
+  max-width: 100%;
+}
+.breadcrumb a,
+.breadcrumb [aria-current] {
+  min-width: 0;
+  max-width: 18rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.breadcrumb [aria-hidden] {
+  flex-shrink: 0;
 }
 .breadcrumb a:hover {
   color: var(--zoj-accent);

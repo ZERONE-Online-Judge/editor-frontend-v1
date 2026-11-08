@@ -4974,3 +4974,22 @@ test('Selecting a Checker does not remove that file from extra Validator connect
   assert.equal(state.document.validator, 'validator.cpp');
   assert.deepEqual(state.document.extra_validators, ['shared.cpp']);
 });
+
+test('Workspace breadcrumbs use the current document title instead of the problem slug and follow updated working copies', async () => {
+  await mount('validator');
+  const currentTitle = () =>
+    host.querySelector('nav[aria-label="문제 위치"] [aria-current="page"]');
+  assert.equal(currentTitle().textContent, state.document.info.name);
+  assert.notEqual(currentTitle().textContent, state.problem.slug);
+  state.problem.revision = 2;
+  updateSnapshot = global.structuredClone(state);
+  updateSnapshot.base_revision = 2;
+  updateSnapshot.document.info.name = '업데이트한 실제 문제 제목';
+  await remoteCommit(2);
+  await click('업데이트');
+  assert.equal(currentTitle().textContent, '업데이트한 실제 문제 제목');
+  assert.equal(
+    host.querySelector('nav[aria-label="문제 위치"] a').getAttribute('href'),
+    '/problems',
+  );
+});
