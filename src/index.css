@@ -5007,6 +5007,16 @@ svg {
   outline: none;
 }
 
+.package-compatibility li,
+.package-compatibility a,
+.package-compatibility code {
+  overflow-wrap: anywhere;
+}
+.package-compatibility-files {
+  max-height: 10rem;
+  overflow: auto;
+}
+
 .import-compatibility {
   display: grid;
   gap: 14px;

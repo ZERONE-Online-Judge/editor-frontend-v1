@@ -21,8 +21,9 @@ import {
   jobCategory,
 } from '../../lib/executionCategories';
 import JudgeCompatibilityNotice from './JudgeCompatibilityNotice';
+import ZojPackageCompatibilityNotice from './ZojPackageCompatibilityNotice';
 import { can, canEdit } from '../../lib/permissions';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { ExecutionView } from '../../lib/executionNavigation';
 import { api, ApiError, blobPreview, post, time, bytes } from '../../lib/api';
@@ -59,10 +60,12 @@ export default function Executions({
   stress = false,
   packages = false,
   verification = false,
+  sharedRevision,
 }: {
   stress?: boolean;
   packages?: boolean;
   verification?: boolean;
+  sharedRevision?: number;
 }) {
   const {
     data,
@@ -205,10 +208,28 @@ export default function Executions({
   >(null);
   const [executionBackend, setExecutionBackend] = useState<'zoj' | null>(null);
   const [startError, setStartError] = useState<{
-    problemId: string;
+    context: string;
     backend: string | null;
     error: ApiError;
   } | null>(null);
+  const startContext = JSON.stringify([
+    data.problem.id,
+    mode,
+    exportFormat,
+    sharedRevision ?? data.problem.revision,
+    packageSets,
+    statementLanguage,
+    verifyPackage,
+  ]);
+  const startScope = useRef({ active: false, generation: 0 });
+  useLayoutEffect(() => {
+    const scope = { active: true, generation: 0 };
+    startScope.current = scope;
+    return () => {
+      scope.active = false;
+    };
+  }, [startContext]);
+  if (startError && startError.context !== startContext) setStartError(null);
   const [zojConfigured, setZojConfigured] = useState(false);
   const [environment, setEnvironment] = useState<ExecutionEnvironment | null>(
     null,
@@ -280,6 +301,8 @@ export default function Executions({
     kind: Job['kind'],
     options: Record<string, unknown> = {},
   ) {
+    const scope = startScope.current;
+    const generation = ++scope.generation;
     setBusy(true);
     setStartError(null);
     try {
@@ -290,9 +313,14 @@ export default function Executions({
           : {}),
       });
     } catch (e) {
-      if (e instanceof ApiError && e.code === 'judge_incompatible')
+      if (!scope.active || generation !== scope.generation) return;
+      if (
+        e instanceof ApiError &&
+        (e.code === 'judge_incompatible' ||
+          (kind === 'package' && e.code === 'zoj_incompatible'))
+      )
         setStartError({
-          problemId: data.problem.id,
+          context: startContext,
           backend: executionBackend,
           error: e,
         });
@@ -422,13 +450,20 @@ export default function Executions({
           </>
         }
       />
-      {startError?.problemId === data.problem.id &&
-        startError.backend === executionBackend && (
+      {startError?.context === startContext &&
+        (startError.error.code === 'zoj_incompatible' ||
+          startError.backend === executionBackend) &&
+        (startError.error.code === 'zoj_incompatible' ? (
+          <ZojPackageCompatibilityNotice
+            error={startError.error}
+            problemId={data.problem.id}
+          />
+        ) : (
           <JudgeCompatibilityNotice
             error={startError.error}
             problemId={data.problem.id}
           />
-        )}
+        ))}
       {!showResults && (
         <ExecutionLimitsInfo environment={environment} stress={stress} />
       )}

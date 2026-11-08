@@ -32,7 +32,8 @@ let state,
   requestGate,
   detailGate,
   advancedLimits,
-  historyGate;
+  historyGate,
+  environmentGate;
 let revisionRequests,
   historyReads,
   workspaceReads,
@@ -173,7 +174,8 @@ async function get(url, options = {}) {
         { once: true },
       );
     });
-  if (url === '/execution-environment')
+  if (url === '/execution-environment') {
+    if (environmentGate) return environmentGate.promise;
     return {
       default_backend: 'zoj',
       zoj_configured: true,
@@ -196,6 +198,7 @@ async function get(url, options = {}) {
       },
       capacity: { running_jobs: 1, queued_jobs: 3 },
     };
+  }
   if (url === '/problems/p') {
     workspaceReads++;
     return JSON.parse(JSON.stringify(state));
@@ -391,6 +394,7 @@ beforeEach(() => {
   requestGate = null;
   detailGate = null;
   historyGate = null;
+  environmentGate = null;
   advancedLimits = null;
   const main = {
     name: 'main.py',
@@ -4489,4 +4493,315 @@ test('a self-test upload failure keeps the edited values for retry and does not 
   unitUploadFailure = null;
   await click('수정');
   assert.equal(host.querySelector('dialog'), null);
+});
+
+function packageIncompatible(details = {}) {
+  return new (source('lib/api.ts').ApiError)(400, {
+    code: 'zoj_incompatible',
+    message: 'ZOJ에서 지원하지 않는 문제 구성입니다.',
+    issues: [],
+    unsupported_extra_validators: [],
+    unsupported_solution_files: [],
+    ...details,
+  });
+}
+
+test('ZOJ package preflight shows both cause file lists and keeps unrelated issues without a long toast', async () => {
+  const before = global.structuredClone(state.document);
+  requestError = packageIncompatible({
+    unsupported_extra_validators: ['second.cpp', 'second.cpp', null],
+    unsupported_solution_files: ['grader+#<img>.cpp'],
+    issues: [
+      '추가 Validator(second.cpp)는 지원되지 않습니다.',
+      '풀이 결합 파일(grader+#<img>.cpp)은 지원되지 않습니다.',
+      '그룹·부분 점수는 지원하지 않습니다.',
+      '그룹·부분 점수는 지원하지 않습니다.',
+    ],
+  });
+  await mount('packages');
+  await click('검증 후 패키지 생성');
+  const notice = host.querySelector('[aria-label="ZOJ 패키지 호환성 안내"]');
+  assert.ok(notice);
+  assert.equal(document.activeElement, notice);
+  assert.match(notice.textContent, /작업 생성 전 호환성 검사에서 중단/);
+  assert.match(notice.textContent, /커밋본 기준.*현재 작업 사본과 다를/s);
+  assert.match(notice.textContent, /추가 Validator · 1개/);
+  assert.match(notice.textContent, /기본 Validator 하나에 통합/);
+  assert.match(notice.textContent, /필수 grader라면 해제하지 말고/);
+  assert.match(notice.textContent, /저장·커밋하고 다시 생성/);
+  assert.match(notice.textContent, /검증을 끄더라도.*호환성 검사/s);
+  assert.equal(
+    (notice.textContent.match(/그룹·부분 점수는 지원하지 않습니다/g) || [])
+      .length,
+    1,
+  );
+  assert.doesNotMatch(
+    notice.textContent,
+    /추가 Validator\(second|풀이 결합 파일\(grader/,
+  );
+  assert.equal(notice.querySelectorAll('li code').length, 2);
+  assert.equal(notice.querySelector('img'), null);
+  assert.equal(
+    notice.querySelectorAll('ul[tabindex="0"][aria-label]').length,
+    2,
+  );
+  assert.deepEqual(
+    [...notice.querySelectorAll('a')].map((a) => a.getAttribute('href')),
+    [
+      '/problems/p/validator',
+      '/problems/p/files?file=' + encodeURIComponent('grader+#<img>.cpp'),
+    ],
+  );
+  assert.deepEqual(state.document, before);
+  assert.equal(requests.length, 1);
+  assert.equal(
+    jobs.some((j) => j.id === 'new-package'),
+    false,
+  );
+  assert.doesNotMatch(
+    host.querySelector('.workspace-main > .notice')?.textContent || '',
+    /ZOJ에서 지원하지 않는/,
+  );
+});
+
+test('Additional Validator guidance opens the actual selected program settings without changing them', async () => {
+  state.document.files['extra.cpp'] = {
+    ...state.document.files['validator.cpp'],
+    name: 'extra.cpp',
+  };
+  state.document.extra_validators = ['extra.cpp'];
+  requestError = packageIncompatible({
+    unsupported_extra_validators: ['extra.cpp'],
+  });
+  await mount('packages');
+  const before = global.structuredClone(state.document);
+  await click('검증 후 패키지 생성');
+  const notice = host.querySelector('.package-compatibility');
+  assert.doesNotMatch(notice.textContent, /풀이와 함께 컴파일하는 파일/);
+  await act(async () =>
+    notice.querySelector('a[href="/problems/p/validator"]').click(),
+  );
+  await flush();
+  const selected = [
+    ...host.querySelectorAll('.component-extra-validators label'),
+  ].find((label) => label.textContent.trim() === 'extra.cpp');
+  assert.ok(selected.querySelector('input').checked);
+  assert.equal(host.querySelector('.package-compatibility'), null);
+  assert.deepEqual(state.document, before);
+  assert.equal(requests.length, 1);
+});
+
+test('Imported grader flag on a Python file can be inspected and disabled through the exact file link', async () => {
+  const name = 'imported_grader.py';
+  state.document.files[name] = {
+    ...state.document.files['validator.cpp'],
+    name,
+    language: 'python3',
+    roles: [],
+    compile_with_solution: true,
+  };
+  requestError = packageIncompatible({ unsupported_solution_files: [name] });
+  await mount('packages');
+  await click('검증 후 패키지 생성');
+  const notice = host.querySelector('.package-compatibility');
+  assert.doesNotMatch(notice.textContent, /추가 Validator ·/);
+  const link = notice.querySelector('a');
+  assert.equal(
+    link.getAttribute('href'),
+    `/problems/p/files?file=${encodeURIComponent(name)}`,
+  );
+  await act(async () => link.click());
+  await flush();
+  const dialog = host.querySelector('dialog');
+  const label = [...dialog.querySelectorAll('label')].find(
+    (label) => label.textContent.trim() === '풀이와 함께 컴파일 (grader)',
+  );
+  assert.ok(label);
+  const flag = label.querySelector('input');
+  assert.ok(flag.checked);
+  await act(async () => flag.click());
+  await flush();
+  assert.ok(dialog.contains(flag));
+  assert.equal(flag.checked, false);
+  assert.equal(state.document.files[name].compile_with_solution, true);
+  assert.equal(requests.length, 1);
+  await click('작업 사본에 반영');
+  assert.equal(host.querySelector('dialog'), null);
+  assert.match(
+    host.querySelector('.working-state').textContent,
+    /저장하지 않은 변경/,
+  );
+  assert.equal(requests.length, 1);
+});
+
+for (const details of [
+  {
+    issues: [
+      '추가 validator와 풀이 결합 파일은 ZOJ 채점에서 동일하게 실행되지 않습니다.',
+    ],
+  },
+  {
+    message:
+      '추가 validator와 풀이 결합 파일은 ZOJ 채점에서 동일하게 실행되지 않습니다.',
+  },
+]) {
+  test(`Older package error supports ${details.issues ? 'issues' : 'message'} without inventing filenames or requiring both causes`, async () => {
+    const error = packageIncompatible(details);
+    delete error.details.unsupported_extra_validators;
+    delete error.details.unsupported_solution_files;
+    requestError = error;
+    await mount('packages');
+    await click('검증 후 패키지 생성');
+    const notice = host.querySelector('.package-compatibility');
+    assert.ok(notice);
+    assert.match(notice.textContent, /추가 validator와 풀이 결합 파일은/);
+    assert.match(notice.textContent, /필수.*무작정 해제하지/s);
+    assert.equal(notice.querySelectorAll('code').length, 0);
+    assert.deepEqual(
+      [...notice.querySelectorAll('a')].map((a) => a.getAttribute('href')),
+      ['/problems/p/validator', '/problems/p/files'],
+    );
+  });
+}
+
+test('Package compatibility preserves other reasons with empty or malformed structured fields', async () => {
+  requestError = packageIncompatible({
+    issues: [
+      '대화형 문제는 지원하지 않습니다.',
+      null,
+      '',
+      '그룹별 점수를 지원하지 않습니다.',
+    ],
+    unsupported_extra_validators: 'unexpected',
+    unsupported_solution_files: [false, {}],
+  });
+  await mount('packages');
+  await click('검증 후 패키지 생성');
+  const notice = host.querySelector('.package-compatibility');
+  assert.match(notice.textContent, /대화형 문제는 지원하지 않습니다/);
+  assert.match(notice.textContent, /그룹별 점수를 지원하지 않습니다/);
+  assert.equal(notice.querySelectorAll('a').length, 0);
+});
+
+test('Changing package format clears compatibility guidance permanently and a new ordinary error uses the normal notice', async () => {
+  requestError = packageIncompatible({
+    unsupported_extra_validators: ['before.cpp'],
+  });
+  await mount('packages');
+  await click('검증 후 패키지 생성');
+  assert.ok(host.querySelector('.package-compatibility'));
+  await setControl('패키지 형식', 'editor');
+  assert.equal(host.querySelector('.package-compatibility'), null);
+  await setControl('패키지 형식', 'zoj');
+  assert.equal(host.querySelector('.package-compatibility'), null);
+  requestError = new Error('새 요청의 연결이 끊겼습니다.');
+  await click('검증 후 패키지 생성');
+  assert.equal(host.querySelector('.package-compatibility'), null);
+  assert.match(host.textContent, /새 요청의 연결이 끊겼습니다/);
+});
+
+test('A remote new commit clears package compatibility guidance before updating the working copy', async () => {
+  requestError = packageIncompatible({
+    unsupported_solution_files: ['old.cpp'],
+  });
+  await mount('packages');
+  await click('검증 후 패키지 생성');
+  assert.ok(host.querySelector('.package-compatibility'));
+  await remoteCommit(2);
+  assert.equal(host.querySelector('.package-compatibility'), null);
+  assert.match(host.querySelector('.working-state').textContent, /공유 r2/);
+  assert.equal(state.problem.revision, 1);
+});
+
+for (const transition of ['format', 'commit', 'page']) {
+  test(`A late package preflight rejection is ignored after ${transition} changes`, async () => {
+    let reject;
+    requestGate = {
+      promise: new Promise((resolve, fail) => {
+        reject = fail;
+      }),
+    };
+    await mount('packages');
+    await click('검증 후 패키지 생성');
+    assert.equal(requests.length, 1);
+    if (transition === 'format') {
+      await setControl('패키지 형식', 'linux');
+      await setControl('패키지 형식', 'zoj');
+    } else if (transition === 'commit') await remoteCommit(2);
+    else {
+      const link = [...host.querySelectorAll('a')].find(
+        (a) => a.getAttribute('href') === '/problems/p/validator',
+      );
+      await act(async () => link.click());
+      await flush();
+    }
+    await act(async () =>
+      reject(
+        packageIncompatible({ unsupported_solution_files: ['stale.cpp'] }),
+      ),
+    );
+    await flush();
+    assert.equal(host.querySelector('.package-compatibility'), null);
+    assert.doesNotMatch(host.textContent, /stale\.cpp/);
+  });
+}
+
+for (const setting of ['sets', 'language', 'verification']) {
+  test(`Changing package ${setting} clears the previous request guidance`, async () => {
+    state.document.statements.english = {
+      ...state.document.statements.korean,
+      name: 'Sum',
+    };
+    requestError = packageIncompatible({
+      issues: ['선택한 세트의 그룹별 점수를 지원하지 않습니다.'],
+    });
+    await mount('packages');
+    await click('검증 후 패키지 생성');
+    assert.ok(host.querySelector('.package-compatibility'));
+    if (setting === 'sets')
+      await selectSets('ZOJ에서 사용할 테스트 세트', ['extra']);
+    else if (setting === 'language')
+      await setControl('ZOJ 기본 지문 언어', 'english');
+    else
+      await act(() =>
+        host.querySelector('[aria-label="패키지 생성 전 검증"]').click(),
+      );
+    await flush();
+    assert.equal(host.querySelector('.package-compatibility'), null);
+  });
+}
+
+test('Slow execution environment response does not hide an already rejected ZOJ package', async () => {
+  const environment = await get('/execution-environment');
+  let resolve;
+  environmentGate = {
+    promise: new Promise((done) => {
+      resolve = done;
+    }),
+  };
+  requestError = packageIncompatible({
+    unsupported_extra_validators: ['extra.cpp'],
+  });
+  await mount('packages');
+  assert.match(host.textContent, /서버의 실행 한도를 확인하고 있습니다/);
+  await click('검증 후 패키지 생성');
+  assert.ok(host.querySelector('.package-compatibility'));
+  await act(async () => resolve(environment));
+  await flush();
+  assert.ok(host.querySelector('.package-compatibility'));
+  assert.match(host.textContent, /세트당 테스트 최대/);
+});
+
+test('A structured package error without issues retains the complete fallback message', async () => {
+  requestError = packageIncompatible({
+    unsupported_extra_validators: ['extra.cpp'],
+    message:
+      '추가 Validator(extra.cpp)는 지원되지 않습니다. 별도의 지문 설정도 확인하세요.',
+  });
+  await mount('packages');
+  await click('검증 후 패키지 생성');
+  assert.match(
+    host.querySelector('.package-compatibility').textContent,
+    /별도의 지문 설정도 확인하세요/,
+  );
 });

@@ -391,7 +391,9 @@ export default function ProblemWorkspace() {
     invocations: <Executions key="invocations" />,
     verification: <Executions key="verification" verification />,
     stress: <Executions key="stress" stress />,
-    packages: <Executions key="packages" packages />,
+    packages: (
+      <Executions key="packages" packages sharedRevision={sharedRevision} />
+    ),
     issues: <Collaboration />,
     access: <Collaboration access />,
     revisions: <Revisions />,

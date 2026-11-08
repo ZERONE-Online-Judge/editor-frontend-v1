@@ -887,15 +887,16 @@ export function FileEditor({
           </fieldset>
         )}
         {!solutions &&
-          ([
-            'cpp17',
-            'cpp20',
-            'c17',
-            'c99',
-            'java17',
-            'java8',
-            'kotlin',
-          ].includes(language) ||
+          (asset?.compile_with_solution ||
+            [
+              'cpp17',
+              'cpp20',
+              'c17',
+              'c99',
+              'java17',
+              'java8',
+              'kotlin',
+            ].includes(language) ||
             (kind === 'resource' && /\.(a|o)$/i.test(name))) && (
             <label className="checkbox">
               <input

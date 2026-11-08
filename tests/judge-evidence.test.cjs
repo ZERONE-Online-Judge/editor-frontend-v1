@@ -62,6 +62,7 @@ loaded.require = (id) => {
     id === './GeneratedTestResults' ||
     id === './ValidationResults' ||
     id === './JudgeCompatibilityNotice' ||
+    id === './ZojPackageCompatibilityNotice' ||
     id === './InvocationComments' ||
     id === './StressControls' ||
     id === './StressCounterexamples' ||
