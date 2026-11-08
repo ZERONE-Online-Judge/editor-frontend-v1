@@ -5,42 +5,71 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { api, post, ApiError } from './api';
+import { post, ApiError } from './api';
+import { authRequest, AuthRequestTimeoutError } from './authRequest';
 import type { User } from './types';
 import { AuthContext } from './authContext';
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, applyUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const generation = useRef(0);
+  const checkingAccount = useRef(true);
   const setUser = useCallback((value: User | null) => {
     generation.current += 1;
+    checkingAccount.current = false;
     applyUser(value);
+    setLoading(false);
+    setConnectionError(null);
   }, []);
-  const [loading, setLoading] = useState(true);
+  const retryAuthentication = useCallback(() => {
+    generation.current += 1;
+    checkingAccount.current = true;
+    setLoading(true);
+    setConnectionError(null);
+    setAttempt((previous) => previous + 1);
+  }, []);
   const accountId = user?.account_id;
   useEffect(() => {
     let active = true;
+    const abort = new AbortController();
     const version = generation.current;
-    api<User>('/auth/me')
+    authRequest<User>('/auth/me', abort.signal)
       .then((u) => {
         if (active && version === generation.current) setUser(u);
       })
-      .catch(() => {})
+      .catch((error) => {
+        if (!active || version !== generation.current) return;
+        if (error instanceof ApiError && error.status === 401) setUser(null);
+        else
+          setConnectionError(
+            error instanceof AuthRequestTimeoutError
+              ? error.message
+              : '로그인 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+          );
+      })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active && version === generation.current) {
+          checkingAccount.current = false;
+          setLoading(false);
+        }
       });
     return () => {
       active = false;
+      abort.abort();
     };
-  }, [setUser]);
+  }, [attempt, setUser]);
   useEffect(() => {
     let active = true;
     let pending = false;
+    const abort = new AbortController();
     async function refreshWhenVisible() {
-      if (document.hidden || pending) return;
+      if (checkingAccount.current || document.hidden || pending) return;
       const version = generation.current;
       pending = true;
       try {
-        const current = await api<User>('/auth/me');
+        const current = await authRequest<User>('/auth/me', abort.signal);
         if (active && version === generation.current) setUser(current);
       } catch (e) {
         if (
@@ -71,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     return () => {
       active = false;
+      abort.abort();
       window.removeEventListener('focus', refreshWhenVisible);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
       stream?.close();
@@ -81,7 +111,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, [setUser]);
   return (
-    <AuthContext.Provider value={{ user, loading, setUser, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        connectionError,
+        retryAuthentication,
+        setUser,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

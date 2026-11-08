@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { api, ApiError } from '../lib/api';
+import { ApiError } from '../lib/api';
+import { authRequest } from '../lib/authRequest';
+import AuthenticationError from '../components/AuthenticationError';
 import { useAuth } from '../lib/authContext';
 import {
   editorReturnPath,
@@ -9,14 +11,15 @@ import {
 } from '../lib/sharedLogin';
 import LocalLogin from './LocalLogin';
 export default function Login() {
-  const { user, loading } = useAuth();
+  const { user, loading, connectionError, retryAuthentication } = useAuth();
   const [mode, setMode] = useState<'local' | 'zoj' | null>(null);
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
-    if (loading || user) return;
+    if (loading || user || connectionError) return;
     let active = true;
-    api<{ mode: 'local' | 'zoj' }>('/auth/config')
+    const abort = new AbortController();
+    authRequest<{ mode: 'local' | 'zoj' }>('/auth/config', abort.signal)
       .then((config) => {
         if (!active) return;
         if (config.mode === 'zoj') redirectToSharedLogin();
@@ -30,15 +33,31 @@ export default function Login() {
       });
     return () => {
       active = false;
+      abort.abort();
     };
-  }, [loading, user, retry]);
+  }, [loading, user, connectionError, retry]);
   useEffect(() => {
-    const redirect = () => redirectToSharedLogin();
+    const redirect = () => {
+      if (!loading && !connectionError) redirectToSharedLogin();
+    };
     window.addEventListener('zoj-central-login-required', redirect);
     return () =>
       window.removeEventListener('zoj-central-login-required', redirect);
-  }, []);
+  }, [loading, connectionError]);
   if (user) return <Navigate to={editorReturnPath()} replace />;
+  if (loading)
+    return (
+      <div className="loading" role="status">
+        계정을 확인하고 있습니다.
+      </div>
+    );
+  if (connectionError)
+    return (
+      <AuthenticationError
+        message={connectionError}
+        onRetry={retryAuthentication}
+      />
+    );
   if (mode === 'local') return <LocalLogin />;
   return (
     <section className="login-page">
@@ -61,9 +80,11 @@ export default function Login() {
         ) : (
           <p role="status">ZOJ 공통 로그인으로 이동하고 있습니다.</p>
         )}
-        <a className="button primary large" href={sharedLoginUrl()}>
-          ZOJ 로그인으로 계속
-        </a>
+        {!error && (
+          <a className="button primary large" href={sharedLoginUrl()}>
+            ZOJ 로그인으로 계속
+          </a>
+        )}
       </div>
     </section>
   );

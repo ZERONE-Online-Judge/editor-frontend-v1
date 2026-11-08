@@ -64,6 +64,12 @@ const mocks = {
 };
 for (const mock of Object.values(mocks))
   if ('default' in mock) mock.__esModule = true;
+mocks['../lib/authRequest'] = compile('lib/authRequest.ts', {
+  './api': mocks['../lib/api'],
+});
+mocks['../components/AuthenticationError'] = compile(
+  'components/AuthenticationError.tsx',
+);
 const Login = compile('pages/Login.tsx', mocks).default;
 after(() => dom.window.close());
 async function mount() {

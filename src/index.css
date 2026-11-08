@@ -2939,6 +2939,13 @@ svg {
   line-height: 1.9;
   margin-top: 12px;
 }
+.login-panel.auth-connection-error {
+  display: grid;
+  gap: 20px;
+}
+.login-panel.auth-connection-error > p {
+  margin-top: 0;
+}
 .login-panel form {
   display: grid;
   gap: 20px;

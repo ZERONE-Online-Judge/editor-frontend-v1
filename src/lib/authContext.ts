@@ -3,9 +3,18 @@ import type { User } from './types';
 export const AuthContext = createContext<{
   user: User | null;
   loading: boolean;
+  connectionError: string | null;
+  retryAuthentication: () => void;
   setUser: (user: User | null) => void;
   logout: () => Promise<void>;
-}>({ user: null, loading: true, setUser: () => {}, logout: async () => {} });
+}>({
+  user: null,
+  loading: true,
+  connectionError: null,
+  retryAuthentication: () => {},
+  setUser: () => {},
+  logout: async () => {},
+});
 export function useAuth() {
   return useContext(AuthContext);
 }

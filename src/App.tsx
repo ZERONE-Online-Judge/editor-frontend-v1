@@ -19,6 +19,7 @@ import { useAuth } from './lib/authContext';
 import type { User } from './lib/types';
 import { Empty, Icon, Modal, Notice, SectionHeading } from './components/ui';
 import Login from './pages/Login';
+import AuthGuard from './components/AuthGuard';
 import PasswordForm from './components/PasswordForm';
 import PasswordSetupGuidance from './components/PasswordSetupGuidance';
 import Problems from './pages/Problems';
@@ -235,24 +236,6 @@ function Layout() {
     </div>
   );
 }
-function Protected() {
-  const location = useLocation();
-  const { user, loading } = useAuth();
-  if (loading) return <div className="loading">계정을 확인하고 있습니다.</div>;
-  return user ? (
-    <Outlet />
-  ) : (
-    <Navigate
-      to={
-        '/login?' +
-        new URLSearchParams({
-          next: location.pathname + location.search + location.hash,
-        })
-      }
-      replace
-    />
-  );
-}
 function WorkspaceRoute() {
   const { problemId } = useParams();
   return (
@@ -429,7 +412,7 @@ const router = createBrowserRouter([
       { path: '/logout', element: <Logout /> },
       { path: '/help', element: <Help /> },
       {
-        element: <Protected />,
+        element: <AuthGuard />,
         children: [
           { path: '/problems', element: <Problems /> },
           { path: '/problems/zoj-transfer', element: <ZojTransfer /> },

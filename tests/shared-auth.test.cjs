@@ -47,7 +47,20 @@ const loaded = new Module(file, module);
 loaded.filename = file;
 loaded.paths = Module._nodeModulePaths(path.dirname(file));
 const native = loaded.require.bind(loaded);
-loaded.require = (id) => mocks[id] || native(id);
+const requestFile = path.resolve(__dirname, '../src/lib/authRequest.ts');
+const requestModule = new Module(requestFile, module);
+requestModule.filename = requestFile;
+requestModule.paths = Module._nodeModulePaths(path.dirname(requestFile));
+const requestNative = requestModule.require.bind(requestModule);
+requestModule.require = (id) => mocks[id] || requestNative(id);
+requestModule._compile(
+  ts.transpileModule(fs.readFileSync(requestFile, 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS },
+  }).outputText,
+  requestFile,
+);
+loaded.require = (id) =>
+  (id === './authRequest' ? requestModule.exports : mocks[id]) || native(id);
 loaded._compile(
   ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: {
