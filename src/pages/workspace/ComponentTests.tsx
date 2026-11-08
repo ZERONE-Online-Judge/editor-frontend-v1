@@ -262,11 +262,17 @@ function ComponentTestsPage({
           <Select
             value={doc[kind]}
             disabled={!editable}
-            onChange={(e) =>
+            onChange={(e) => {
+              if (!editable) return;
+              const name = e.target.value;
               mutate((d) => {
-                d[kind] = e.target.value;
-              })
-            }
+                d[kind] = name;
+                if (kind === 'validator' && name)
+                  d.extra_validators = d.extra_validators.filter(
+                    (extra) => extra !== name,
+                  );
+              });
+            }}
           >
             <option value="">선택하지 않음</option>
             {kind === 'checker' &&
@@ -292,6 +298,38 @@ function ComponentTestsPage({
         {kind === 'validator' && (
           <div className="component-extra-validators">
             <h3>추가 Validator</h3>
+            {doc.validator && doc.extra_validators.includes(doc.validator) && (
+              <Notice>
+                <p>
+                  기본 Validator <code>{doc.validator}</code>가 추가 목록에도
+                  중복 연결되어 있습니다. 기본 프로그램은 유지하고 중복 연결만
+                  해제하세요.
+                </p>
+                <div className="actions">
+                  <button
+                    className="button small"
+                    disabled={!editable}
+                    onClick={() => {
+                      if (!editable) return;
+                      const primary = doc.validator;
+                      mutate((d) => {
+                        if (d.validator === primary)
+                          d.extra_validators = d.extra_validators.filter(
+                            (extra) => extra !== primary,
+                          );
+                      });
+                    }}
+                  >
+                    중복 추가 연결 해제
+                  </button>
+                  <span className="muted small">
+                    {editable
+                      ? '해제 후 작업 사본을 저장·커밋하세요.'
+                      : '파일·구성요소 편집 권한이 필요합니다.'}
+                  </span>
+                </div>
+              </Notice>
+            )}
             <div className="checkbox-list">
               {sources
                 .filter((f) => f.name !== doc.validator)

@@ -4805,3 +4805,172 @@ test('A structured package error without issues retains the complete fallback me
     /별도의 지문 설정도 확인하세요/,
   );
 });
+
+function addValidatorSource(name, roles = ['validator']) {
+  state.document.files[name] = {
+    ...state.document.files['validator.cpp'],
+    name,
+    roles,
+  };
+}
+function extraValidatorCheckbox(name) {
+  const label = [
+    ...host.querySelectorAll('.component-extra-validators label.checkbox'),
+  ].find((item) => item.textContent.trim() === name);
+  return label?.querySelector('input');
+}
+function duplicateValidatorButton() {
+  return [...host.querySelectorAll('button')].find(
+    (button) => button.textContent.trim() === '중복 추가 연결 해제',
+  );
+}
+
+test('Validator selection removes only the newly selected primary from extra connections', async () => {
+  addValidatorSource('next.cpp');
+  addValidatorSource('keep.cpp');
+  state.document.extra_validators = ['keep.cpp'];
+  saveEnabled = true;
+  await mount('validator');
+  await act(async () => extraValidatorCheckbox('next.cpp').click());
+  await flush();
+  assert.ok(extraValidatorCheckbox('next.cpp').checked);
+  await setControl('사용할 Validator 프로그램', 'next.cpp');
+  assert.equal(control('사용할 Validator 프로그램').value, 'next.cpp');
+  assert.equal(extraValidatorCheckbox('next.cpp'), undefined);
+  assert.ok(extraValidatorCheckbox('keep.cpp').checked);
+  assert.equal(extraValidatorCheckbox('validator.cpp').checked, false);
+  assert.equal(duplicateValidatorButton(), undefined);
+  assert.deepEqual(requests, []);
+  await click('작업 사본 저장');
+  assert.equal(state.document.validator, 'next.cpp');
+  assert.deepEqual(state.document.extra_validators, ['keep.cpp']);
+  assert.deepEqual(Object.keys(state.document.files), [
+    'validator.cpp',
+    'next.cpp',
+    'keep.cpp',
+  ]);
+  assert.deepEqual(
+    requests.map((request) => request.url),
+    ['/problems/p/working-copy'],
+  );
+});
+
+test('Existing duplicate Validator connections remain unchanged until explicit cleanup preserves the primary and other extras', async () => {
+  addValidatorSource('keep.cpp');
+  state.document.extra_validators = [
+    'validator.cpp',
+    'keep.cpp',
+    'validator.cpp',
+  ];
+  const before = global.structuredClone(state.document);
+  saveEnabled = true;
+  await mount('validator');
+  assert.equal(control('사용할 Validator 프로그램').value, 'validator.cpp');
+  assert.ok(duplicateValidatorButton());
+  assert.match(
+    host.querySelector('.component-extra-validators .notice').textContent,
+    /기본 프로그램은 유지/,
+  );
+  assert.deepEqual(state.document, before);
+  assert.deepEqual(requests, []);
+  assert.doesNotMatch(
+    host.querySelector('.working-state').textContent,
+    /저장하지 않은 변경/,
+  );
+  await click('중복 추가 연결 해제');
+  assert.equal(duplicateValidatorButton(), undefined);
+  assert.equal(control('사용할 Validator 프로그램').value, 'validator.cpp');
+  assert.ok(extraValidatorCheckbox('keep.cpp').checked);
+  assert.match(
+    host.querySelector('.working-state').textContent,
+    /저장하지 않은 변경/,
+  );
+  assert.deepEqual(state.document, before);
+  assert.deepEqual(requests, []);
+  await click('작업 사본 저장');
+  assert.equal(state.document.validator, 'validator.cpp');
+  assert.deepEqual(state.document.extra_validators, ['keep.cpp']);
+  assert.deepEqual(state.document.files, before.files);
+  assert.equal(state.problem.revision, 1);
+  assert.deepEqual(
+    requests.map((request) => request.url),
+    ['/problems/p/working-copy'],
+  );
+});
+
+for (const [role, permissions] of [
+  ['READ', []],
+  ['OWNER', ['execute']],
+]) {
+  test(`Duplicate Validator cleanup respects explicit edit permissions for ${role}`, async () => {
+    state.problem.role = role;
+    state.problem.permissions = permissions;
+    state.document.extra_validators = ['validator.cpp'];
+    const before = global.structuredClone(state.document);
+    await mount('validator');
+    const cleanup = duplicateValidatorButton();
+    assert.ok(cleanup.disabled);
+    assert.match(
+      host.querySelector('.component-extra-validators .notice').textContent,
+      /파일·구성요소 편집 권한/,
+    );
+    await act(async () => cleanup.click());
+    await setControl('사용할 Validator 프로그램', '');
+    assert.equal(control('사용할 Validator 프로그램').value, 'validator.cpp');
+    assert.ok(duplicateValidatorButton());
+    assert.deepEqual(state.document, before);
+    assert.deepEqual(requests, []);
+  });
+}
+
+test('A delegated file editor can explicitly clean duplicate Validator connections', async () => {
+  state.problem.role = 'READ';
+  state.problem.permissions = ['edit_files'];
+  state.document.extra_validators = ['validator.cpp'];
+  saveEnabled = true;
+  await mount('validator');
+  assert.equal(duplicateValidatorButton().disabled, false);
+  await click('중복 추가 연결 해제');
+  await click('작업 사본 저장');
+  assert.equal(state.document.validator, 'validator.cpp');
+  assert.deepEqual(state.document.extra_validators, []);
+});
+
+test('Running Validator self-tests does not silently alter existing duplicate connections', async () => {
+  state.document.extra_validators = ['validator.cpp'];
+  const before = global.structuredClone(state.document);
+  await mount('validator');
+  await click('테스트 실행');
+  assert.deepEqual(state.document, before);
+  assert.deepEqual(
+    requests.map((request) => request.url),
+    ['/problems/p/jobs'],
+  );
+  assert.equal(requests[0].body.kind, 'validator-tests');
+});
+
+test('Clearing the primary Validator does not promote an extra Validator automatically', async () => {
+  addValidatorSource('extra.cpp');
+  state.document.extra_validators = ['extra.cpp'];
+  saveEnabled = true;
+  await mount('validator');
+  await setControl('사용할 Validator 프로그램', '');
+  assert.equal(control('사용할 Validator 프로그램').value, '');
+  assert.ok(extraValidatorCheckbox('extra.cpp').checked);
+  assert.equal(duplicateValidatorButton(), undefined);
+  await click('작업 사본 저장');
+  assert.equal(state.document.validator, '');
+  assert.deepEqual(state.document.extra_validators, ['extra.cpp']);
+});
+
+test('Selecting a Checker does not remove that file from extra Validator connections', async () => {
+  addValidatorSource('shared.cpp', ['checker', 'validator']);
+  state.document.extra_validators = ['shared.cpp'];
+  saveEnabled = true;
+  await mount('checker');
+  await setControl('사용할 Checker 프로그램', 'shared.cpp');
+  await click('작업 사본 저장');
+  assert.equal(state.document.checker, 'shared.cpp');
+  assert.equal(state.document.validator, 'validator.cpp');
+  assert.deepEqual(state.document.extra_validators, ['shared.cpp']);
+});
