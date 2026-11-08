@@ -3,6 +3,18 @@
   display: none;
 }
 
+.review-page > .section-heading > .actions {
+  max-width: 100%;
+  flex-wrap: nowrap;
+}
+.review-page > .section-heading > .actions > select {
+  width: 180px;
+  flex: 1 1 180px;
+}
+.review-page > .section-heading > .actions > .button {
+  flex: 0 0 auto;
+}
+
 .review-print-description {
   line-height: 1.8;
   color: var(--zoj-muted);
@@ -181,6 +193,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
     gap: 6mm;
+  }
+  .review-page .problem-preview > .review-sample-pair {
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   .review-sample-print {
     display: block;
