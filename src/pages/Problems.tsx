@@ -22,6 +22,7 @@ import {
 import type { SharedFolderTab } from '../components/SharedFolders';
 import SharedFolderOverview from '../components/SharedFolderOverview';
 import SharedFolderHistory from '../components/SharedFolderHistory';
+import FolderPackageExport from '../components/FolderPackageExport';
 import {
   folderRoles,
   shareScopeChanges,
@@ -361,6 +362,22 @@ export default function Problems() {
               </span>
             </nav>
             <div className="actions">
+              {current && filter !== 'deleted' && (
+                <button
+                  className="button small"
+                  onClick={() =>
+                    setParams((previous) => {
+                      const next = new URLSearchParams(previous);
+                      next.set('action', 'export');
+                      next.delete('export');
+                      return next;
+                    })
+                  }
+                >
+                  <Icon name="download" size={15} />
+                  패키지 일괄 다운로드
+                </button>
+              )}
               <button
                 className="button small"
                 disabled={!writable}
@@ -752,6 +769,32 @@ export default function Problems() {
           )}
         </div>
       </div>
+      {current &&
+        user &&
+        (params.get('action') === 'export' || params.has('export')) && (
+          <FolderPackageExport
+            key={`${user.id}/${current.id}`}
+            folder={current}
+            exportId={params.get('export')}
+            onSelect={(id) =>
+              setParams((previous) => {
+                const next = new URLSearchParams(previous);
+                next.set('action', 'export');
+                if (id) next.set('export', id);
+                else next.delete('export');
+                return next;
+              })
+            }
+            onClose={() =>
+              setParams((previous) => {
+                const next = new URLSearchParams(previous);
+                if (next.get('action') === 'export') next.delete('action');
+                next.delete('export');
+                return next;
+              })
+            }
+          />
+        )}
       {newShared && (
         <NewSharedFolder
           onClose={() => setNewShared(false)}
