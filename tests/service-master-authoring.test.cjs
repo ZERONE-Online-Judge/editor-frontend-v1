@@ -24,6 +24,12 @@ const { act, createElement: h } = React;
 const { createRoot } = require('react-dom/client');
 const { MemoryRouter } = require('react-router-dom');
 let user, calls, respond, root, host;
+class ApiError extends Error {
+  constructor(status) {
+    super('서비스 마스터 권한이 필요합니다.');
+    this.status = status;
+  }
+}
 const cache = new Map();
 function source(relative) {
   const filename = path.resolve(__dirname, '../src', relative);
@@ -37,6 +43,7 @@ function source(relative) {
     if (id.endsWith('/authContext')) return { useAuth: () => ({ user }) };
     if (id.endsWith('/api'))
       return {
+        ApiError,
         api: (url, options = {}) => {
           calls.push({ url, options });
           return respond(url, options);
@@ -237,4 +244,35 @@ test('pending responses cannot leak metadata after permission loss or account ch
   await render();
   assert.match(host.textContent, /함께 만드는 문제 new/);
   assert.doesNotMatch(host.textContent, /함께 만드는 문제 p/);
+});
+
+test('a denied detail hides all directory metadata even while the account claim remains stale', async () => {
+  for (const status of [401, 403]) {
+    user = { ...user, id: `master-${status}` };
+    respond = async () => list();
+    await render();
+    assert.match(host.textContent, /author@example.test/);
+    respond = async () => {
+      throw new ApiError(status);
+    };
+    await click('함께 만드는 문제 p 제작자 상세');
+    assert.match(host.textContent, /접근 권한이 변경되었거나 로그인이 만료/);
+    assert.doesNotMatch(
+      host.textContent,
+      /함께 만드는 문제|author@example.test/,
+    );
+    assert.equal(host.querySelector('dialog'), null);
+    const count = calls.length;
+    await render();
+    assert.equal(calls.length, count);
+    assert.doesNotMatch(
+      host.textContent,
+      /함께 만드는 문제|author@example.test/,
+    );
+  }
+  user = { ...user, id: 'another-master' };
+  respond = async () => list([problem('new')]);
+  await render();
+  assert.match(host.textContent, /함께 만드는 문제 new/);
+  assert.equal(host.querySelector('dialog'), null);
 });

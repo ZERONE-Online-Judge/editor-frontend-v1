@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from 'react-router-dom';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import Pagination, { PaginatedList } from '../components/Pagination';
 import Select from '../components/Select';
 import {
@@ -47,14 +47,17 @@ function AuthoringDetails({
   id,
   accountId,
   onClose,
+  onAccessDenied,
 }: {
   id: string;
   accountId: string;
   onClose: () => void;
+  onAccessDenied: () => void;
 }) {
   const { data, error, loading, refresh } = useMasterMetadata<AuthoringDetail>(
     `/service-master/problems/${encodeURIComponent(id)}`,
     accountId,
+    onAccessDenied,
   );
   return (
     <Modal
@@ -165,11 +168,21 @@ function AuthoringDetails({
 }
 
 export default function ServiceMasterProblems() {
-  const { user } = useAuth();
+  const { user, retryAuthentication } = useAuth();
   const [params, setParams] = useSearchParams();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<{
+    id: string;
+    accountId: string;
+  } | null>(null);
+  const [deniedAccount, setDeniedAccount] = useState<string | null>(null);
   const isMaster = user?.is_service_master === true;
-  const accountId = isMaster ? user.id : null;
+  const masterAccountId = isMaster ? user.id : null;
+  const accessDenied =
+    masterAccountId !== null && deniedAccount === masterAccountId;
+  const accountId = accessDenied ? null : masterAccountId;
+  const onAccessDenied = useCallback(() => {
+    setDeniedAccount(masterAccountId);
+  }, [masterAccountId]);
   const query = params.get('q') || '';
   const sort = Object.hasOwn(sortOptions, params.get('sort') || '')
     ? params.get('sort')!
@@ -183,7 +196,7 @@ export default function ServiceMasterProblems() {
   const path = `/service-master/problems?${new URLSearchParams({ q: query, sort, deleted: String(deleted), page: String(page), page_size: '10' })}`;
   const { data, error, loading, refresh } = useMasterMetadata<
     Page<AuthoringProblem>
-  >(path, accountId);
+  >(path, accountId, onAccessDenied);
 
   function filter(key: string, value: string) {
     const next = new URLSearchParams(params);
@@ -193,16 +206,31 @@ export default function ServiceMasterProblems() {
     setParams(next);
   }
 
-  if (!isMaster)
+  if (!isMaster || accessDenied)
     return (
       <div className="page-container">
         <Empty
           icon="shield"
           title="서비스 마스터 전용 화면입니다."
+          description={
+            accessDenied
+              ? '접근 권한이 변경되었거나 로그인이 만료되었습니다. 계정을 다시 확인해 주세요.'
+              : undefined
+          }
           action={
-            <Link className="button" to="/problems">
-              내 문제로 이동
-            </Link>
+            <>
+              {accessDenied && (
+                <button
+                  className="button primary"
+                  onClick={retryAuthentication}
+                >
+                  계정 다시 확인
+                </button>
+              )}
+              <Link className="button" to="/problems">
+                내 문제로 이동
+              </Link>
+            </>
           }
         />
       </div>
@@ -344,7 +372,9 @@ export default function ServiceMasterProblems() {
                 </div>
                 <button
                   className="button small"
-                  onClick={() => setSelected(problem.id)}
+                  onClick={() =>
+                    setSelected({ id: problem.id, accountId: accountId! })
+                  }
                   aria-label={`${problem.name} 제작자 상세`}
                 >
                   상세
@@ -360,12 +390,13 @@ export default function ServiceMasterProblems() {
           />
         </>
       )}
-      {selected && data && !error && (
+      {selected && selected.accountId === accountId && data && !error && (
         <AuthoringDetails
-          key={`${accountId}:${selected}`}
-          id={selected}
+          key={`${accountId}:${selected.id}`}
+          id={selected.id}
           accountId={accountId!}
           onClose={() => setSelected(null)}
+          onAccessDenied={onAccessDenied}
         />
       )}
     </div>

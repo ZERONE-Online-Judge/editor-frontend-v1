@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from './api';
+import { api, ApiError } from './api';
 
 export type AuthorIdentity = {
   id: string;
@@ -40,7 +40,11 @@ export type AuthoringDetail = {
 
 // Keep administrator metadata scoped to the current account and request.
 // Errors, account changes and permission revocation never retain old rows.
-export function useMasterMetadata<T>(path: string, accountId: string | null) {
+export function useMasterMetadata<T>(
+  path: string,
+  accountId: string | null,
+  onAccessDenied?: () => void,
+) {
   const [version, setVersion] = useState(0);
   const key = accountId ? `${accountId}:${path}:${version}` : '';
   const [state, setState] = useState<{ key: string; data?: T; error?: string }>(
@@ -55,14 +59,17 @@ export function useMasterMetadata<T>(path: string, accountId: string | null) {
         if (active) setState({ key, data });
       })
       .catch((error: Error) => {
-        if (active && !abort.signal.aborted)
+        if (active && !abort.signal.aborted) {
           setState({ key, error: error.message });
+          if (error instanceof ApiError && [401, 403].includes(error.status))
+            onAccessDenied?.();
+        }
       });
     return () => {
       active = false;
       abort.abort();
     };
-  }, [key, path, accountId]);
+  }, [key, path, accountId, onAccessDenied]);
   const result = key && state.key === key ? state : undefined;
   return {
     data: result?.data,
