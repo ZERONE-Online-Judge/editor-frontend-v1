@@ -625,6 +625,13 @@ export default function Tests() {
                   각 테스트의 ‘입력·출력 보기’ 버튼에서 내용을 확인할 수
                   있습니다.
                 </p>
+                <p id="test-sample-guidance">
+                  입력·출력을 등록한 뒤 ‘지문 예제’를 선택하면 문제 지문에 예제
+                  입출력으로 표시됩니다.{' '}
+                  <Link to={`/problems/${data.problem.id}/review`}>
+                    문제 미리보기에서 확인
+                  </Link>
+                </p>
               </div>
               <div className="actions">
                 <button
@@ -836,6 +843,8 @@ export default function Tests() {
                             <label className="checkbox">
                               <input
                                 type="checkbox"
+                                aria-label={`테스트 ${test.index} 지문 예제로 표시`}
+                                aria-describedby="test-sample-guidance"
                                 checked={test.sample}
                                 disabled={!editable}
                                 onChange={(e) =>

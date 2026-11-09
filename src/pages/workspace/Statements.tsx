@@ -40,9 +40,13 @@ export default function Statements() {
     <div className="section-stack">
       <SectionHeading
         title="문제 지문"
-        description="언어별 지문과 해설을 작성합니다. 수식은 LaTeX 문법을 사용하세요."
+        description="언어별 지문과 해설을 작성합니다. 예제 입출력은 테스트에서 추가하고 ‘지문 예제’를 선택하세요."
         actions={
           <>
+            <Link className="button" to={`/problems/${data.problem.id}/tests`}>
+              <Icon name="plus" />
+              예제 입출력 추가하기
+            </Link>
             <button className="button" onClick={() => setPreview(!preview)}>
               <Icon name="file" />
               {preview ? '편집만 보기' : '미리보기 함께 보기'}
@@ -185,9 +189,7 @@ export default function Statements() {
             <Icon name="help" />
             <p>
               수식은 <code>$a+b$</code> 또는 <code>$$…$$</code>로 작성합니다.
-              예제는 테스트 목록에서 ‘지문 예제’를 선택하세요.
             </p>
-            <Link to={`/problems/${data.problem.id}/tests`}>테스트로 이동</Link>
           </div>
         </>
       )}
