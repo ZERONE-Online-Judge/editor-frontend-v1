@@ -5,6 +5,7 @@ export type User = {
   email: string;
   handle: string;
   display_name: string;
+  is_service_master?: boolean;
 };
 export type Info = {
   name: string;

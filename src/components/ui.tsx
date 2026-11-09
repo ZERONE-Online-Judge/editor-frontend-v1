@@ -27,6 +27,9 @@ export function Icon({ name, size = 18 }: { name: string; size?: number }) {
     arrow: <path d="m9 5 7 7-7 7" />,
     down: <path d="m6 9 6 6 6-6" />,
     check: <path d="m5 12 4 4L19 6" />,
+    refresh: (
+      <path d="M3 12a9 9 0 0 1 15.36-6.36L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.36 6.36L3 16M8 16H3v5" />
+    ),
     close: <path d="m6 6 12 12M18 6 6 18" />,
     file: (
       <>

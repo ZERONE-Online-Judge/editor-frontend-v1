@@ -23,6 +23,9 @@ import AuthGuard from './components/AuthGuard';
 import PasswordForm from './components/PasswordForm';
 import PasswordSetupGuidance from './components/PasswordSetupGuidance';
 import Problems from './pages/Problems';
+const ServiceMasterProblems = lazy(
+  () => import('./pages/ServiceMasterProblems'),
+);
 const ProblemWorkspace = lazy(() => import('./pages/Workspace'));
 function Layout() {
   const { pathname, hash } = useLocation();
@@ -77,6 +80,9 @@ function Layout() {
         </Link>
         <nav aria-label="주 메뉴">
           <NavLink to="/problems">문제</NavLink>
+          {user?.is_service_master === true && (
+            <NavLink to="/service-master/problems">제작 현황</NavLink>
+          )}
           <NavLink to="/help">도움말</NavLink>
         </nav>
         <div className="account-controls">
@@ -415,6 +421,18 @@ const router = createBrowserRouter([
         element: <AuthGuard />,
         children: [
           { path: '/problems', element: <Problems /> },
+          {
+            path: '/service-master/problems',
+            element: (
+              <Suspense
+                fallback={
+                  <div className="loading">제작 현황을 불러오고 있습니다.</div>
+                }
+              >
+                <ServiceMasterProblems />
+              </Suspense>
+            ),
+          },
           { path: '/problems/zoj-transfer', element: <ZojTransfer /> },
           { path: '/problems/:problemId/:tab', element: <WorkspaceRoute /> },
           { path: '/problems/:problemId', element: <WorkspaceRoute /> },
