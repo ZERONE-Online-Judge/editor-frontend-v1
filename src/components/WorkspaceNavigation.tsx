@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Icon, Modal } from './ui';
 
@@ -66,6 +66,7 @@ export default function WorkspaceNavigation(props: NavigationProps) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const pointerFocused = useRef(false);
+  const navigationRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLElement>(null);
   const menuId = useId();
   const open = openedAt === locationKey;
@@ -76,6 +77,58 @@ export default function WorkspaceNavigation(props: NavigationProps) {
     group.items.some(([id]) => id === props.tab),
   );
   const currentItem = currentGroup?.items.find(([id]) => id === props.tab);
+
+  useLayoutEffect(() => {
+    const navigation = navigationRef.current;
+    if (!navigation) return;
+    let frame = 0;
+    function measure() {
+      frame = 0;
+      if (!navigation) return;
+      const stickyTop =
+        Number.parseFloat(window.getComputedStyle(navigation).top) || 0;
+      // Before it sticks, the sidebar also sits below the page heading.
+      const top = Math.max(stickyTop, navigation.getBoundingClientRect().top);
+      const viewport = Math.min(
+        window.innerHeight,
+        window.visualViewport?.height ?? window.innerHeight,
+      );
+      const height = `${Math.max(0, Math.floor(viewport - top - 20))}px`;
+      if (
+        navigation.style.getPropertyValue('--workspace-navigation-height') !==
+        height
+      )
+        navigation.style.setProperty('--workspace-navigation-height', height);
+    }
+    function schedule() {
+      if (!frame) frame = window.requestAnimationFrame(measure);
+    }
+    measure();
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, {
+      capture: true,
+      passive: true,
+    });
+    window.visualViewport?.addEventListener('resize', schedule);
+    window.visualViewport?.addEventListener('scroll', schedule);
+    const observer = window.ResizeObserver
+      ? new window.ResizeObserver(schedule)
+      : null;
+    for (const element of [
+      navigation,
+      navigation.parentElement,
+      navigation.closest('.workspace-page'),
+    ])
+      if (element) observer?.observe(element);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('scroll', schedule, true);
+      window.visualViewport?.removeEventListener('resize', schedule);
+      window.visualViewport?.removeEventListener('scroll', schedule);
+    };
+  }, []);
 
   function closeMenu() {
     if (!open) return;
@@ -93,7 +146,9 @@ export default function WorkspaceNavigation(props: NavigationProps) {
   }, [closingAt]);
 
   useEffect(() => {
-    const desktop = window.matchMedia?.('(min-width: 768px)');
+    const desktop = window.matchMedia?.(
+      '(min-width: 768px) and (min-height: 480px)',
+    );
     if (!desktop) return;
     const closeOnDesktop = () => {
       if (desktop.matches) {
@@ -119,6 +174,7 @@ export default function WorkspaceNavigation(props: NavigationProps) {
 
   return (
     <div
+      ref={navigationRef}
       className="workspace-navigation"
       data-collapsed={collapsed}
       data-expanded={expanded}

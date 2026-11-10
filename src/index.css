@@ -5078,6 +5078,7 @@ svg {
 /* Workspace navigation: click works on every device; hover is an enhancement. */
 .workspace-navigation {
   min-width: 0;
+  min-height: 0;
 }
 .workspace-menu-bar {
   display: flex;
@@ -5194,7 +5195,7 @@ svg {
     opacity 150ms,
     transform 200ms;
 }
-@media screen and (min-width: 768px) {
+@media screen and (min-width: 768px) and (min-height: 480px) {
   .editor-app .workspace-layout {
     grid-template-columns: 248px minmax(0, 1fr);
     gap: 24px;
@@ -5220,7 +5221,10 @@ svg {
     display: flex;
     flex-direction: column;
     width: 248px;
-    max-height: calc(100dvh - var(--workspace-navigation-top) - 20px);
+    max-height: min(
+      var(--workspace-navigation-height, 100dvh),
+      calc(100dvh - var(--workspace-navigation-top) - 20px)
+    );
     overflow: hidden;
     border: 1px solid #e2e6ed;
     border-radius: 12px;
@@ -5235,7 +5239,8 @@ svg {
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    scrollbar-width: none;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd1df transparent;
     border-top: 1px solid #edf0f4;
   }
   .workspace-navigation[data-collapsed='true'][data-expanded='false']
@@ -5344,7 +5349,7 @@ svg {
     display: none;
   }
 }
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 479px) {
   .workspace-navigation .problem-sidebar {
     display: none;
   }
@@ -5391,6 +5396,8 @@ svg {
   flex: 1;
   min-height: 0;
   max-height: none;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 16px max(12px, env(safe-area-inset-right))
     max(16px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   overscroll-behavior: contain;

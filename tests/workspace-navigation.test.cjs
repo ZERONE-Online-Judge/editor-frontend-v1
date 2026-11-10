@@ -35,7 +35,7 @@ const desktop = mediaQuery(false);
 const hover = mediaQuery(false);
 const reducedMotion = mediaQuery(true);
 window.matchMedia = (query) => {
-  if (query === '(min-width: 768px)') return desktop;
+  if (query === '(min-width: 768px) and (min-height: 480px)') return desktop;
   if (query === '(hover: hover) and (pointer: fine)') return hover;
   if (query === '(prefers-reduced-motion: reduce)') return reducedMotion;
   throw new Error(`Unexpected media query: ${query}`);
