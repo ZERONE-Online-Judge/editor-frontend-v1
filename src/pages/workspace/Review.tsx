@@ -114,6 +114,28 @@ export default function Review() {
       : language === 'english'
         ? 'English'
         : language;
+  const hasStatement = Boolean(statement);
+  useEffect(() => {
+    if (!hasStatement) return;
+    const openPrintOptions = (event: KeyboardEvent) => {
+      if (
+        !(event.ctrlKey || event.metaKey) ||
+        event.altKey ||
+        event.shiftKey ||
+        event.isComposing ||
+        event.key.toLowerCase() !== 'p'
+      )
+        return;
+      // Native printing cannot wait for authenticated image downloads. Keep
+      // repeats blocked too, while the existing print preparation owns them.
+      event.preventDefault();
+      if (event.repeat || printRequest.current) return;
+      setPrintError('');
+      setPrintOptionsOpen(true);
+    };
+    window.addEventListener('keydown', openPrintOptions, true);
+    return () => window.removeEventListener('keydown', openPrintOptions, true);
+  }, [hasStatement]);
   useEffect(() => () => printRequest.current?.abort(), [doc, language]);
   function closePrintOptions() {
     printRequest.current?.abort();
@@ -371,7 +393,8 @@ export default function Review() {
             <strong>{statement?.name || doc.info.name}</strong> ·{' '}
             {languageLabel}
             <br />
-            선택한 항목만 인쇄합니다. 화면의 미리보기는 그대로 유지됩니다.
+            선택한 항목의 이미지가 준비된 뒤 인쇄합니다. 화면의 인쇄 버튼이나
+            Ctrl+P / ⌘P를 사용해 주세요.
           </p>
           {printError && <Notice tone="error">{printError}</Notice>}
           <div className="review-print-font">

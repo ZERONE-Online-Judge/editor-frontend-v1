@@ -586,3 +586,25 @@ test('duplicate upload gestures start one request and unmounted completion does 
   );
   assert.equal(changes.length, 0);
 });
+
+test('image picker fallback uses a compact loading status without nested links or buttons', async () => {
+  await render({
+    assets: [
+      {
+        id: 'one',
+        source: 'picture.png',
+        name: '그림.png',
+        previewUrl: 'https://assets.example.test/picture.png',
+      },
+    ],
+  });
+  await click('▧ 이미지 추가·관리');
+  const thumbnail = document.querySelector('.statement-image-thumbnail');
+  assert.ok(
+    thumbnail.querySelector(
+      '[data-statement-image-state=loading][data-compact]',
+    ),
+  );
+  assert.match(thumbnail.textContent, /이미지를 불러오고 있습니다/);
+  assert.equal(thumbnail.querySelector('a,button'), null);
+});

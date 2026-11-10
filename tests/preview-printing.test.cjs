@@ -391,4 +391,95 @@ test('failed images in excluded editorial are ignored until that section is sele
   await view.close();
 });
 
+async function printShortcut(target = window, patch = {}) {
+  const event = new window.KeyboardEvent('keydown', {
+    key: 'p',
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+    ...patch,
+  });
+  await act(async () => target.dispatchEvent(event));
+  return event;
+}
+
+test('Preview Ctrl+P opens options and waits for delayed images before one print, including held repeats', async () => {
+  const view = await mount();
+  const pending = pendingImage(view);
+  assert.equal((await printShortcut()).defaultPrevented, true);
+  assert.ok(view.host.querySelector('dialog[open]'));
+  assert.equal(printing.length, 0);
+  assert.equal(
+    (await printShortcut(window, { repeat: true })).defaultPrevented,
+    true,
+  );
+  assert.equal(view.host.querySelectorAll('dialog[open]').length, 1);
+  await click(button(view.host, '선택한 범위 인쇄'));
+  assert.equal(printing.length, 0);
+  assert.equal((await printShortcut()).defaultPrevented, true);
+  assert.equal(
+    (await printShortcut(window, { repeat: true })).defaultPrevented,
+    true,
+  );
+  assert.equal(button(view.host, '이미지 준비 중…').disabled, true);
+  await loadedImage(pending);
+  assert.equal(printing.length, 1);
+  assert.equal(printing[0].modalOpen, false);
+  await view.close();
+});
+
+test('Preview Cmd+P works from a focused control and keeps prior language and selected sections', async () => {
+  const view = await mount();
+  const control = view.host.querySelector('select');
+  await act(async () => {
+    control.value = 'english';
+    control.dispatchEvent(new window.Event('change', { bubbles: true }));
+    control.focus();
+  });
+  assert.equal(
+    (await printShortcut(control, { ctrlKey: false, metaKey: true, key: 'P' }))
+      .defaultPrevented,
+    true,
+  );
+  await click(checkbox(view.host, '해설 · 검수용'));
+  await click(checkbox(view.host, '하단 ZOJ 워터마크'));
+  await click(button(view.host, '취소'));
+  assert.equal(printing.length, 0);
+  assert.equal(
+    (await printShortcut(control, { ctrlKey: false, metaKey: true }))
+      .defaultPrevented,
+    true,
+  );
+  assert.equal(checkbox(view.host, '해설 · 검수용').checked, true);
+  assert.equal(checkbox(view.host, '하단 ZOJ 워터마크').checked, false);
+  await click(button(view.host, '선택한 범위 인쇄'));
+  assert.equal(printing.length, 1);
+  assert.equal(printing[0].title, 'Count lines');
+  assert.equal(printing[0].editorial, 'true');
+  assert.equal(printing[0].watermark, 'false');
+  await view.close();
+});
+
+test('Preview print shortcuts preserve unrelated combinations and stop intercepting after leaving Preview', async () => {
+  const view = await mount();
+  for (const patch of [
+    { ctrlKey: false },
+    { altKey: true },
+    { shiftKey: true },
+    { isComposing: true },
+    { key: 's' },
+  ]) {
+    assert.equal((await printShortcut(window, patch)).defaultPrevented, false);
+    assert.equal(view.host.querySelector('dialog[open]'), null);
+  }
+  assert.equal(
+    (await printShortcut(window, { repeat: true })).defaultPrevented,
+    true,
+  );
+  assert.equal(view.host.querySelector('dialog[open]'), null);
+  await view.close();
+  assert.equal((await printShortcut()).defaultPrevented, false);
+  assert.equal(printing.length, 0);
+});
+
 after(() => dom.window.close());

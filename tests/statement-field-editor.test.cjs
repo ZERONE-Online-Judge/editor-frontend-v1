@@ -457,3 +457,203 @@ test('SVG thumbnails and statements accept descriptive alt text and do not refet
     global.URL.revokeObjectURL = previousRevoke;
   }
 });
+
+test('statement image placeholder spans authenticated fetch, native loading and decode without changing declared layout', async () => {
+  const previousFetch = global.fetch;
+  const previousCreate = global.URL.createObjectURL;
+  const previousRevoke = global.URL.revokeObjectURL;
+  let receive, decoded;
+  const reads = [],
+    revoked = [];
+  global.fetch = (url, options) => {
+    reads.push({ url, credentials: options.credentials });
+    return new Promise((resolve) => {
+      receive = resolve;
+    });
+  };
+  global.URL.createObjectURL = () => 'blob:loading-lifecycle';
+  global.URL.revokeObjectURL = (url) => revoked.push(url);
+  const props = {
+    src: '/api/problems/problem-one/blobs/' + 'a'.repeat(64),
+    alt: '느리게 도착하는 그림',
+    properties: {
+      'data-zoj-align': 'right',
+      'data-zoj-width': '50%',
+      'data-tex-height': '120px',
+    },
+  };
+  try {
+    await act(async () => root.render(h(Image, props)));
+    const status = host.querySelector('[data-statement-image-state=loading]');
+    assert.match(status.textContent, /이미지를 불러오고 있습니다/);
+    assert.equal(status.style.width, '50%');
+    assert.equal(status.style.height, '120px');
+    assert.equal(status.style.minHeight, '0');
+    assert.equal(status.style.marginRight, '0px');
+    assert.equal(host.querySelector('img'), null);
+    await act(async () => {
+      receive({ ok: true, arrayBuffer: async () => pngBytes.buffer });
+      await tick();
+    });
+    const image = host.querySelector('img');
+    assert.ok(image);
+    assert.equal(image.className, 'statement-image-pending');
+    assert.ok(host.querySelector('[data-statement-image-state=loading]'));
+    Object.defineProperty(image, 'naturalWidth', { value: 100 });
+    image.decode = () =>
+      new Promise((resolve) => {
+        decoded = resolve;
+      });
+    await act(async () => image.dispatchEvent(new window.Event('load')));
+    assert.ok(host.querySelector('[data-statement-image-state=loading]'));
+    await act(async () => decoded());
+    assert.equal(
+      host.querySelector('[data-statement-image-state=loading]'),
+      null,
+    );
+    assert.equal(image.dataset.statementImageState, 'ready');
+    assert.equal(image.className, '');
+    assert.equal(image.style.width, '50%');
+    assert.equal(image.parentElement, host);
+    assert.deepEqual(reads, [{ url: props.src, credentials: 'same-origin' }]);
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    assert.deepEqual(revoked, ['blob:loading-lifecycle']);
+  } finally {
+    global.fetch = previousFetch;
+    global.URL.createObjectURL = previousCreate;
+    global.URL.revokeObjectURL = previousRevoke;
+  }
+});
+
+test('statement image errors are visible and stale source decodes cannot clear a newer failure', async () => {
+  let finishOld;
+  await act(async () =>
+    root.render(
+      h(Image, {
+        src: 'https://assets.example.test/first.png',
+        alt: '첫 그림',
+        properties: {},
+      }),
+    ),
+  );
+  const first = host.querySelector('img');
+  Object.defineProperty(first, 'naturalWidth', { value: 100 });
+  first.decode = () =>
+    new Promise((resolve) => {
+      finishOld = resolve;
+    });
+  await act(async () => first.dispatchEvent(new window.Event('load')));
+  await act(async () =>
+    root.render(
+      h(Image, {
+        src: 'https://assets.example.test/second.png',
+        alt: '새 그림',
+        properties: {},
+      }),
+    ),
+  );
+  const second = host.querySelector('img');
+  assert.equal(first === second, false);
+  await act(async () => second.dispatchEvent(new window.Event('error')));
+  assert.match(host.textContent, /이미지를 불러오지 못했습니다/);
+  assert.match(host.textContent, /새 그림/);
+  await act(async () => finishOld());
+  assert.ok(host.querySelector('[data-statement-image-state=error]'));
+  assert.equal(host.querySelector('img'), null);
+  assert.equal(host.querySelector('a,button'), null);
+  await act(async () =>
+    root.render(
+      h(Image, {
+        src: 'https://assets.example.test/third.png',
+        alt: '디코드 실패',
+        properties: {},
+      }),
+    ),
+  );
+  const third = host.querySelector('img');
+  Object.defineProperty(third, 'naturalWidth', { value: 100 });
+  third.decode = async () => {
+    throw new Error('private decoder detail');
+  };
+  await act(async () => third.dispatchEvent(new window.Event('load')));
+  assert.ok(host.querySelector('[data-statement-image-state=error]'));
+  assert.equal(host.textContent.includes('private decoder detail'), false);
+  await act(async () =>
+    root.render(
+      h(Image, {
+        src: 'https://assets.example.test/fourth.png',
+        alt: '디코드 중 실패',
+        properties: {},
+      }),
+    ),
+  );
+  const fourth = host.querySelector('img');
+  Object.defineProperty(fourth, 'naturalWidth', { value: 100 });
+  let completeDecode,
+    decodes = 0;
+  fourth.decode = () => {
+    decodes++;
+    return new Promise((resolve) => {
+      completeDecode = resolve;
+    });
+  };
+  await act(async () => {
+    fourth.dispatchEvent(new window.Event('load'));
+    fourth.dispatchEvent(new window.Event('load'));
+  });
+  assert.equal(decodes, 1);
+  await act(async () => {
+    fourth.dispatchEvent(new window.Event('error'));
+    completeDecode();
+  });
+  assert.ok(host.querySelector('[data-statement-image-state=error]'));
+  assert.equal(host.querySelector('[data-statement-image-state=ready]'), null);
+});
+
+test('failed authorized fetch and unmounted native decode keep their lifecycle isolated', async () => {
+  const previousFetch = global.fetch;
+  global.fetch = async () => {
+    throw new Error('private connection detail');
+  };
+  try {
+    await act(async () => {
+      root.render(
+        h(Image, {
+          src: '/api/problems/problem-one/blobs/' + 'b'.repeat(64),
+          alt: '권한이 필요한 그림',
+          properties: {},
+        }),
+      );
+      await tick();
+    });
+    assert.ok(host.querySelector('[data-statement-image-state=error]'));
+    assert.match(host.textContent, /권한이 필요한 그림/);
+    assert.equal(host.textContent.includes('private connection detail'), false);
+  } finally {
+    global.fetch = previousFetch;
+  }
+  await act(async () =>
+    root.render(
+      h(Image, {
+        src: 'https://assets.example.test/slow.png',
+        alt: '느린 그림',
+        compact: true,
+        properties: {},
+      }),
+    ),
+  );
+  assert.ok(host.querySelector('[data-compact]'));
+  let finish;
+  const image = host.querySelector('img');
+  Object.defineProperty(image, 'naturalWidth', { value: 100 });
+  image.decode = () =>
+    new Promise((resolve) => {
+      finish = resolve;
+    });
+  await act(async () => image.dispatchEvent(new window.Event('load')));
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await act(async () => finish());
+  assert.equal(host.textContent, '');
+});

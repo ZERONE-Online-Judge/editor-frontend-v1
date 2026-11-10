@@ -21,6 +21,7 @@ import {
   type StatementImageAsset,
   type StatementImageOccurrence,
 } from '../lib/statementImages';
+import StatementImage from './StatementImage';
 import './StatementImageTools.css';
 
 export type { StatementImageAsset } from '../lib/statementImages';
@@ -176,7 +177,12 @@ function ImageDialog({
                       {renderThumbnail ? (
                         renderThumbnail(item)
                       ) : item.previewUrl ? (
-                        <img src={item.previewUrl} alt="" />
+                        <StatementImage
+                          src={item.previewUrl || ''}
+                          alt={item.name}
+                          properties={{}}
+                          compact
+                        />
                       ) : (
                         <span aria-hidden="true">▧</span>
                       )}

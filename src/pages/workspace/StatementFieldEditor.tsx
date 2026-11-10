@@ -143,6 +143,7 @@ export default function StatementFieldEditor({
           src={asset.previewUrl || ''}
           alt={asset.name}
           properties={{}}
+          compact
         />
       )}
     >
