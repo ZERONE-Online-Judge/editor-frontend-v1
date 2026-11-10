@@ -1,0 +1,44 @@
+.single-verification-decision {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 18px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 10px;
+  background: var(--zoj-surface);
+}
+.single-verification-decision-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.single-verification-decision-heading > div {
+  min-width: 0;
+}
+.single-verification-decision-heading h4 {
+  margin: 0 0 5px;
+  font-size: 14px;
+  font-weight: 650;
+}
+.single-verification-decision p {
+  overflow-wrap: anywhere;
+}
+.single-verification-source summary {
+  cursor: pointer;
+  color: var(--zoj-accent);
+  font-size: 12px;
+}
+.single-verification-source .code-editor {
+  margin-top: 12px;
+}
+@media (max-width: 640px) {
+  .single-verification-decision {
+    padding: 14px;
+  }
+  .single-verification-decision-heading .actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

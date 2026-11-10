@@ -36,6 +36,8 @@ function source(relative) {
   loaded.paths = Module._nodeModulePaths(path.dirname(file));
   const native = loaded.require.bind(loaded);
   loaded.require = (id) => {
+    if (id.endsWith('/RecentExecutions'))
+      return { __esModule: true, default: () => null };
     if (id === 'react-router-dom') return router;
     if (id.endsWith('/workspace')) return { useWorkspace: () => context };
     if (id.endsWith('/api'))
@@ -733,7 +735,9 @@ test('review report filters evidence without claiming unsaved edits were checked
   );
   assert.match(target.textContent, /이전 저장 자료 기준/);
   assert.ok(
-    target.querySelector('a[href="/problems/problem/executions?job=evidence"]'),
+    target.querySelector(
+      'a[href="/problems/problem/invocations?job=evidence"]',
+    ),
   );
   const select = target.querySelector('select');
   await act(async () => {

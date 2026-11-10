@@ -50,6 +50,8 @@ loaded.require = (id) => {
     id === '../../components/Select' ||
     id === '../../components/Pagination' ||
     id === '../../components/JobOutcome' ||
+    id === '../../components/RecentExecutions' ||
+    id === '../../components/SingleVerificationDecision' ||
     id === '../../lib/useRemotePage' ||
     id === '../../lib/jobHistory' ||
     id === '../../lib/executionCategories' ||

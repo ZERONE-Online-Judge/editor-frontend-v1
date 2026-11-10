@@ -28,6 +28,8 @@ function source(relative) {
   loaded.paths = Module._nodeModulePaths(path.dirname(file));
   const native = loaded.require.bind(loaded);
   loaded.require = (id) => {
+    if (id.endsWith('/RecentExecutions'))
+      return { __esModule: true, default: () => null };
     if (id === 'react-router-dom')
       return {
         Link: ({ children, to, ...props }) =>

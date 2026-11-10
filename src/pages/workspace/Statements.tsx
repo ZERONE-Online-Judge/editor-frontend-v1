@@ -1,4 +1,5 @@
 import { can } from '../../lib/permissions';
+import RecentExecutions from '../../components/RecentExecutions';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useWorkspace } from '../../lib/workspace';
@@ -193,6 +194,7 @@ export default function Statements() {
           </div>
         </>
       )}
+      <RecentExecutions category="render" />
     </div>
   );
 }

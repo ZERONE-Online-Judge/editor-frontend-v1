@@ -40,6 +40,7 @@ import Collaboration from './workspace/Collaboration';
 import Revisions from './workspace/Revisions';
 import Review from './workspace/Review';
 import Materials from './workspace/Materials';
+import SingleVerification from './workspace/SingleVerification';
 export default function ProblemWorkspace() {
   const { problemId = '', tab = 'overview' } = useParams();
   const navigate = useNavigate();
@@ -106,6 +107,7 @@ export default function ProblemWorkspace() {
   const reload = useCallback(
     async (preserveEdits = false) => {
       const value = await api<WorkspaceData>(`/problems/${problemId}`);
+      if (activeProblem.current !== problemId) return;
       if (preserveEdits && dirtyRef.current) return;
       setData(value);
       setDoc(structuredClone(value.document));
@@ -399,6 +401,9 @@ export default function ProblemWorkspace() {
     tests: <Tests />,
     invocations: <Executions key="invocations" />,
     verification: <Executions key="verification" verification />,
+    'verification-single': (
+      <SingleVerification key={`${problemId}/verification-single`} />
+    ),
     stress: <Executions key="stress" stress />,
     packages: (
       <Executions key="packages" packages sharedRevision={sharedRevision} />

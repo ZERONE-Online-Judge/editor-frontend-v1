@@ -152,7 +152,7 @@ test('Hamburger identifies the current work and opens grouped, active navigation
   assert.equal(v.host.querySelector('dialog'), null);
   const dialog = await v.open();
   assert.equal(v.toggle().getAttribute('aria-expanded'), 'true');
-  assert.equal(dialog.querySelectorAll('nav a').length, 17);
+  assert.equal(dialog.querySelectorAll('nav a').length, 18);
   assert.equal(dialog.querySelectorAll('.sidebar-group').length, 3);
   assert.match(
     dialog.querySelector('.nav-readiness').textContent,
@@ -168,6 +168,18 @@ test('Hamburger identifies the current work and opens grouped, active navigation
 test('Choosing a task navigates and dismisses the menu, including the current task', async () => {
   const v = await mount();
   let dialog = await v.open();
+  const links = [...dialog.querySelectorAll('a')];
+  const singleIndex = links.findIndex((link) =>
+    link.getAttribute('href').endsWith('/verification-single'),
+  );
+  assert.ok(singleIndex >= 0);
+  assert.ok(
+    links[singleIndex + 1].getAttribute('href').endsWith('/verification'),
+  );
+  await act(async () => links[singleIndex].click());
+  assert.equal(v.host.querySelector('dialog'), null);
+  assert.match(v.toggle().getAttribute('aria-label'), /단일 검증/);
+  dialog = await v.open();
   await act(async () =>
     dialog.querySelector('a[href$="/verification"]').click(),
   );
@@ -207,7 +219,7 @@ test('Returning to desktop dismisses the drawer and releases background scrollin
   assert.equal(v.host.querySelector('dialog'), null);
   assert.equal(document.body.style.overflow, 'clip');
   document.body.style.overflow = '';
-  assert.equal(v.host.querySelectorAll('.problem-sidebar a').length, 17);
+  assert.equal(v.host.querySelectorAll('.problem-sidebar a').length, 18);
 });
 
 function pointer(target, type, pointerType = 'mouse', relatedTarget = null) {

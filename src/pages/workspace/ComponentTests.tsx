@@ -1,4 +1,5 @@
 import Pagination from '../../components/Pagination';
+import RecentExecutions from '../../components/RecentExecutions';
 import { usePagination } from '../../lib/pagination';
 import Select from '../../components/Select';
 import { can } from '../../lib/permissions';
@@ -684,6 +685,11 @@ function ComponentTestsPage({
           )}
           {actionError && <Notice tone="error">{actionError}</Notice>}
         </Modal>
+      )}
+      {kind !== 'interactor' && (
+        <RecentExecutions
+          category={kind === 'checker' ? 'checker-tests' : 'validator-tests'}
+        />
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import Select from '../../components/Select';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { executionResultPath } from '../../lib/executionNavigation';
 import { useWorkspace } from '../../lib/workspace';
 import { Badge, SectionHeading } from '../../components/ui';
 
@@ -105,7 +106,11 @@ export function ReviewReportView({
             <strong>{item.message}</strong>
             {item.evidence && <p>{item.evidence}</p>}
             <Link
-              to={`/problems/${problemId}/${item.section}${item.job_id ? `?job=${item.job_id}` : ''}`}
+              to={
+                item.job_id
+                  ? executionResultPath(problemId, item.job_id)
+                  : `/problems/${problemId}/${item.section}`
+              }
             >
               {item.job_id ? '근거 실행 기록 보기' : '관련 항목 보기'} →
             </Link>

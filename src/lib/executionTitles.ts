@@ -118,6 +118,20 @@ export function executionPresentation(job: Job) {
             ? `풀이 ${runnable.length}개 검증`
             : '풀이 검증';
     parts = [label, scope.setLabel, scope.testLabel];
+    if (options.single_verification === true) {
+      const source = object(
+        Array.isArray(options.temporary_solutions)
+          ? options.temporary_solutions[0]
+          : undefined,
+      );
+      parts = [
+        '단일 검증',
+        text(source.name) || selected?.[0] || '',
+        text(source.tag) ? `기대 ${text(source.tag)}` : '',
+        scope.setLabel,
+        scope.testLabel,
+      ];
+    }
     if (selected?.length) details.push(`풀이: ${list(selected)}`);
     else if (runnable?.length) details.push(`대상 풀이: ${list(runnable)}`);
     if (options.force_prepare === true) parts.push('준비 새로 실행');

@@ -799,7 +799,8 @@ for (const [tab, category] of [
 ]) {
   test(`${tab} contains launch controls only and links to its category in execution results`, async () => {
     await mount(tab);
-    assert.equal(historyReads, 0);
+    assert.ok(historyReads > 0);
+    assert.ok(host.querySelector('.recent-executions'));
     assert.equal(host.querySelector('.execution-history'), null);
     assert.equal(host.querySelector('.execution-detail'), null);
     const link = host.querySelector(
@@ -1933,28 +1934,17 @@ test('switching back to one set restores individual test selection', async () =>
   assert.equal(requests[0].body.options.all_testsets, undefined);
 });
 
-test('reviewer temporary code uses all sets on the committed revision', async () => {
+test('full verification keeps temporary code in the separate single-verification tab', async () => {
   state.problem.role = 'READ';
   state.problem.reviewer = true;
   await mount('verification');
-  await selectSets('검증 테스트 세트', ['tests', 'extra']);
-  await act(() => {
-    const code = host.querySelector('textarea[aria-label="임시 검수 코드"]');
-    Object.getOwnPropertyDescriptor(
-      window.HTMLTextAreaElement.prototype,
-      'value',
-    ).set.call(code, 'print(42)');
-    code.dispatchEvent(new window.Event('input', { bubbles: true }));
-  });
-  await click('임시 코드 검증 시작');
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].body.options.snapshot, 'committed');
-  assert.deepEqual(requests[0].body.options.testsets, ['tests', 'extra']);
-  assert.deepEqual(requests[0].body.options.test_indices, []);
   assert.equal(
-    requests[0].body.options.temporary_solutions[0].content,
-    'print(42)',
+    host.querySelector('textarea[aria-label="임시 검수 코드"]'),
+    null,
   );
+  assert.equal(host.querySelector('.invocation-review-code'), null);
+  assert.ok(host.querySelector('a[href="/problems/p/verification-single"]'));
+  assert.deepEqual(requests, []);
 });
 
 test('stored all-set verification displays its scope and per-set progress', async () => {

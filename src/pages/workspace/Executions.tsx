@@ -15,6 +15,8 @@ import Pagination, { PaginatedList } from '../../components/Pagination';
 import { useRemotePage } from '../../lib/useRemotePage';
 import { jobRelation, requesterName, historyTime } from '../../lib/jobHistory';
 import JobOutcome from '../../components/JobOutcome';
+import RecentExecutions from '../../components/RecentExecutions';
+import SingleVerificationDecision from '../../components/SingleVerificationDecision';
 import {
   executionCategories,
   isExecutionCategory,
@@ -616,6 +618,7 @@ export default function Executions({
           </div>
         </>
       ) : null}
+      {!showResults && <RecentExecutions category={mode} />}
       {showResults && (
         <>
           <div className="history-filters">
@@ -889,6 +892,12 @@ export default function Executions({
                     </div>
                   </div>
                   <JobOutcome job={job} />
+                  <SingleVerificationDecision
+                    key={job.id}
+                    job={job}
+                    onUpdated={setJob}
+                    onRefreshHistory={fetchRows}
+                  />
                   {validationFeedback && (
                     <ValidationResults key={job.id} job={job} />
                   )}

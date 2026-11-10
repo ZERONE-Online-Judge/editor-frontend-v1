@@ -3,13 +3,8 @@ import Select from '../../components/Select';
 import { useEffect, useState } from 'react';
 import { api, tags } from '../../lib/api';
 import { parseTestIndices } from '../../lib/invocationOptions';
-import type {
-  ExecutionLimits,
-  Language,
-  ProblemDocument,
-  SolutionTag,
-} from '../../lib/types';
-import { CodeEditor, Icon, Notice } from '../../components/ui';
+import type { ExecutionLimits, ProblemDocument } from '../../lib/types';
+import { Icon, Notice } from '../../components/ui';
 import TestsetSelector from './TestsetSelector';
 
 export default function InvocationControls({
@@ -80,10 +75,6 @@ export default function InvocationControls({
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
   const [forcePrepare, setForcePrepare] = useState(false);
-  const [reviewName, setReviewName] = useState('review.py');
-  const [reviewLanguage, setReviewLanguage] = useState<Language>('python3');
-  const [reviewTag, setReviewTag] = useState<SolutionTag>('OK');
-  const [reviewCode, setReviewCode] = useState('');
   const availableSolutions = Object.keys(source?.solutions || {}).filter(
     (key) => source!.solutions[key].tag !== 'NR',
   );
@@ -336,87 +327,6 @@ export default function InvocationControls({
           ? '전체 풀이 검증 시작'
           : '선택 범위 검증 시작'}
       </button>
-      {allowed && (
-        <details className="invocation-review-code">
-          <summary>내 임시 검수 코드 실행</summary>
-          <p className="muted small">
-            위에서 지정한 자료·테스트 범위를 사용합니다. 기존 파일을 덮어쓰지
-            않으며 코드는 이 실행에만 포함됩니다.
-          </p>
-          <div className="form-grid">
-            <label>
-              임시 코드 파일명
-              <input
-                value={reviewName}
-                onChange={(e) => setReviewName(e.target.value)}
-              />
-            </label>
-            <label>
-              임시 코드 언어
-              <Select
-                value={reviewLanguage}
-                onChange={(e) => setReviewLanguage(e.target.value as Language)}
-              >
-                {[
-                  'python3',
-                  'pypy3',
-                  'kotlin',
-                  'cpp17',
-                  'cpp20',
-                  'c99',
-                  'c17',
-                  'java8',
-                  'java17',
-                ].map((language) => (
-                  <option key={language}>{language}</option>
-                ))}
-              </Select>
-            </label>
-            <label>
-              임시 코드의 기대 판정
-              <Select
-                value={reviewTag}
-                onChange={(e) => setReviewTag(e.target.value as SolutionTag)}
-              >
-                {Object.entries(tags)
-                  .filter(([tag]) => tag !== 'MA')
-                  .map(([tag, title]) => (
-                    <option value={tag} key={tag}>
-                      {title}
-                    </option>
-                  ))}
-              </Select>
-            </label>
-          </div>
-          <CodeEditor
-            label="임시 검수 코드"
-            value={reviewCode}
-            onChange={setReviewCode}
-            readOnly={!allowed}
-            rows={10}
-          />
-          <button
-            className="button"
-            disabled={blocked || !reviewCode.trim() || !reviewName}
-            onClick={() =>
-              start({
-                ...scope,
-                solutions: [reviewName],
-                temporary_solutions: [
-                  {
-                    name: reviewName,
-                    language: reviewLanguage,
-                    tag: reviewTag,
-                    content: reviewCode,
-                  },
-                ],
-              })
-            }
-          >
-            임시 코드 검증 시작
-          </button>
-        </details>
-      )}
     </div>
   );
 }

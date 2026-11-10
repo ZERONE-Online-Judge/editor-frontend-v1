@@ -35,6 +35,11 @@ export const executionCategories = [
     description: '저장된 입력을 사용해 Main 풀이의 정답을 생성합니다.',
   },
   {
+    id: 'verify-single',
+    label: '단일 검증',
+    description: '직접 입력한 코드 한 개를 채점하고 기대 판정과 비교합니다.',
+  },
+  {
     id: 'verify',
     label: '풀이 검증 · 전체 검증',
     description: '선택한 풀이를 테스트로 채점하고 기대 판정과 비교합니다.',
@@ -74,7 +79,10 @@ export function isExecutionCategory(value: string): value is ExecutionCategory {
   return executionCategories.some((category) => category.id === value);
 }
 export function jobCategory(job: Job) {
-  let id = job.category;
+  let id =
+    job.kind === 'verify' && job.options.single_verification === true
+      ? 'verify-single'
+      : job.category;
   if (!id || !isExecutionCategory(id)) {
     const mode = job.options.prepare_mode || job.result.prepare_mode || 'full';
     id = job.kind === 'prepare' ? `prepare-${mode}` : job.kind;

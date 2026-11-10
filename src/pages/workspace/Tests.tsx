@@ -1,4 +1,5 @@
 import Pagination from '../../components/Pagination';
+import RecentExecutions from '../../components/RecentExecutions';
 import { usePagination } from '../../lib/pagination';
 import Select from '../../components/Select';
 import { can } from '../../lib/permissions';
@@ -615,6 +616,7 @@ export default function Tests() {
               </p>
             </section>
           </div>
+          <RecentExecutions category="prepare" />
           <section className="card no-padding">
             <div className="card-heading">
               <div>

@@ -19,6 +19,7 @@ const sections = [
     items: [
       ['tests', '테스트 · 생성 스크립트', 'tests'],
       ['solutions', '풀이', 'code'],
+      ['verification-single', '단일 검증', 'check'],
       ['verification', '전체 검증', 'check'],
       ['invocations', '실행 결과', 'play'],
       ['stress', '스트레스 테스트', 'spark'],
