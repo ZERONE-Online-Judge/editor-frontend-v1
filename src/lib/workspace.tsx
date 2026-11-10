@@ -10,7 +10,11 @@ export type Workspace = {
   mutate: (fn: (doc: ProblemDocument) => void) => void;
   save: () => Promise<number>;
   reload: (preserveEdits?: boolean) => Promise<void>;
-  run: (kind: JobKind, options?: Record<string, unknown>) => Promise<Job>;
+  run: (
+    kind: JobKind,
+    options?: Record<string, unknown>,
+    request?: { reuse?: boolean },
+  ) => Promise<Job>;
   notify: (message: string, error?: boolean, action?: NoticeAction) => void;
 };
 export const WorkspaceContext = createContext<Workspace | null>(null);

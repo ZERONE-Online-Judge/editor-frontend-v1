@@ -9,6 +9,8 @@ const React = require('react');
 const { act } = React;
 const { File, Buffer } = require('node:buffer');
 const { setImmediate } = require('node:timers');
+const { URL } = require('node:url');
+const { TextEncoder } = require('node:util');
 const editor = fs.existsSync(
   path.resolve(__dirname, '../src/lib/statementImages.ts'),
 );
@@ -489,6 +491,75 @@ test('actual statement rendering applies only safe image layout and preserves th
     0,
   );
 });
+test(
+  'Markdown rerenders retain loaded authorized image nodes and blob URLs while updated asset maps still resolve',
+  { timeout: 10000 },
+  async () => {
+    if (!editor) return;
+    const Component = source(
+      path.resolve(__dirname, '../src/components/Markdown.tsx'),
+      await ready,
+    ).default;
+    const previousFetch = global.fetch;
+    const previousCreate = URL.createObjectURL;
+    const previousRevoke = URL.revokeObjectURL;
+    const reads = [],
+      revoked = [];
+    let created = 0;
+    global.fetch = async (url, options) => {
+      reads.push({ url, credentials: options.credentials });
+      return {
+        ok: true,
+        arrayBuffer: async () =>
+          new TextEncoder().encode(
+            '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+          ).buffer,
+      };
+    };
+    URL.createObjectURL = () => `blob:review-image-${++created}`;
+    URL.revokeObjectURL = (url) => revoked.push(url);
+    const first = '/api/problems/print-fixture/blobs/' + 'a'.repeat(64);
+    const second = '/api/problems/print-fixture/blobs/' + 'b'.repeat(64);
+    const renderImage = async (url) => {
+      await act(async () => {
+        root.render(
+          React.createElement(
+            Component,
+            { assets: { 'diagram.svg': url } },
+            '![Diagram](diagram.svg)',
+          ),
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+      });
+    };
+    try {
+      await renderImage(first);
+      const image = host.querySelector('img');
+      assert.ok(image);
+      assert.equal(image.src, 'blob:review-image-1');
+      // Printing changes parent state repeatedly and supplies fresh asset maps.
+      await renderImage(first);
+      await renderImage(first);
+      assert.equal(host.querySelector('img') === image, true);
+      assert.equal(created, 1);
+      assert.deepEqual(reads, [{ url: first, credentials: 'same-origin' }]);
+      assert.deepEqual(revoked, []);
+      await renderImage(second);
+      const changedImage = host.querySelector('img');
+      assert.ok(changedImage);
+      assert.equal(changedImage.src, 'blob:review-image-2');
+      assert.equal(reads.length, 2);
+      assert.deepEqual(revoked, ['blob:review-image-1']);
+      await act(() => root.unmount());
+      root = createRoot(host);
+      assert.deepEqual(revoked, ['blob:review-image-1', 'blob:review-image-2']);
+    } finally {
+      global.fetch = previousFetch;
+      URL.createObjectURL = previousCreate;
+      URL.revokeObjectURL = previousRevoke;
+    }
+  },
+);
 test('duplicate upload gestures start one request and unmounted completion does not change data', async () => {
   let finish;
   let calls = 0;

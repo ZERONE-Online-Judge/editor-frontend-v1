@@ -395,6 +395,7 @@ export type JobAssessment = {
   uncovered?: number;
 };
 export type Job = {
+  reused?: boolean;
   category?: string;
   discarded_at?: number | null;
   application?: {

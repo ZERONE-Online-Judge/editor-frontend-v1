@@ -46,9 +46,17 @@ export default function StatementImage({
   }, [src, internal]);
   if (!src) return null;
   if (internal && image.source !== src)
-    return <span role="status">이미지 불러오는 중…</span>;
+    return (
+      <span role="status" data-statement-image-state="loading">
+        이미지 불러오는 중…
+      </span>
+    );
   if (internal && image.failed)
-    return <a href={src}>{alt || '이미지'} 다운로드</a>;
+    return (
+      <a href={src} data-statement-image-state="error">
+        {alt || '이미지'} 다운로드
+      </a>
+    );
   return (
     <img
       src={internal ? image.url : src}

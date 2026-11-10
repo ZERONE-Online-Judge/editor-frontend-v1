@@ -198,6 +198,7 @@ export default function Executions({
   const [deciding, setDeciding] = useState(false);
   const [exportFormat, setExportFormat] = useState('zoj');
   const [verifyPackage, setVerifyPackage] = useState(true);
+  const [rebuildPackage, setRebuildPackage] = useState(false);
   const [statementLanguage, setStatementLanguage] = useState(
     Object.keys(doc.statements).includes('korean')
       ? 'korean'
@@ -220,6 +221,7 @@ export default function Executions({
     packageSets,
     statementLanguage,
     verifyPackage,
+    rebuildPackage,
   ]);
   const startScope = useRef({ active: false, generation: 0 });
   useLayoutEffect(() => {
@@ -306,12 +308,16 @@ export default function Executions({
     setBusy(true);
     setStartError(null);
     try {
-      await run(kind, {
-        ...options,
-        ...(['verify', 'package', 'stress'].includes(kind)
-          ? { execution_backend: 'zoj' }
-          : {}),
-      });
+      await run(
+        kind,
+        {
+          ...options,
+          ...(['verify', 'package', 'stress'].includes(kind)
+            ? { execution_backend: 'zoj' }
+            : {}),
+        },
+        kind === 'package' ? { reuse: !rebuildPackage } : undefined,
+      );
     } catch (e) {
       if (!scope.active || generation !== scope.generation) return;
       if (
@@ -383,8 +389,10 @@ export default function Executions({
         처리합니다.
       </p>
       {environment && !zojConfigured && (
-        <Notice tone="error">
-          ZOJ 채점기 연결이 설정되지 않았습니다. 관리자에게 문의하세요.
+        <Notice tone={packages ? 'info' : 'error'}>
+          {packages
+            ? '기존 패키지는 채점기 연결 없이도 재사용할 수 있습니다. 새 검증이 필요하면 ZOJ 채점기 연결 설정을 관리자에게 문의하세요.'
+            : 'ZOJ 채점기 연결이 설정되지 않았습니다. 관리자에게 문의하세요.'}
         </Notice>
       )}
     </section>
@@ -403,7 +411,7 @@ export default function Executions({
         }
         description={
           packages
-            ? '커밋된 리비전을 패키지로 내보냅니다. 검증 실행 여부를 선택할 수 있습니다.'
+            ? '커밋된 리비전의 기존 패키지를 재사용하고, 없거나 내보내기 조건이 바뀐 경우 새로 생성합니다.'
             : stress
               ? '생성기와 기준 풀이를 사용해 비교할 풀이의 유효한 반례를 찾습니다.'
               : verification
@@ -442,9 +450,11 @@ export default function Executions({
                 }
               >
                 <Icon name="play" />
-                {verifyPackage
-                  ? '검증 후 패키지 생성'
-                  : '검증 없이 패키지 생성'}
+                {rebuildPackage
+                  ? verifyPackage
+                    ? '재검증 후 패키지 생성'
+                    : '패키지 다시 생성'
+                  : '패키지 준비'}
               </button>
             )}
           </>
@@ -512,14 +522,34 @@ export default function Executions({
                 disabled={!canPackage || busy}
                 onChange={(event) => setVerifyPackage(event.target.checked)}
               />
-              패키지 생성 전 풀이·구성요소 검증 실행
+              새 패키지 생성 전 풀이·구성요소 검증 실행
             </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                aria-label="기존 패키지 다시 생성"
+                checked={rebuildPackage}
+                disabled={!canPackage || busy}
+                onChange={(event) => setRebuildPackage(event.target.checked)}
+              />
+              {verifyPackage
+                ? '기존 패키지도 재검증 후 생성'
+                : '기존 패키지도 다시 생성'}
+            </label>
+            {!rebuildPackage && (
+              <p className="muted">
+                같은 리비전·형식·테스트 범위의 기존 패키지를 먼저 사용합니다.
+                검증이 필요하면 기존 검증 결과도 재사용합니다.
+              </p>
+            )}
             {!verifyPackage && (
               <Notice>
-                저장된 자료만 내보내며 생성기·Validator·Main·풀이를 실행하지
-                않습니다. ZOJ·Linux 형식은 입력·정답이 모두 저장되어 있어야
-                합니다. 작성 중인 자료는 Editor 형식으로 보관할 수 있습니다. ZOJ
-                등록·업데이트에는 검증을 완료한 패키지가 필요합니다.
+                새 패키지가 필요하면 저장된 자료만 내보내며
+                생성기·Validator·Main·풀이를 실행하지 않습니다. 기존 패키지의
+                검증 상태는 유지됩니다. ZOJ·Linux 형식은 입력·정답이 모두
+                저장되어 있어야 합니다. 작성 중인 자료는 Editor 형식으로 보관할
+                수 있습니다. ZOJ 등록·업데이트에는 검증을 완료한 패키지가
+                필요합니다.
               </Notice>
             )}
             <div className="form-grid">
@@ -578,10 +608,10 @@ export default function Executions({
           <div className="workspace-guide">
             <Icon name="branch" />
             <p>
-              내 작업 사본을 먼저 커밋하세요. 검증을 선택하면 입력·정답을
-              준비하고 풀이 기대 판정과 checker·validator 자체 테스트를
-              확인합니다. 선택을 해제하면 저장된 자료를 미검증 패키지로
-              내보냅니다.
+              내 작업 사본을 먼저 커밋하세요. 새 패키지가 필요한 경우 검증을
+              선택하면 입력·정답을 준비하고 풀이 기대 판정과 checker·validator
+              자체 테스트를 확인합니다. 선택을 해제하면 저장된 자료를 새 검증
+              없이 내보냅니다.
             </p>
           </div>
         </>

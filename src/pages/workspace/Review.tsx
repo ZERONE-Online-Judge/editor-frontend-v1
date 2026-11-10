@@ -1,6 +1,6 @@
 import { textPreview } from '../../lib/largeText';
 import Select from '../../components/Select';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import { useWorkspace } from '../../lib/workspace';
@@ -15,6 +15,7 @@ import {
 } from '../../components/ui';
 import Markdown from '../../components/Markdown';
 import { statementAssets } from '../../lib/statementAssets';
+import { prepareStatementPrint } from '../../lib/statementPrint';
 import './Review.css';
 
 const printSections = [
@@ -58,6 +59,10 @@ export default function Review() {
   const [printChoices, setPrintChoices] = useState(defaultPrintSections);
   const [watermark, setWatermark] = useState(true);
   const [printFontSize, setPrintFontSize] = useState(defaultPrintFontSize);
+  const [printPreparing, setPrintPreparing] = useState(false);
+  const [printError, setPrintError] = useState('');
+  const printRoot = useRef<HTMLDivElement>(null);
+  const printRequest = useRef<AbortController | null>(null);
   const fontSizeId = useId();
   const [sampleResult, setSampleResult] = useState<{
     key: string;
@@ -109,6 +114,39 @@ export default function Review() {
       : language === 'english'
         ? 'English'
         : language;
+  useEffect(() => () => printRequest.current?.abort(), [doc, language]);
+  function closePrintOptions() {
+    printRequest.current?.abort();
+    setPrintOptionsOpen(false);
+    setPrintError('');
+  }
+  async function printStatement() {
+    if (!canPrint || !printRoot.current || printRequest.current) return;
+    const controller = new AbortController();
+    printRequest.current = controller;
+    setPrintPreparing(true);
+    setPrintError('');
+    try {
+      await prepareStatementPrint(printRoot.current, controller.signal);
+      if (controller.signal.aborted) return;
+      flushSync(() => setPrintOptionsOpen(false));
+      window.print();
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setPrintOptionsOpen(true);
+        setPrintError(
+          error instanceof Error
+            ? error.message
+            : '인쇄를 준비하지 못했습니다.',
+        );
+      }
+    } finally {
+      if (printRequest.current === controller) {
+        printRequest.current = null;
+        setPrintPreparing(false);
+      }
+    }
+  }
   useEffect(() => {
     const abort = new AbortController();
     const items = JSON.parse(sampleKey) as (string | null)[][];
@@ -166,6 +204,7 @@ export default function Review() {
   }, [data.problem.id, sampleKey, sampleRequestKey]);
   return (
     <div
+      ref={printRoot}
       className="section-stack review-page"
       style={
         { '--review-print-font-size': `${printFontSize}pt` } as CSSProperties
@@ -312,24 +351,18 @@ export default function Review() {
         <Modal
           title="인쇄 옵션"
           className="review-print-options"
-          onClose={() => setPrintOptionsOpen(false)}
+          onClose={closePrintOptions}
           footer={
             <>
-              <button
-                className="button"
-                onClick={() => setPrintOptionsOpen(false)}
-              >
+              <button className="button" onClick={closePrintOptions}>
                 취소
               </button>
               <button
                 className="button primary"
-                disabled={!canPrint}
-                onClick={() => {
-                  flushSync(() => setPrintOptionsOpen(false));
-                  window.print();
-                }}
+                disabled={!canPrint || printPreparing}
+                onClick={() => void printStatement()}
               >
-                선택한 범위 인쇄
+                {printPreparing ? '이미지 준비 중…' : '선택한 범위 인쇄'}
               </button>
             </>
           }
@@ -340,6 +373,7 @@ export default function Review() {
             <br />
             선택한 항목만 인쇄합니다. 화면의 미리보기는 그대로 유지됩니다.
           </p>
+          {printError && <Notice tone="error">{printError}</Notice>}
           <div className="review-print-font">
             <div className="review-print-font-heading">
               <label htmlFor={fontSizeId}>글자 크기</label>
@@ -352,6 +386,7 @@ export default function Review() {
               max={16}
               step={0.5}
               value={printFontSize}
+              disabled={printPreparing}
               aria-valuetext={`${printFontSize}포인트`}
               aria-describedby={`${fontSizeId}-help`}
               onChange={(event) => setPrintFontSize(Number(event.target.value))}
@@ -370,7 +405,7 @@ export default function Review() {
               예제 입력과 출력은 한 쌍으로 나란히 인쇄합니다.
             </p>
           </div>
-          <fieldset className="review-print-range">
+          <fieldset className="review-print-range" disabled={printPreparing}>
             <legend>
               인쇄 범위 <span>{selectedCount}개 선택</span>
             </legend>
@@ -404,6 +439,7 @@ export default function Review() {
               <input
                 type="checkbox"
                 checked={watermark}
+                disabled={printPreparing}
                 onChange={(e) => setWatermark(e.target.checked)}
               />
               <span>
@@ -424,6 +460,7 @@ export default function Review() {
             </span>
             <button
               className="button small"
+              disabled={printPreparing}
               onClick={() => {
                 setPrintChoices(defaultPrintSections);
                 setWatermark(true);

@@ -237,7 +237,11 @@ export default function ProblemWorkspace() {
     }
   }, [problemId, notify, data, doc]);
   const run = useCallback(
-    (kind: JobKind, options: Record<string, unknown> = {}) => {
+    (
+      kind: JobKind,
+      options: Record<string, unknown> = {},
+      requestOptions: { reuse?: boolean } = {},
+    ) => {
       if (requestInFlight.current?.problemId === problemId)
         return requestInFlight.current.promise;
       setRequesting(true);
@@ -258,11 +262,15 @@ export default function ProblemWorkspace() {
             ...options,
             ...(committed ? { snapshot: 'committed' } : {}),
           },
-          reuse: false,
+          reuse: kind === 'package' && requestOptions.reuse !== false,
         });
         if (activeProblem.current === problemId) {
           notify(
-            `${executionTitle(result)} 요청을 접수했습니다. 아래에서 진행 상황과 결과를 확인하세요.`,
+            kind === 'package' && result.reused
+              ? result.status === 'completed'
+                ? '기존 패키지를 재사용했습니다. 아래에서 ZIP을 다운로드하세요.'
+                : '진행 중인 패키지 준비 작업을 열었습니다. 아래에서 진행 상황과 결과를 확인하세요.'
+              : `${executionTitle(result)} 요청을 접수했습니다. 아래에서 진행 상황과 결과를 확인하세요.`,
           );
           navigate(executionResultPath(problemId, result.id));
         }

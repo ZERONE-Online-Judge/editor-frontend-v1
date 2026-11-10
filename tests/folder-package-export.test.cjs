@@ -217,11 +217,11 @@ test('a double click creates one durable request with matching package defaults'
           });
   const view = await mount();
   assert.equal(view.host.querySelector('select').value, 'zoj');
-  assert.equal(
-    [...view.host.querySelectorAll('input[type=checkbox]')].every(
+  assert.deepEqual(
+    [...view.host.querySelectorAll('input[type=checkbox]')].map(
       (node) => node.checked,
     ),
-    true,
+    [true, true, false],
   );
   await act(async () => {
     const start = button(view.host, '패키지 준비');
@@ -233,6 +233,7 @@ test('a double click creates one durable request with matching package defaults'
     include_descendants: true,
     export_format: 'zoj',
     verify: true,
+    reuse: true,
     statement_language: 'korean',
   });
   await act(async () =>
@@ -243,6 +244,69 @@ test('a double click creates one durable request with matching package defaults'
   assert.match(view.host.textContent, /창을 닫아도 준비가 계속/);
   await tick(2000);
   assert.equal(calls.filter((call) => call.method === 'POST').length, 1);
+});
+
+for (const verify of [true, false]) {
+  test(`folder force regeneration opts out of reuse without changing verification=${verify}`, async () => {
+    let result;
+    responder = (method, url, body) => {
+      if (method === 'POST') {
+        result = record({
+          options: {
+            export_format: body.export_format,
+            verify: body.verify,
+            reuse: body.reuse,
+            statement_language: body.statement_language,
+          },
+          items: [item(1, { reused: false })],
+        });
+        return result;
+      }
+      return url.startsWith('/folders/') ? { items: [] } : result;
+    };
+    const view = await mount();
+    if (!verify)
+      await click(
+        view.host.querySelector('[aria-label="패키지 생성 전 검증"]'),
+      );
+    await click(
+      view.host.querySelector('[aria-label="기존 패키지 다시 생성"]'),
+    );
+    assert.match(
+      view.host.textContent,
+      verify ? /기존 패키지도 재검증 후 생성/ : /기존 패키지도 다시 생성/,
+    );
+    assert.match(view.host.textContent, /재사용하지 않고 모든 문제/);
+    await click(button(view.host, '패키지 준비'));
+    const submitted = calls.find((call) => call.method === 'POST').body;
+    assert.equal(submitted.reuse, false);
+    assert.equal(submitted.verify, verify);
+    assert.match(
+      view.host.textContent,
+      verify ? /재검증 후 생성/ : /새 검증 없이 재생성/,
+    );
+    assert.doesNotMatch(view.host.textContent, /기존 패키지 재사용/);
+  });
+}
+
+test('skipping new verification does not describe a reused verified package as unverified', async () => {
+  const result = record({
+    options: {
+      export_format: 'zoj',
+      verify: false,
+      reuse: true,
+      statement_language: 'korean',
+    },
+  });
+  responder = (method, url) =>
+    url.startsWith('/folders/') ? { items: [result] } : result;
+  const view = await mount();
+  assert.match(view.host.textContent, /새 검증 생략/);
+  await click(view.host.querySelector('.folder-export-reopen'));
+  assert.match(view.host.textContent, /새 검증 생략/);
+  assert.match(view.host.textContent, /기존 패키지 재사용/);
+  assert.doesNotMatch(view.host.textContent, /미검증/);
+  assert.ok(view.host.querySelector('a[download]'));
 });
 
 test('recent and reload flows reopen partial exports with 10-item pages and real result links', async () => {

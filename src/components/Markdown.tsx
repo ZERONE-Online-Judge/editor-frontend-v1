@@ -1,4 +1,5 @@
 import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
@@ -9,6 +10,15 @@ import './statementLatex.css';
 import StatementImage from './StatementImage';
 import 'katex/dist/katex.min.css';
 import { latexToMarkdown } from '../lib/latex';
+
+// Keep image component identity stable when print options or layout rerender.
+// Remounting would revoke the authenticated blob URL just before printing.
+const statementComponents: Components = {
+  img: ({ src = '', alt = '', ...properties }) => (
+    <StatementImage src={src} alt={alt} properties={properties} />
+  ),
+};
+
 export default function Markdown({
   children,
   assets = {},
@@ -31,11 +41,7 @@ export default function Markdown({
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         urlTransform={(url, key) => statementUrl(resolve(url), key)}
-        components={{
-          img: ({ src = '', alt = '', ...properties }) => (
-            <StatementImage src={src} alt={alt} properties={properties} />
-          ),
-        }}
+        components={statementComponents}
         rehypePlugins={[
           rehypeRaw,
           [rehypeSanitize, statementSchema],

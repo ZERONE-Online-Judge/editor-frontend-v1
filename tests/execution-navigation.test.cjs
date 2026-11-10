@@ -29,6 +29,7 @@ let state,
   jobs,
   requests,
   requestError,
+  requestResult,
   requestGate,
   detailGate,
   advancedLimits,
@@ -311,6 +312,7 @@ async function post(url, body) {
   }
   assert.equal(url, '/problems/p/jobs');
   if (requestGate) await requestGate.promise;
+  if (requestResult) return requestResult;
   const result = job(
     'new-' + body.kind,
     body.kind,
@@ -391,6 +393,7 @@ beforeEach(() => {
   updateFailure = null;
   requests = [];
   requestError = null;
+  requestResult = null;
   requestGate = null;
   detailGate = null;
   historyGate = null;
@@ -690,12 +693,71 @@ for (const [status, expected] of [
 test('Linux package verification uses ZOJ while retaining offline replay materials', async () => {
   await mount('packages');
   await setControl('패키지 형식', 'linux');
-  await click('검증 후 패키지 생성');
+  await click('패키지 준비');
   assert.equal(requests.length, 1);
   assert.equal(requests[0].body.kind, 'package');
   assert.equal(requests[0].body.options.export_format, 'linux');
   assert.equal(requests[0].body.options.execution_backend, 'zoj');
+  assert.equal(requests[0].body.reuse, true);
+  assert.equal(requests[0].body.options.reuse, undefined);
 });
+
+test('package reuse is the default and a reused result opens its existing ZIP without claiming a new run', async () => {
+  const existing = job('existing-package', 'package', '기존 검증 결과');
+  existing.options = { export_format: 'zoj', verify: true, testset: 'tests' };
+  existing.result = {
+    verified: true,
+    package: {
+      filename: 'existing.zip',
+      size: 123,
+      verified: true,
+      format: 'zoj',
+    },
+  };
+  jobs.unshift(existing);
+  requestResult = { ...existing, reused: true };
+  environmentGate = {
+    promise: Promise.resolve({ zoj_configured: false }),
+  };
+  await mount('packages');
+  assert.equal(
+    host.querySelector('[aria-label="기존 패키지 다시 생성"]').checked,
+    false,
+  );
+  await click('패키지 준비');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.reuse, true);
+  assert.equal(requests[0].body.options.verify, true);
+  assert.match(
+    host.querySelector('#location').textContent,
+    /job=existing-package/,
+  );
+  assert.match(host.textContent, /기존 패키지를 재사용했습니다/);
+  assert.doesNotMatch(host.textContent, /요청을 접수했습니다/);
+  assert.match(host.querySelector('.package-download').textContent, /검증된/);
+  assert.equal(
+    host.querySelector('.package-download a').getAttribute('href'),
+    '/api/problems/p/packages/existing-package',
+  );
+});
+
+for (const verify of [true, false]) {
+  test(`explicit package regeneration bypasses reuse with verification=${verify}`, async () => {
+    await mount('packages');
+    if (!verify)
+      await act(() =>
+        host.querySelector('[aria-label="패키지 생성 전 검증"]').click(),
+      );
+    await act(() =>
+      host.querySelector('[aria-label="기존 패키지 다시 생성"]').click(),
+    );
+    await click(verify ? '재검증 후 패키지 생성' : '패키지 다시 생성');
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].body.reuse, false);
+    assert.equal(requests[0].body.options.verify, verify);
+    assert.equal(requests[0].body.options.reuse, undefined);
+  });
+}
 
 test('execution results include verification history while launch controls remain in the verification tab', async () => {
   await mount('invocations');
@@ -3353,13 +3415,13 @@ test('ZOJ package checkboxes send only selected sets and require at least one se
   await mount('packages');
   await selectSets('ZOJ에서 사용할 테스트 세트', []);
   const start = [...host.querySelectorAll('button')].find(
-    (el) => el.textContent.trim() === '검증 후 패키지 생성',
+    (el) => el.textContent.trim() === '패키지 준비',
   );
   assert.ok(start.disabled);
   await act(() => start.click());
   assert.deepEqual(requests, []);
   await selectSets('ZOJ에서 사용할 테스트 세트', ['tests', 'extra']);
-  await click('검증 후 패키지 생성');
+  await click('패키지 준비');
   assert.deepEqual(requests[0].body.options.testsets, ['tests', 'extra']);
   assert.equal(requests[0].body.options.export_format, 'zoj');
 });
@@ -3375,9 +3437,10 @@ test('package verification can be disabled without changing the selected sets', 
     /생성기·Validator·Main·풀이를 실행하지 않습니다/,
   );
   await selectSets('ZOJ에서 사용할 테스트 세트', ['extra']);
-  await click('검증 없이 패키지 생성');
+  await click('패키지 준비');
   assert.equal(requests.length, 1);
   assert.equal(requests[0].body.options.verify, false);
+  assert.equal(requests[0].body.reuse, true);
   assert.deepEqual(requests[0].body.options.testsets, ['extra']);
 });
 
@@ -3450,7 +3513,7 @@ test('Package creation can be granted without edits or verification execution', 
   state.problem.permissions = ['package'];
   await mount('packages');
   const run = [...host.querySelectorAll('button')].find(
-    (b) => b.textContent === '검증 후 패키지 생성',
+    (b) => b.textContent === '패키지 준비',
   );
   assert.ok(run);
   assert.equal(run.disabled, false);
@@ -4519,7 +4582,7 @@ test('ZOJ package preflight shows both cause file lists and keeps unrelated issu
     ],
   });
   await mount('packages');
-  await click('검증 후 패키지 생성');
+  await click('패키지 준비');
   const notice = host.querySelector('[aria-label="ZOJ 패키지 호환성 안내"]');
   assert.ok(notice);
   assert.equal(document.activeElement, notice);
@@ -4575,7 +4638,7 @@ test('Additional Validator guidance opens the actual selected program settings w
   });
   await mount('packages');
   const before = global.structuredClone(state.document);
-  await click('검증 후 패키지 생성');
+  await click('패키지 준비');
   const notice = host.querySelector('.package-compatibility');
   assert.doesNotMatch(notice.textContent, /풀이와 함께 컴파일하는 파일/);
   await act(async () =>
@@ -4602,7 +4665,7 @@ test('Imported grader flag on a Python file can be inspected and disabled throug
   };
   requestError = packageIncompatible({ unsupported_solution_files: [name] });
   await mount('packages');
-  await click('검증 후 패키지 생성');
+  await click('패키지 준비');
   const notice = host.querySelector('.package-compatibility');
   assert.doesNotMatch(notice.textContent, /추가 Validator ·/);
   const link = notice.querySelector('a');
@@ -4651,7 +4714,7 @@ for (const details of [
     delete error.details.unsupported_solution_files;
     requestError = error;
     await mount('packages');
-    await click('검증 후 패키지 생성');
+    await click('패키지 준비');
     const notice = host.querySelector('.package-compatibility');
     assert.ok(notice);
     assert.match(notice.textContent, /추가 validator와 풀이 결합 파일은/);
@@ -4676,7 +4739,7 @@ test('Package compatibility preserves other reasons with empty or malformed stru
     unsupported_solution_files: [false, {}],
   });
   await mount('packages');
-  await click('검증 후 패키지 생성');
+  await click('패키지 준비');
   const notice = host.querySelector('.package-compatibility');
   assert.match(notice.textContent, /대화형 문제는 지원하지 않습니다/);
   assert.match(notice.textContent, /그룹별 점수를 지원하지 않습니다/);
@@ -4688,14 +4751,14 @@ test('Changing package format clears compatibility guidance permanently and a ne
     unsupported_extra_validators: ['before.cpp'],
   });
   await mount('packages');
-  await click('검증 후 패키지 생성');
+  await click('패키지 준비');
   assert.ok(host.querySelector('.package-compatibility'));
   await setControl('패키지 형식', 'editor');
   assert.equal(host.querySelector('.package-compatibility'), null);
   await setControl('패키지 형식', 'zoj');
   assert.equal(host.querySelector('.package-compatibility'), null);
   requestError = new Error('새 요청의 연결이 끊겼습니다.');
-  await click('검증 후 패키지 생성');
+  await click('패키지 준비');
   assert.equal(host.querySelector('.package-compatibility'), null);
   assert.match(host.textContent, /새 요청의 연결이 끊겼습니다/);
 });
@@ -4705,7 +4768,7 @@ test('A remote new commit clears package compatibility guidance before updating 
     unsupported_solution_files: ['old.cpp'],
   });
   await mount('packages');
-  await click('검증 후 패키지 생성');
+  await click('패키지 준비');
   assert.ok(host.querySelector('.package-compatibility'));
   await remoteCommit(2);
   assert.equal(host.querySelector('.package-compatibility'), null);
@@ -4722,7 +4785,7 @@ for (const transition of ['format', 'commit', 'page']) {
       }),
     };
     await mount('packages');
-    await click('검증 후 패키지 생성');
+    await click('패키지 준비');
     assert.equal(requests.length, 1);
     if (transition === 'format') {
       await setControl('패키지 형식', 'linux');
@@ -4756,7 +4819,7 @@ for (const setting of ['sets', 'language', 'verification']) {
       issues: ['선택한 세트의 그룹별 점수를 지원하지 않습니다.'],
     });
     await mount('packages');
-    await click('검증 후 패키지 생성');
+    await click('패키지 준비');
     assert.ok(host.querySelector('.package-compatibility'));
     if (setting === 'sets')
       await selectSets('ZOJ에서 사용할 테스트 세트', ['extra']);
@@ -4784,7 +4847,7 @@ test('Slow execution environment response does not hide an already rejected ZOJ 
   });
   await mount('packages');
   assert.match(host.textContent, /서버의 실행 한도를 확인하고 있습니다/);
-  await click('검증 후 패키지 생성');
+  await click('패키지 준비');
   assert.ok(host.querySelector('.package-compatibility'));
   await act(async () => resolve(environment));
   await flush();
@@ -4799,7 +4862,7 @@ test('A structured package error without issues retains the complete fallback me
       '추가 Validator(extra.cpp)는 지원되지 않습니다. 별도의 지문 설정도 확인하세요.',
   });
   await mount('packages');
-  await click('검증 후 패키지 생성');
+  await click('패키지 준비');
   assert.match(
     host.querySelector('.package-compatibility').textContent,
     /별도의 지문 설정도 확인하세요/,

@@ -138,6 +138,9 @@ async function mount(sampleOverrides = {}, sharedOverrides = {}) {
   await act(async () => root.render(React.createElement(Review)));
   return {
     host,
+    rerender: async () => {
+      await act(async () => root.render(React.createElement(Review)));
+    },
     close: async () => {
       await act(async () => root.unmount());
       host.remove();
@@ -307,6 +310,85 @@ test('Empty print ranges and failed sample loads cannot create misleading printe
   assert.equal(printing.length, 0);
   await view.close();
   failSamples = false;
+});
+
+function pendingImage(view, selector = '.problem-preview .markdown') {
+  const pending = document.createElement('span');
+  pending.dataset.statementImageState = 'loading';
+  view.host.querySelector(selector).append(pending);
+  return pending;
+}
+async function loadedImage(pending) {
+  const image = document.createElement('img');
+  image.src = 'blob:authorized-statement-image';
+  Object.defineProperty(image, 'complete', { value: true });
+  Object.defineProperty(image, 'naturalWidth', { value: 100 });
+  image.decode = async () => {};
+  await act(async () => {
+    pending.replaceWith(image);
+  });
+}
+
+test('printing waits for authorized images and blocks duplicate clicks until ready', async () => {
+  const view = await mount();
+  const pending = pendingImage(view);
+  await click(button(view.host, '인쇄'));
+  const start = button(view.host, '선택한 범위 인쇄');
+  await click(start);
+  await click(start);
+  assert.equal(printing.length, 0);
+  assert.equal(button(view.host, '이미지 준비 중…').disabled, true);
+  assert.equal(view.host.querySelector('fieldset').disabled, true);
+  await loadedImage(pending);
+  assert.equal(printing.length, 1);
+  assert.equal(printing[0].modalOpen, false);
+  await view.close();
+});
+
+test('closing options, language/document changes and unmount cancel late printing', async () => {
+  for (const mode of ['close', 'language', 'document', 'unmount']) {
+    const view = await mount();
+    const pending = pendingImage(view);
+    await click(button(view.host, '인쇄'));
+    await click(button(view.host, '선택한 범위 인쇄'));
+    if (mode === 'close') await click(button(view.host, '취소'));
+    if (mode === 'language')
+      await act(async () => {
+        const select = view.host.querySelector('select');
+        select.value = 'english';
+        select.dispatchEvent(new window.Event('change', { bubbles: true }));
+      });
+    if (mode === 'document') {
+      context = { ...context, document: { ...context.document } };
+      await view.rerender();
+    }
+    if (mode === 'unmount') await view.close();
+    await loadedImage(pending);
+    assert.equal(printing.length, 0, mode);
+    if (mode !== 'unmount') await view.close();
+  }
+});
+
+test('failed images in excluded editorial are ignored until that section is selected', async () => {
+  const view = await mount();
+  const failed = pendingImage(view, '.review-editorial .markdown');
+  failed.dataset.statementImageState = 'error';
+  await click(button(view.host, '인쇄'));
+  await click(button(view.host, '선택한 범위 인쇄'));
+  assert.equal(printing.length, 1);
+  await click(button(view.host, '인쇄'));
+  await click(checkbox(view.host, '해설 · 검수용'));
+  await click(button(view.host, '선택한 범위 인쇄'));
+  assert.equal(printing.length, 1);
+  assert.match(
+    view.host.querySelector('dialog').textContent,
+    /인쇄할 이미지를 불러오지 못했습니다/,
+  );
+  assert.equal(button(view.host, '선택한 범위 인쇄').disabled, false);
+  await click(checkbox(view.host, '해설 · 검수용'));
+  await click(button(view.host, '선택한 범위 인쇄'));
+  assert.equal(printing.length, 2);
+  await view.close();
 });
 
 after(() => dom.window.close());

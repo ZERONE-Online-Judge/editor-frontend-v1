@@ -36,6 +36,7 @@ type ExportSummary = {
   options: {
     export_format: ExportFormat;
     verify: boolean;
+    reuse?: boolean;
     statement_language: string;
   };
   status: ExportStatus;
@@ -69,6 +70,15 @@ const active = (status: ExportStatus) =>
   status === 'queued' || status === 'running';
 const denied = (error: unknown) =>
   error instanceof ApiError && [401, 403, 404].includes(error.status);
+function policy(options: ExportSummary['options']) {
+  return options.reuse === false
+    ? options.verify
+      ? '재검증 후 생성'
+      : '새 검증 없이 재생성'
+    : options.verify
+      ? '필요 시 검증 후 생성'
+      : '새 검증 생략';
+}
 
 export default function FolderPackageExport({
   folder,
@@ -83,6 +93,7 @@ export default function FolderPackageExport({
 }) {
   const [format, setFormat] = useState<ExportFormat>('zoj');
   const [verify, setVerify] = useState(true);
+  const [rebuild, setRebuild] = useState(false);
   const [descendants, setDescendants] = useState(true);
   const [language, setLanguage] = useState('korean');
   const [busy, setBusy] = useState(false);
@@ -214,6 +225,7 @@ export default function FolderPackageExport({
           include_descendants: descendants,
           export_format: format,
           verify,
+          reuse: !rebuild,
           statement_language: language.trim() || 'korean',
         },
       );
@@ -295,7 +307,9 @@ export default function FolderPackageExport({
             변경사항은 먼저 커밋하세요.
           </p>
           <p className="muted">
-            같은 조건의 패키지는 재사용하고, 없는 패키지는 자동으로 생성합니다.
+            {rebuild
+              ? '기존 패키지를 재사용하지 않고 모든 문제의 패키지를 새로 생성합니다.'
+              : '같은 조건의 패키지는 재사용하고, 없는 패키지는 자동으로 생성합니다.'}{' '}
             검색·필터·선택한 문제와 관계없이 폴더 전체가 대상입니다.
           </p>
           <label className="checkbox">
@@ -348,10 +362,23 @@ export default function FolderPackageExport({
             <input
               type="checkbox"
               checked={verify}
+              aria-label="패키지 생성 전 검증"
               disabled={busy}
               onChange={(event) => setVerify(event.target.checked)}
             />
-            패키지 생성 전 풀이·구성요소 검증 실행
+            새 패키지 생성 전 풀이·구성요소 검증 실행
+          </label>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              aria-label="기존 패키지 다시 생성"
+              checked={rebuild}
+              disabled={busy}
+              onChange={(event) => setRebuild(event.target.checked)}
+            />
+            {verify
+              ? '기존 패키지도 재검증 후 생성'
+              : '기존 패키지도 다시 생성'}
           </label>
           <p className="muted">
             각 문제의 모든 테스트 세트를 사용합니다. 패키지 내보내기 권한이
@@ -359,9 +386,10 @@ export default function FolderPackageExport({
           </p>
           {!verify && (
             <Notice>
-              저장된 자료만 미검증 패키지로 내보냅니다. ZOJ·Linux 형식은
-              입력·정답이 모두 저장되어 있어야 합니다. ZOJ 등록·업데이트에는
-              검증된 패키지가 필요합니다.
+              새 패키지가 필요하면 저장된 자료를 새 검증 없이 내보냅니다. 기존
+              패키지의 검증 상태는 유지됩니다. ZOJ·Linux 형식은 입력·정답이 모두
+              저장되어 있어야 합니다. ZOJ 등록·업데이트에는 검증된 패키지가
+              필요합니다.
             </Notice>
           )}
           {startError && <Notice tone="error">{startError}</Notice>}
@@ -389,7 +417,7 @@ export default function FolderPackageExport({
                     <span>
                       {time(row.created_at)} ·{' '}
                       {formats[row.options.export_format]} ·{' '}
-                      {row.options.verify ? '검증' : '미검증'}
+                      {policy(row.options)}
                     </span>
                     <span>
                       {statuses[row.status]} · {row.ready}/{row.total}개{' '}
@@ -424,7 +452,7 @@ export default function FolderPackageExport({
                   <h3>{statuses[detail.status]}</h3>
                   <p className="muted">
                     {formats[detail.options.export_format]} ·{' '}
-                    {detail.options.verify ? '검증 후 생성' : '미검증'} ·{' '}
+                    {policy(detail.options)} ·{' '}
                     {detail.include_descendants
                       ? '하위 폴더 포함'
                       : '현재 폴더만'}
