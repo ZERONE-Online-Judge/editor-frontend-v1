@@ -7,6 +7,9 @@ import { api } from '../../lib/api';
 import { executionResultPath } from '../../lib/executionNavigation';
 import { useWorkspace } from '../../lib/workspace';
 import { Badge, SectionHeading } from '../../components/ui';
+import ConstraintComparison, {
+  type ConstraintComparisonData,
+} from './ConstraintComparison';
 
 export type ReviewReportData = {
   document_hash: string;
@@ -15,6 +18,7 @@ export type ReviewReportData = {
   counts: Record<string, number>;
   evidence_jobs: string[];
   method: string;
+  constraint_comparison?: ConstraintComparisonData;
   items: {
     code: string;
     severity: string;
@@ -42,8 +46,25 @@ export function ReviewReportView({
 }) {
   const [category, setCategory] = useState('all');
   const [severity, setSeverity] = useState('all');
+  const comparison =
+    report.constraint_comparison?.version === 1
+      ? report.constraint_comparison
+      : null;
+  const constraintRows = (comparison?.rows || []).filter(
+    (row) =>
+      severity === 'all' ||
+      severity === (row.status === 'difference' ? 'warning' : 'info'),
+  );
+  const showComparison =
+    comparison &&
+    (category === 'all' || category === 'constraints') &&
+    (severity === 'all' ||
+      severity === 'info' ||
+      (severity === 'warning' &&
+        (constraintRows.length > 0 || comparison.counts.different > 0)));
   const items = report.items.filter(
     (item) =>
+      !(comparison && item.category === 'constraints') &&
       (category === 'all' || item.category === category) &&
       (severity === 'all' || item.severity === severity),
   );
@@ -86,6 +107,15 @@ export function ReviewReportView({
           ))}
         </Select>
       </label>
+      {showComparison && (
+        <ConstraintComparison
+          comparison={comparison}
+          rows={constraintRows}
+          problemId={problemId}
+          resetKey={`${problemId}/${report.document_hash}/${category}/${severity}`}
+          showInformation={severity !== 'warning'}
+        />
+      )}
       <div className="review-report-list">
         {paging.items.map((item, index) => (
           <article key={`${item.code}-${index}`}>
@@ -116,7 +146,7 @@ export function ReviewReportView({
             </Link>
           </article>
         ))}
-        {!items.length && (
+        {!items.length && !showComparison && (
           <p className="muted">선택한 분류에 표시할 항목이 없습니다.</p>
         )}
       </div>
@@ -133,31 +163,39 @@ export function ReviewReportView({
 }
 export default function ReviewReport() {
   const { data, dirty, busy } = useWorkspace();
-  const [report, setReport] = useState<ReviewReportData | null>(null);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const problemId = data.problem.id;
+  const documentHash = data.document_hash;
+  const scope = `${problemId}/${documentHash}/${refresh}`;
+  const [result, setResult] = useState<{
+    scope: string;
+    report: ReviewReportData | null;
+    error: string;
+  } | null>(null);
+  const current = result?.scope === scope ? result : null;
+  const report = current?.report || null;
+  const error = current?.error || '';
+  const loading = !current;
   useEffect(() => {
     let cancelled = false;
-    api<ReviewReportData>(`/problems/${data.problem.id}/review-report`)
+    const controller = new AbortController();
+    api<ReviewReportData>(`/problems/${problemId}/review-report`, {
+      signal: controller.signal,
+    })
       .then((value) => {
-        if (!cancelled) {
-          setReport(value);
-          setError('');
-        }
+        if (!cancelled) setResult({ scope, report: value, error: '' });
       })
       .catch((error) => {
-        if (!cancelled) setError(error.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled)
+          setResult({ scope, report: null, error: error.message });
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [data.problem.id, data.document_hash, refresh]);
+  }, [problemId, documentHash, refresh, scope]);
   return (
-    <section className="card review-report">
+    <section className="card review-report" aria-busy={loading}>
       <SectionHeading
         title="문제 검수 보고서"
         description="저장된 자료와 실제 실행 근거를 함께 검토합니다. 보고서를 열어도 AI나 채점 작업을 새로 시작하지 않습니다."
@@ -166,7 +204,6 @@ export default function ReviewReport() {
             className="button small"
             disabled={busy || loading}
             onClick={() => {
-              setLoading(true);
               setRefresh((n) => n + 1);
             }}
           >
@@ -185,9 +222,9 @@ export default function ReviewReport() {
           problemId={data.problem.id}
           stale={dirty || report.document_hash !== data.document_hash}
         />
-      ) : (
+      ) : loading ? (
         <p className="muted">검수 근거를 불러오고 있습니다.</p>
-      )}
+      ) : null}
     </section>
   );
 }
