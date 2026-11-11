@@ -11,6 +11,17 @@ release_file="$root/config/release.env"
 frontend="$source_root/editor_frontend_v1"
 backend="$source_root/editor_backend_v1"
 [[ -r "$env_file" && -r "$release_file" ]] || exit 1
+# The healthy backend revision owns the shared switch and deployment lock once
+# blue-green routing is installed. Keep the legacy path for its first bootstrap.
+if grep -q '^EDITOR_DEPLOY_MODE=' "$release_file"; then
+    [[ $(sed -n 's/^EDITOR_DEPLOY_MODE=//p' "$release_file") == blue-green ]] || { echo 'Unknown Editor deployment mode; deployment stopped.' >&2; exit 1; }
+    backend_sha=$(sed -n 's/^EDITOR_API_IMAGE=zoj-editor-api://p' "$release_file")
+    [[ $backend_sha =~ ^[a-f0-9]{40}$ ]] || exit 1
+    [[ $(git -C "$backend" remote get-url origin) == 'https://github.com/ZERONE-Online-Judge/editor-backend-v1.git' ]] || exit 1
+    [[ -z $(git -C "$backend" status --porcelain) ]] || { echo 'Uncommitted backend coordinator changes; deployment stopped.' >&2; exit 1; }
+    [[ $(git -C "$backend" rev-parse HEAD) == "$backend_sha" ]] || { echo 'Backend coordinator differs from its healthy release.' >&2; exit 1; }
+    exec bash "$backend/deploy/deploy-main.sh" frontend "$event_sha"
+fi
 exec 9>"$root/config/deploy.lock"
 flock -w 2400 9
 for part in frontend backend; do
@@ -38,7 +49,7 @@ old_container=$("${compose[@]}" ps -q --status running frontend)
 [[ $(docker inspect --format '{{.Config.Image}}' "$old_container") == "$old_image" ]] || { echo 'Running frontend differs from its release; inspect before continuing.' >&2; exit 1; }
 docker image inspect "$old_image" >/dev/null
 new_image="zoj-editor-frontend:$event_sha"
-docker build -t "$new_image" "$frontend"
+docker build --build-arg "EDITOR_FRONTEND_REVISION=$event_sha" -t "$new_image" "$frontend"
 export EDITOR_FRONTEND_IMAGE="$new_image"
 rollback() {
     trap - ERR
@@ -53,6 +64,7 @@ container=$("${compose[@]}" ps -q --status running frontend)
 [[ $(docker inspect --format '{{.Config.Image}}' "$container") == "$new_image" ]]
 docker exec "$container" nginx -t
 docker exec "$container" test -s /usr/share/nginx/html/index.html
+[[ $(docker exec "$container" wget -qO- http://127.0.0.1/healthz) == "$event_sha" ]]
 [[ $("${compose[@]}" ps -q --status running api) == "$api_before" ]]
 [[ $("${compose[@]}" ps -q --status running worker) == "$worker_before" ]]
 python3 - "$release_file" "$new_image" <<'PY'

@@ -160,6 +160,20 @@ Dockerfile과 `deploy/nginx.conf.template`을 제공합니다. 백엔드 저장�
 호스트 포트·SMTP·TLS·DB 설정은 백엔드 배포 문서를 따릅니다.
 `VITE_API_PROXY`는 개발용이며 운영은 동일 도메인의 `/api`를 사용합니다.
 
+운영 `release.env`에 `EDITOR_DEPLOY_MODE=blue-green`이 있으면 프런트엔드
+배포는 해당 파일의 API 이미지 SHA와 일치하는 백엔드 체크아웃의 배포
+조정기를 실행합니다. 조정기가 공통 잠금과 후보 슬롯 검증, 트래픽 전환을
+담당하며 프런트엔드 배포는 API·워커 이미지를 변경하지 않습니다.
+모드가 아직 없는 최초 전환에서는 기존 프런트엔드 서비스만 교체합니다.
+
+Nginx의 `EDITOR_API_UPSTREAM` 기본값은 `api:8000`이며 슬롯 배포에서는
+조정기가 같은 슬롯의 API 주소를 지정합니다. 이미지 빌드 시
+`--build-arg EDITOR_FRONTEND_REVISION=<커밋 SHA>`로 릴리스를 기록합니다.
+`/release.txt`는 기존 인그레스 접근 정책 안에서 SHA를 반환하고,
+`/healthz`는 원래 TCP 연결이 루프백인 경우에만 같은 값을 반환합니다.
+로컬 상태 확인은 프록시의 인그레스 CIDR과 관계없이 가능하며 다른
+정적 파일이나 API에 대한 접근 권한은 부여하지 않습니다.
+
 ## 브랜치
 
 각 기능 브랜치는 앞 브랜치를 기반으로 쌓았습니다.

@@ -2,6 +2,16 @@ geo $realip_remote_addr $editor_ingress_allowed {
     default 0;
     ${EDITOR_INGRESS_CIDR} 1;
 }
+geo $realip_remote_addr $editor_health_allowed {
+    default 0;
+    127.0.0.1/32 1;
+    ::1/128 1;
+}
+map "$editor_ingress_allowed:$editor_health_allowed:$uri" $editor_request_allowed {
+    default 0;
+    ~^1: 1;
+    "0:1:/healthz" 1;
+}
 server {
     listen 80;
     server_name editor.zoj.kr;
@@ -12,12 +22,21 @@ server {
     real_ip_header X-Forwarded-For;
     real_ip_recursive on;
     # Test the original TCP peer; real_ip may replace remote_addr with a user IP.
-    if ($editor_ingress_allowed = 0) { return 403; }
+    if ($editor_request_allowed = 0) { return 403; }
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy same-origin always;
     add_header X-Frame-Options SAMEORIGIN always;
+    # A local probe reads the revision only after image build asset checks pass.
+    # Check the TCP peer so forwarded client addresses cannot grant health access.
+    location = /healthz {
+        if ($editor_health_allowed = 0) { return 403; }
+        access_log off;
+        default_type text/plain;
+        add_header Cache-Control no-store;
+        try_files /release.txt =503;
+    }
     location /api/ {
-        proxy_pass http://api:8000;
+        proxy_pass http://${EDITOR_API_UPSTREAM};
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto https;

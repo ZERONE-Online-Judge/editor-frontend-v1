@@ -15,25 +15,57 @@ jobs:
       - run: npm test
       - run: npm run lint
       - run: npm run build
-      - name: Verify logo serving from a private checkout
+      - name: Verify private assets, release health and upstreams
         run: |
           chmod 600 public/zoj-logo.png
-          docker build -t zoj-editor-frontend:ci .
-          trap 'docker rm -f editor-assets-ci >/dev/null 2>&1 || true' EXIT
+          docker build --build-arg "EDITOR_FRONTEND_REVISION=$GITHUB_SHA" \
+            -t zoj-editor-frontend:ci .
+          trap 'docker rm -f editor-assets-ci editor-upstream-ci editor-health-ci >/dev/null 2>&1 || true' EXIT
+          wait_for_health() {
+            for attempt in $(seq 1 15); do
+              if revision=$(docker exec "$1" wget -qO- http://127.0.0.1/healthz); then
+                test "$revision" = "$GITHUB_SHA"
+                return
+              fi
+              sleep 1
+            done
+            docker logs "$1"
+            return 1
+          }
+          # Default api:8000 must survive the restricted envsubst filter.
           docker run -d --name editor-assets-ci --network none \
             --add-host api:127.0.0.1 \
             -e EDITOR_INGRESS_CIDR=127.0.0.1/32 \
             -e NGINX_ENVSUBST_FILTER=EDITOR_ zoj-editor-frontend:ci
-          for attempt in $(seq 1 15); do
-            if docker exec editor-assets-ci wget -qO- \
-              'http://127.0.0.1/zoj-logo.png?v=2' > /tmp/editor-served-logo.png; then
-              cmp public/zoj-logo.png /tmp/editor-served-logo.png
-              exit 0
-            fi
-            sleep 1
-          done
-          echo 'Nginx could not serve the actual logo from a private checkout.' >&2
-          exit 1
+          wait_for_health editor-assets-ci
+          docker exec editor-assets-ci wget -qO- \
+            'http://127.0.0.1/zoj-logo.png?v=2' > /tmp/editor-served-logo.png
+          cmp public/zoj-logo.png /tmp/editor-served-logo.png
+          docker exec editor-assets-ci sh -ec \
+            'for asset in /usr/share/nginx/html/assets/*.js; do wget -qO- "http://127.0.0.1/assets/${asset##*/}" | cmp - "$asset"; done'
+          test "$(docker exec editor-assets-ci wget -qO- http://127.0.0.1/release.txt)" = "$GITHUB_SHA"
+          # No api hostname exists here: a hardcoded upstream fails to start.
+          docker run -d --name editor-upstream-ci --network none \
+            --add-host api-green:127.0.0.1 \
+            -e EDITOR_API_UPSTREAM=api-green:8000 \
+            -e EDITOR_INGRESS_CIDR=203.0.113.4/32 \
+            -e NGINX_ENVSUBST_FILTER=EDITOR_ zoj-editor-frontend:ci
+          wait_for_health editor-upstream-ci
+          if docker exec editor-upstream-ci wget -qO- http://127.0.0.1/; then
+            echo 'A health probe must not bypass the static ingress ACL.' >&2
+            exit 1
+          fi
+          # Even an allowed non-loopback TCP peer cannot read local health.
+          docker run -d --name editor-health-ci \
+            --add-host api:127.0.0.1 \
+            -e EDITOR_INGRESS_CIDR=0.0.0.0/0 \
+            -e NGINX_ENVSUBST_FILTER=EDITOR_ zoj-editor-frontend:ci
+          wait_for_health editor-health-ci
+          if docker exec editor-health-ci sh -c \
+            'wget -qO- --header="X-Forwarded-For: 127.0.0.1" "http://$(hostname -i)/healthz"'; then
+            echo 'A forwarded address must not grant local health access.' >&2
+            exit 1
+          fi
   deploy:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

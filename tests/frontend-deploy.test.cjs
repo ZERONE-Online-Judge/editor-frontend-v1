@@ -26,6 +26,9 @@ function deploy(overrides = {}) {
   fs.mkdirSync(bin);
   const release = path.join(root, 'config/release.env');
   const before = [
+    ...(overrides.DEPLOY_MODE
+      ? [`EDITOR_DEPLOY_MODE=${overrides.DEPLOY_MODE}`]
+      : []),
     `EDITOR_API_IMAGE=zoj-editor-api:${backend}`,
     `EDITOR_FRONTEND_IMAGE=zoj-editor-frontend:${previous}`,
     `EDITOR_RUNNER_IMAGE=zoj-editor-runtime:${backend}`,
@@ -39,6 +42,16 @@ function deploy(overrides = {}) {
   fs.writeFileSync(image, `zoj-editor-frontend:${previous}`);
   const log = path.join(folder, 'calls');
   fs.writeFileSync(log, '');
+  fs.writeFileSync(
+    path.join(repositories, 'editor_backend_v1/deploy/deploy-main.sh'),
+    `#!/usr/bin/env bash
+exec node - "$@" <<'JS'
+const fs=require('node:fs'),a=process.argv.slice(2),e=process.env;
+fs.appendFileSync(e.CALL_LOG,JSON.stringify({coordinator:true,args:a})+'\\n');
+process.exit(e.FAIL_COORDINATOR==='1'?1:0);
+JS
+`,
+  );
   const script = path.join(folder, 'deploy.sh');
   fs.writeFileSync(
     script,
@@ -57,7 +70,7 @@ const a=process.argv.slice(2), p=a[1]; a.splice(0,2);
 if(a.join(' ')==='remote get-url origin') console.log('https://github.com/ZERONE-Online-Judge/editor-'+(p.endsWith('editor_frontend_v1')?'frontend':'backend')+'-v1.git');
 if(a[0]==='status' && process.env.DIRTY==='1') console.log(' M unrelated-file');
 if(a.join(' ')==='rev-parse origin/main') console.log(process.env.NEWER==='1'?'d'.repeat(40):'${target}');
-if(a.join(' ')==='rev-parse HEAD') console.log('${backend}');
+if(a.join(' ')==='rev-parse HEAD') console.log(process.env.WRONG_BACKEND==='1'?'e'.repeat(40):'${backend}');
 `,
   );
   executable(
@@ -76,6 +89,7 @@ if(a[0]==='compose') {
 if(a[0]==='inspect') console.log(fs.readFileSync(e.IMAGE,'utf8'));
 if(a[0]==='build' && e.FAIL_BUILD==='1') process.exit(1);
 if(a[0]==='exec' && e.FAIL_HEALTH==='1' && a.includes('nginx')) process.exit(1);
+if(a[0]==='exec' && a.includes('wget')) console.log(e.WRONG_RELEASE==='1'?'e'.repeat(40):'${target}');
 `,
   );
   try {
@@ -131,6 +145,8 @@ test('Frontend release changes only its image and preserves API, worker and runt
       (c) => !/preflight|SIGUSR1|pg_dump|alembic|stop/.test(c.args.join(' ')),
     ),
   );
+  const build = result.calls.find((c) => c.args[0] === 'build');
+  assert.ok(build.args.includes(`EDITOR_FRONTEND_REVISION=${target}`));
 });
 
 test('Build failures keep the active frontend and release manifest intact', () => {
@@ -141,7 +157,7 @@ test('Build failures keep the active frontend and release manifest intact', () =
   assert.ok(result.calls.every((c) => !c.args.includes('up')));
 });
 
-for (const failure of ['FAIL_ACTIVATE', 'FAIL_HEALTH']) {
+for (const failure of ['FAIL_ACTIVATE', 'FAIL_HEALTH', 'WRONG_RELEASE']) {
   test(`${failure} restores the old frontend without advancing the release manifest`, () => {
     const result = deploy({ [failure]: '1' });
     assert.notEqual(result.status, 0);
@@ -161,5 +177,37 @@ test('Superseded commits and unrelated dirty server files cannot deploy', () => 
     assert.equal(result.image, `zoj-editor-frontend:${previous}`);
     assert.equal(result.release, result.before);
     assert.equal(result.calls.length, 0);
+  }
+});
+
+test('Blue-green frontend releases use the healthy pinned backend coordinator', () => {
+  const result = deploy({ DEPLOY_MODE: 'blue-green' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.calls, [
+    { coordinator: true, args: ['frontend', target] },
+  ]);
+  assert.equal(result.image, `zoj-editor-frontend:${previous}`);
+  assert.equal(result.release, result.before);
+});
+
+test('Coordinator failures propagate without falling back to container recreation', () => {
+  const result = deploy({ DEPLOY_MODE: 'blue-green', FAIL_COORDINATOR: '1' });
+  assert.equal(result.status, 1, result.stderr);
+  assert.deepEqual(result.calls, [
+    { coordinator: true, args: ['frontend', target] },
+  ]);
+  assert.equal(result.release, result.before);
+});
+
+test('Unsafe coordinator checkouts and unknown modes cannot use the legacy path', () => {
+  for (const overrides of [
+    { DEPLOY_MODE: 'blue-green', WRONG_BACKEND: '1' },
+    { DEPLOY_MODE: 'blue-green', DIRTY: '1' },
+    { DEPLOY_MODE: 'unknown' },
+  ]) {
+    const result = deploy(overrides);
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.calls.length, 0);
+    assert.equal(result.release, result.before);
   }
 });
