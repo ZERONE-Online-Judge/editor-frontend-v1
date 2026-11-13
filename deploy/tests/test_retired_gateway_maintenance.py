@@ -33,7 +33,7 @@ def processes(namespace=False):
     target = tool.TARGET_NS if namespace else tool.TARGET_HOST
     entries[target] = row(tool.TARGET_HOST, tool.TARGET_NS, "retired", tool.TARGET_START)
     for host, ns in zip(tool.CURRENT_HOST, tool.CURRENT_NS):
-        entries[ns if namespace else host] = row(host, ns, "current", tool.CURRENT_START)
+        entries[ns if namespace else host] = row(host, ns, "current", tool.CURRENT_START_BY_HOST[host])
     return entries
 
 
@@ -76,7 +76,8 @@ class IdentityTests(unittest.TestCase):
             (tool.MASTER_HOST, "nspid", [tool.MASTER_HOST, 2]),
             (tool.MASTER_HOST, "expected_container", False),
             (tool.CURRENT_HOST[0], "kind", "retired"),
-            (tool.CURRENT_HOST[0], "start_ticks", tool.CURRENT_START + 1),
+            (tool.CURRENT_HOST[0], "start_ticks", tool.CURRENT_START_BY_HOST[tool.CURRENT_HOST[0]] + 1),
+            (tool.CURRENT_HOST[-1], "start_ticks", tool.CURRENT_START_BY_HOST[tool.CURRENT_HOST[-1]] - 1),
             (tool.CURRENT_HOST[0], "ppid", 999),
             (tool.CURRENT_HOST[0], "nspid", [tool.CURRENT_HOST[0], 999]),
             (tool.CURRENT_HOST[0], "expected_container", False),
@@ -236,6 +237,11 @@ class SignalTests(unittest.TestCase):
 
 
 class ReleaseTests(unittest.TestCase):
+    def setUp(self):
+        clock = patch.object(tool.time, 'time', return_value=tool.FIRST_RETIRED_OBSERVATION + 2000)
+        clock.start()
+        self.addCleanup(clock.stop)
+
     def test_exact_release_accepts_only_immutable_api_image(self):
         self.assertEqual(tool.validate_release(release(), containers()), "sha256:" + "b" * 64)
 
@@ -315,12 +321,13 @@ class CommandDiagnosticsTests(unittest.TestCase):
                'running': False, 'pid': 0, 'pid_mode': 'container:' + tool.CONTAINER,
                'marker': tool.CONTAINER}
         with patch.object(tool, 'run', side_effect=['', helper, json.dumps(row),
-                json.dumps({'outcome': 'namespace_inspect_passed', 'signal_sent': False}), '']) as run:
+                json.dumps({'outcome': 'namespace_inspect_passed', 'signal_sent': False}),
+                json.dumps({'running': False, 'exit_code': 0}), '']) as run:
             result = tool.namespace_check(image)
         self.assertTrue(result['runtime_image_matches_active_api'])
         self.assertEqual([x.kwargs['stage'] for x in run.call_args_list],
             ['helper_duplicate_check', 'namespace_helper_create', 'created_helper_identity',
-             'retired_worker_namespace_inspect', 'namespace_helper_remove'])
+             'retired_worker_namespace_inspect', 'namespace_helper_exit_state', 'namespace_helper_remove'])
         self.assertEqual(run.call_args_list[1].args[0][1], 'create')
         self.assertEqual(run.call_args_list[3].args[0][:4], ['docker', 'start', '-a', '-i'])
 
@@ -340,6 +347,30 @@ class CommandDiagnosticsTests(unittest.TestCase):
                 self.assertNotIn('retired_worker_namespace_inspect',
                     [x.kwargs['stage'] for x in run.call_args_list])
                 self.assertEqual(run.call_args_list[-1].args[0], ['docker', 'rm', '-f', helper])
+
+    def test_zero_cli_exit_still_propagates_known_inner_refusal_and_container_exit(self):
+        image, helper = 'sha256:' + 'a' * 64, 'b' * 64
+        row = {'id': helper, 'image_id': image, 'image_reference': 'zoj-editor-api:' + tool.API_SHA,
+               'running': False, 'pid': 0, 'pid_mode': 'container:' + tool.CONTAINER,
+               'marker': tool.CONTAINER}
+        with patch.object(tool, 'run', side_effect=['', helper, json.dumps(row),
+                json.dumps({'outcome': 'refused', 'code': 'master_namespace_changed'}),
+                json.dumps({'running': False, 'exit_code': 1}), '']):
+            with self.assertRaises(tool.Refused) as error:
+                tool.namespace_check(image)
+        self.assertEqual(str(error.exception), 'master_namespace_changed')
+        self.assertEqual(error.exception.diagnostic, {'container_exit_code': 1})
+
+    def test_success_json_does_not_hide_nonzero_container_exit(self):
+        image, helper = 'sha256:' + 'a' * 64, 'b' * 64
+        row = {'id': helper, 'image_id': image, 'image_reference': 'zoj-editor-api:' + tool.API_SHA,
+               'running': False, 'pid': 0, 'pid_mode': 'container:' + tool.CONTAINER,
+               'marker': tool.CONTAINER}
+        with patch.object(tool, 'run', side_effect=['', helper, json.dumps(row),
+                json.dumps({'outcome': 'namespace_inspect_passed', 'signal_sent': False}),
+                json.dumps({'running': False, 'exit_code': 1}), '']):
+            with self.assertRaisesRegex(tool.Refused, 'namespace_helper_exit_failed'):
+                tool.namespace_check(image)
 
     def test_namespace_stderr_is_private_and_logs_only_static_summary(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -422,6 +453,11 @@ class CommandDiagnosticsTests(unittest.TestCase):
 
 
 class ReleasePreflightTests(unittest.TestCase):
+    def setUp(self):
+        clock = patch.object(tool.time, 'time', return_value=tool.FIRST_RETIRED_OBSERVATION + 2000)
+        clock.start()
+        self.addCleanup(clock.stop)
+
     def test_apply_requires_exact_confirmation_before_lock_or_docker(self):
         with patch.object(tool.socket, "gethostname", return_value="zoj-editor"), \
                 patch.object(tool, "run") as command:

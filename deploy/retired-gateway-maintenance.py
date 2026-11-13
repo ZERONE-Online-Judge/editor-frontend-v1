@@ -21,21 +21,24 @@ import time
 import urllib.request
 
 CONTAINER = "76a3a69e6ab595f50e8c41834ac9ae857e43828bdb5a43801cef066f6cb2a414"
-API_SHA = "9b57b66da43f6dd95c162df989c843e69f8c231a"
-UI_SHA = "c7881c73fe27fa9faafb21a7865c3f2699a17bf1"
-CONFIRMATION = "terminate-retired-editor-gateway-worker-344"
-FIRST_RETIRED_OBSERVATION = 1794574092  # 2026-11-13T12:48:12Z
+API_SHA = "0e2f678fcbc02d3c56570229743150de6f8f53bc"
+UI_SHA = "21d0ffe651ded2f28f780baa026a0d9174ba907a"
+CONFIRMATION = "terminate-retired-editor-gateway-worker-408"
+FIRST_RETIRED_OBSERVATION = 1794583185.346143  # 2026-11-13T15:19:45.346143Z
 MINIMUM_RETIRED_SECONDS = 1900
-HELPER_NAME = "editor-retired-gateway-20261113"
+HELPER_NAME = "editor-retired-gateway-408-20261114"
 PROJECT = "zoj-editor"
 MASTER_HOST = 3602572
 MASTER_START = 225755805
-TARGET_HOST = 3620554
-TARGET_NS = 344
-TARGET_START = 225793692
-CURRENT_START = 243953669
-CURRENT_HOST = tuple(range(3698865, 3698871))
-CURRENT_NS = tuple(range(405, 411))
+TARGET_HOST = 3698868
+TARGET_NS = 408
+TARGET_START = 243953669
+CURRENT_HOST = (3960785, 3960786, 3960787, 3960788, 3960789, 3960791)
+CURRENT_NS = (7008, 7009, 7010, 7011, 7012, 7013)
+CURRENT_START_BY_HOST = {
+    3960785: 244908369, 3960786: 244908369, 3960787: 244908369,
+    3960788: 244908369, 3960789: 244908369, 3960791: 244908370,
+}
 CONFIG = Path("/srv/zoj-editor/config")
 NAMESPACE_REFUSALS = frozenset({
     "process_metadata_unavailable", "master_missing", "master_identity_changed",
@@ -183,7 +186,7 @@ def validate_processes(read=process, *, namespace=False):
         row = read(ns_pid if namespace else host_pid)
         require(row is not None, "current_worker_missing")
         require(row["kind"] == "current" and row["ppid"] == master_id
-                and row["start_ticks"] == CURRENT_START,
+                and row["start_ticks"] == CURRENT_START_BY_HOST[host_pid],
                 "current_worker_identity_changed")
         require(row["nspid"] == ([ns_pid] if namespace else [host_pid, ns_pid]),
                 "current_worker_namespace_changed")
@@ -199,7 +202,7 @@ def validate_processes(read=process, *, namespace=False):
             "retired_worker_namespace_changed")
     if not namespace:
         require(target["expected_container"], "retired_worker_container_changed")
-    require(TARGET_START < CURRENT_START, "worker_generation_order_changed")
+    require(TARGET_START < min(CURRENT_START_BY_HOST.values()), "worker_generation_order_changed")
     return True
 
 
@@ -405,6 +408,15 @@ def namespace_check(image, *, apply=False):
                   input=Path(__file__).read_text(), timeout=45,
                   stage="retired_worker_namespace_helper" if apply else "retired_worker_namespace_inspect")
         result = json.loads(raw)
+        exit_state = json.loads(run(["docker", "inspect", "--format",
+            '{"running":{{json .State.Running}},"exit_code":{{json .State.ExitCode}}}', helper_id],
+            stage="namespace_helper_exit_state"))
+        if result.get("outcome") == "refused" and result.get("code") in NAMESPACE_REFUSALS:
+            raise Refused(result["code"],
+                stage="retired_worker_namespace_helper" if apply else "retired_worker_namespace_inspect",
+                diagnostic={"container_exit_code": exit_state.get("exit_code")})
+        require(exit_state.get("running") is False and exit_state.get("exit_code") == 0,
+                "namespace_helper_exit_failed")
         allowed = {"already_gone", "retired_worker_terminated"} if apply else {"already_gone", "namespace_inspect_passed"}
         require(result.get("outcome") in allowed, "namespace_helper_refused")
         require(apply or result.get("signal_sent") is False, "namespace_inspect_reported_signal")

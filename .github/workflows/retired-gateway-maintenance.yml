@@ -11,7 +11,7 @@ on:
           - inspect
           - terminate-retired-worker
       confirmation:
-        description: Apply requires terminate-retired-editor-gateway-worker-344
+        description: Apply requires terminate-retired-editor-gateway-worker-408
         required: false
         type: string
 permissions:

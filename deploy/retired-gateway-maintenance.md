@@ -14,13 +14,13 @@ The default workflow action is `inspect`. It validates the actual restricted
 Docker/PID namespace and pidfd access in a short-lived helper without sending
 any signal. Apply repeats this namespace inspection before termination. The
 apply action requires the exact
-confirmation `terminate-retired-editor-gateway-worker-344`. Root must review
+confirmation `terminate-retired-editor-gateway-worker-408`. Root must review
 this remaining HTTP-request risk before dispatching apply.
 
 The helper holds the same deployment/backup lock and refuses concurrent work
 or an unresolved recovery marker. It requires the public API to serve
-`9b57b66da43f6dd95c162df989c843e69f8c231a` and UI to serve
-`c7881c73fe27fa9faafb21a7865c3f2699a17bf1`, corroborated by private release
+`0e2f678fcbc02d3c56570229743150de6f8f53bc` and UI to serve
+`21d0ffe651ded2f28f780baa026a0d9174ba907a`, corroborated by private release
 metadata and active service image references. All Editor container identities,
 process IDs, images and health state must be unchanged afterward.
 
@@ -29,17 +29,20 @@ The only possible signal target is the pinned retired worker:
 | Identity | Exact value |
 | --- | --- |
 | Gateway container | `76a3a69e6ab595f50e8c41834ac9ae857e43828bdb5a43801cef066f6cb2a414` |
-| Host PID / container PID | `3620554` / `344` |
-| Start ticks | `225793692` |
+| Host PID / container PID | `3698868` / `408` |
+| Start ticks | `243953669` |
 | Master host PID / container PID | `3602572` / `1` |
 | Master start ticks | `225755805` |
-| Current host workers | `3698865` through `3698870` |
-| Current container workers | `405` through `410` |
-| Current worker start ticks | `243953669` |
+| Current host workers | `3960785`, `3960786`, `3960787`, `3960788`, `3960789`, `3960791` |
+| Current container workers | `7008` through `7013`, in the same order |
+| Current worker start ticks | `244908369` for the first five; `244908370` for `3960791` |
 
 All worker titles, parents, namespace mappings, start ticks and host cgroups
 are checked. The exact retired title must remain `nginx: worker process is
 shutting down`. The first observed retirement must be over 1,900 seconds old.
+That observation was `2026-11-13T15:19:45.346143Z`; apply remains refused until
+after `2026-11-13T15:51:25.346143Z`. Process age is not used as a substitute for
+this observed retirement grace.
 
 For namespace inspection and apply, a stopped Python maintenance container is
 created from the exact healthy API release's canonical tag, with pulls disabled.
@@ -50,7 +53,7 @@ a container's config digest as a runnable image reference. A retagged image is
 refused before any process starts. The helper shares only the gateway's PID
 namespace, has no network, environment injection or mounts, runs on a read-only
 filesystem, drops all capabilities except `KILL`, and runs no application
-entrypoint. It opens a pidfd for PID 344, validates identities again, and sends
+entrypoint. It opens a pidfd for PID 408, validates identities again, and sends
 SIGTERM through that descriptor only. A reused numeric PID can never redirect
 the signal to its replacement. It waits up to ten seconds, with no SIGKILL
 fallback. It neither restarts any gateway nor signals a job/API/DB process.
@@ -84,5 +87,7 @@ separate operations.
 
 After a successful apply, normal frontend deployment may be retried with its
 existing gateway drain guard intact. This helper does not retry or deploy any
-release. A separately reviewed bounded SSE lifetime is still needed to prevent
-this class of blocker in future deployments.
+release. The new Editor API already limits new session-event streams to 120
+seconds. This does not retroactively end an existing stream held by the legacy
+9b57 generation. This exact legacy profile is a one-time bootstrap operation;
+the normal connection-drain guard remains enabled for all releases.
