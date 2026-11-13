@@ -240,6 +240,18 @@ export default function Overview() {
             />
             Checker 점수를 백분율로 처리
           </label>
+          {doc.info.points_enabled && (
+            <p className="span-2 muted small">
+              서브태스크는{' '}
+              <Link to={`/problems/${data.problem.id}/tests`}>
+                테스트 → 그룹 관리
+              </Link>
+              에서 구성하세요. 그룹에 테스트를 배정하고 배점을 지정한 뒤
+              저장·커밋해 ZOJ 패키지로 내보낼 수 있습니다. 배점 합계는 100점이며
+              ZOJ 대회에서 ‘IOI 점수제’를 선택해야 합니다. Checker 백분율 점수는
+              ZOJ에서 지원하지 않습니다.
+            </p>
+          )}
         </fieldset>
       </section>
       <ReviewReport />

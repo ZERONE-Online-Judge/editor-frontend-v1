@@ -601,7 +601,7 @@ export default function Executions({
             </div>
             <p className="muted">
               {exportFormat === 'zoj'
-                ? '선택한 세트의 입력·정답을 하나의 활성 채점 데이터로 합칩니다. 선택한 세트의 예제와 모든 번역 지문, 검증 코드·checker·validator 및 원본 Editor 자료를 함께 보관합니다. 그룹·부분 점수 등 지원하지 않는 채점 방식은 생성 전에 안내합니다.'
+                ? '선택한 세트의 입력·정답을 하나의 활성 채점 데이터로 합칩니다. 예제·번역 지문·검증 코드·checker·validator와 원본 Editor 자료를 함께 보관합니다. 서브태스크 배점은 합계 100점으로 내보내며 ZOJ의 IOI 점수제 대회에서 사용합니다. Checker 백분율 점수 등 지원하지 않는 설정은 생성 전에 안내합니다.'
                 : exportFormat === 'linux'
                   ? '전체 생성 테스트·정답·소스·검증 환경과 고정된 실행 코드를 담습니다. Python과 준비된 Docker 이미지로 API 키·서비스 DB 없이 오프라인 재실행할 수 있습니다. Editor 실행 정책을 재현하며, ZOJ 대회 채점기의 언어별 보정과 다른 하드웨어에서의 시간 일치를 보장하는 패키지는 아닙니다.'
                   : 'Editor에서 다시 열 수 있는 작업 자료와 problem.xml, 생성된 테스트, 모든 지문 언어를 포함합니다.'}

@@ -14,6 +14,11 @@ import BulkTests from './BulkTests';
 import TestOrder from './TestOrder';
 import { orderedTests } from '../../lib/testOrder';
 import {
+  allocateGroupPoints,
+  groupPoints,
+  groupTests,
+} from '../../lib/subtaskPoints';
+import {
   removeTestset,
   testsetRemovalImpact,
   testsetRemovalIssue,
@@ -646,7 +651,7 @@ export default function Tests() {
                 </button>
                 <button className="button" onClick={() => openPanel('groups')}>
                   <Icon name="folder" />
-                  그룹 관리
+                  그룹 관리{doc.info.points_enabled ? ' · 서브태스크' : ''}
                 </button>
                 <label
                   className={`button ${!editable || busy ? 'disabled' : ''}`}
@@ -1365,6 +1370,11 @@ function GroupEditor({
   const { document: doc, mutate, editable } = useWorkspace();
   const [name, setName] = useState('');
   const groups = doc.testsets[testset].groups;
+  const tests = doc.testsets[testset].tests;
+  const totalPoints = Object.values(tests).reduce(
+    (sum, test) => sum + test.points,
+    0,
+  );
   return (
     <Modal
       wide
@@ -1392,10 +1402,25 @@ function GroupEditor({
         />
         테스트 그룹 사용
       </label>
-      <p className="muted">
-        점수 정책과 피드백 범위, 선행 그룹 의존성을 지정합니다. 그룹별 점수는
-        등록 테스트 점수에서 결정합니다.
-      </p>
+      {!doc.info.points_enabled && (
+        <p className="muted">
+          점수 정책과 피드백 범위, 선행 그룹 의존성을 지정합니다. 그룹별 점수는
+          등록 테스트 점수에서 결정합니다.
+        </p>
+      )}
+      {doc.info.points_enabled && (
+        <Notice>
+          <strong>서브태스크 배점 · 현재 세트 {totalPoints}점</strong>
+          <p>
+            각 테스트의 그룹을 지정한 뒤 배점을 입력하세요. 그룹 전체를 통과해야
+            점수를 받으며, 배점은 그룹 내 테스트 점수의 합계입니다.
+          </p>
+          <p>
+            ZOJ IOI 점수제용 · 함께 내보낼 세트의 배점 합계 100점 · 서브태스크별
+            최고 점수 합산
+          </p>
+        </Notice>
+      )}
       <div className="inline-form">
         <input
           aria-label="새 그룹 이름"
@@ -1424,6 +1449,36 @@ function GroupEditor({
         <div className="group-row" key={key}>
           <strong>{key}</strong>
           <div className="form-grid">
+            {doc.info.points_enabled &&
+              g.points_policy === 'COMPLETE_GROUP' && (
+                <label>
+                  서브태스크 배점
+                  <input
+                    aria-label={`${key} 서브태스크 배점`}
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={groupPoints(tests, key)}
+                    disabled={!editable || !groupTests(tests, key).length}
+                    onChange={(e) => {
+                      const points = Number(e.target.value);
+                      mutate((d) => {
+                        allocateGroupPoints(
+                          d.testsets[testset].tests,
+                          key,
+                          points,
+                        );
+                      });
+                    }}
+                  />
+                  <small>
+                    {groupTests(tests, key).length
+                      ? `${groupTests(tests, key).length}개 테스트 전체 통과 시 획득`
+                      : '테스트 목록에서 이 그룹에 테스트를 먼저 배정하세요.'}
+                  </small>
+                </label>
+              )}
             <label>
               점수 정책
               <Select
