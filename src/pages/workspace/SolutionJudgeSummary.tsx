@@ -9,14 +9,82 @@ export default function SolutionJudgeSummary({
 }: {
   solution: Solution;
 }) {
-  if (!solution.judge_runs?.length) return null;
+  const groups = solution.groups || [];
+  const hasScore =
+    solution.total_score != null ||
+    groups.length > 0 ||
+    solution.score_scope_complete === false;
+  const hasRuns = Boolean(solution.judge_runs?.length);
+  const multipleSets = new Set(groups.map((group) => group.testset)).size > 1;
+  if (!hasScore && !hasRuns) return null;
   return (
-    <section className="solution-judge-summary" aria-label="ZOJ 채점 기록">
-      <p className="solution-judge-note">
-        실제 채점 기록 · 시간·메모리는 요청별 최댓값입니다. 개별 테스트의 값은
-        아래 결과에서 확인하세요.
-      </p>
-      {solution.judge_runs.map((record) => (
+    <section className="solution-judge-summary" aria-label="점수 및 채점 기록">
+      {hasScore && (
+        <section className="solution-score-summary" aria-label="점수 요약">
+          <div className="solution-score-heading">
+            <dl className="solution-score-total">
+              <dt>총점</dt>
+              <dd>
+                {solution.total_score == null ? (
+                  <span className="solution-score-pending">미확정</span>
+                ) : (
+                  <>
+                    {solution.total_score.toLocaleString()}
+                    <span>점</span>
+                  </>
+                )}
+              </dd>
+            </dl>
+            {groups.length > 0 && (
+              <span className="solution-score-count">
+                서브태스크 {groups.length}개
+              </span>
+            )}
+          </div>
+          {groups.length > 0 && (
+            <ul className="solution-subtasks" aria-label="서브태스크별 점수">
+              {groups.map((group) => (
+                <li
+                  key={`${group.testset}-${group.name}`}
+                  className={`solution-subtask ${group.passed ? 'passed' : 'pending'}`}
+                >
+                  <span className="solution-subtask-name">{group.name}</span>
+                  <strong className="solution-subtask-score">
+                    {group.score.toLocaleString()}
+                    <span>점</span>
+                  </strong>
+                  {multipleSets && (
+                    <span className="solution-subtask-set">
+                      {group.testset}
+                    </span>
+                  )}
+                  {group.blocked ? (
+                    <span className="solution-subtask-note">
+                      의존 그룹 미통과
+                    </span>
+                  ) : !group.complete ? (
+                    <span className="solution-subtask-note">
+                      전체 실행 필요
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+          {solution.score_scope_complete === false && (
+            <p className="solution-judge-note">
+              일부 테스트만 실행했으므로 세트 전체 점수는 계산하지 않았습니다.
+            </p>
+          )}
+        </section>
+      )}
+      {hasRuns && (
+        <p className="solution-judge-note">
+          실제 채점 기록 · 시간·메모리는 요청별 최댓값입니다. 개별 테스트의 값은
+          아래 결과에서 확인하세요.
+        </p>
+      )}
+      {solution.judge_runs?.map((record) => (
         <div className="solution-judge-run" key={record.id}>
           <div className="solution-judge-agent">
             <span>{record.node_name || '채점 노드 정보 없음'}</span>

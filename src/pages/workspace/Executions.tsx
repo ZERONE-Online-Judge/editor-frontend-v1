@@ -1255,33 +1255,7 @@ export default function Executions({
                               </table>
                             </div>
                           ) : null}
-                          {solution.total_score != null && (
-                            <p>점수 {solution.total_score.toLocaleString()}</p>
-                          )}
-                          {solution.score_scope_complete === false && (
-                            <p className="muted small">
-                              일부 테스트만 실행했으므로 세트 전체 점수는
-                              계산하지 않았습니다.
-                            </p>
-                          )}
                           <SolutionJudgeSummary solution={solution} />
-                          {solution.groups?.length ? (
-                            <div className="inline-tags">
-                              {solution.groups.map((g) => (
-                                <Badge
-                                  key={`${g.testset}-${g.name}`}
-                                  tone={g.passed ? 'success' : 'warning'}
-                                >
-                                  {g.name} · {g.score}점
-                                  {g.blocked
-                                    ? ' · 의존 그룹 미통과'
-                                    : !g.complete
-                                      ? ' · 전체 실행 필요'
-                                      : ''}
-                                </Badge>
-                              ))}
-                            </div>
-                          ) : null}
                           <div className="solution-testsets">
                             {[
                               ...new Set(

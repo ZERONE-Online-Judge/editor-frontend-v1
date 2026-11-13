@@ -1247,6 +1247,153 @@ test('judge agent summaries show only maximum time and memory without nested dis
   );
 });
 
+for (const kind of ['verify', 'package']) {
+  test(`${kind} retains a measured zero score without agent evidence`, async () => {
+    const row = job('zero-score', kind, '풀이 검증 완료');
+    row.result.solutions = [
+      {
+        name: 'wrong.py',
+        tag: 'WA',
+        matched: true,
+        skipped: false,
+        cases: [],
+        total_score: 0,
+        score_scope_complete: true,
+        judge_runs: [],
+      },
+    ];
+    jobs = [row];
+    await mount('invocations?job=zero-score');
+    const panel = host.querySelector('.solution-result');
+    const score = panel.querySelector('[aria-label="점수 요약"]');
+    assert.ok(score, 'A measured zero remains visible without judge records');
+    assert.equal(score.querySelector('dt').textContent, '총점');
+    assert.equal(score.querySelector('dd').textContent, '0점');
+    assert.equal(panel.querySelector('.solution-judge-run'), null);
+    assert.doesNotMatch(panel.textContent, /미확정|채점 노드 정보 없음/);
+    assert.deepEqual(requests, []);
+  });
+}
+
+test('partial verification preserves unknown totals and explains blocked and incomplete groups', async () => {
+  const row = job('partial-score', 'verify', '선택 테스트 검증 완료');
+  row.result.solutions = [
+    {
+      name: 'partial.py',
+      tag: 'PA',
+      matched: true,
+      skipped: false,
+      cases: [],
+      total_score: null,
+      score_scope_complete: false,
+      complete: true,
+      groups: [
+        {
+          testset: 'tests',
+          name: '작은 입력',
+          score: 30,
+          passed: true,
+          blocked: false,
+          complete: true,
+          policy: 'COMPLETE_GROUP',
+        },
+        {
+          testset: 'tests',
+          name: '의존 그룹',
+          score: 0,
+          passed: false,
+          blocked: true,
+          complete: true,
+          policy: 'COMPLETE_GROUP',
+        },
+        {
+          testset: 'tests',
+          name: '아직 덜 실행한 그룹',
+          score: 0,
+          passed: false,
+          blocked: false,
+          complete: false,
+          policy: 'COMPLETE_GROUP',
+        },
+      ],
+    },
+  ];
+  jobs = [row];
+  await mount('invocations?job=partial-score');
+  const score = host.querySelector('[aria-label="점수 요약"]');
+  assert.equal(score.querySelector('dd').textContent, '미확정');
+  assert.match(score.textContent, /세트 전체 점수는 계산하지 않았습니다/);
+  const groups = [...score.querySelectorAll('li')];
+  assert.equal(groups.length, 3);
+  assert.match(groups[0].textContent, /작은 입력30점/);
+  assert.match(groups[1].textContent, /의존 그룹 미통과/);
+  assert.match(groups[2].textContent, /전체 실행 필요/);
+  assert.doesNotMatch(score.textContent, /총점0점|총점30점/);
+  assert.equal(score.querySelector('.solution-judge-agent'), null);
+});
+
+test('multi-set results keep duplicate group names and agent evidence inside the same summary', async () => {
+  const row = job('multi-set-score', 'verify', '모든 세트 검증 완료');
+  const group = {
+    name: '작은 입력',
+    score: 30,
+    passed: true,
+    blocked: false,
+    complete: true,
+    policy: 'COMPLETE_GROUP',
+  };
+  row.result.solutions = [
+    {
+      name: 'main.py',
+      tag: 'MA',
+      matched: true,
+      skipped: false,
+      cases: [],
+      total_score: 60,
+      score_scope_complete: true,
+      groups: [
+        { ...group, testset: '예선' },
+        { ...group, testset: '본선' },
+      ],
+      judge_runs: [
+        {
+          id: 'judge-multi',
+          testset: '예선',
+          status: 'accepted',
+          node_name: 'zoj-agent-01',
+          agent_version: '0.3.0',
+          testcase_count: 10,
+          runtime_ms: 0,
+          memory_kb: 0,
+          compile_message: null,
+          judge_message: null,
+        },
+      ],
+    },
+  ];
+  jobs = [row];
+  await mount('invocations?job=multi-set-score');
+  const panel = host.querySelector('.solution-result');
+  const summary = panel.querySelector('.solution-judge-summary');
+  const score = summary.querySelector('[aria-label="점수 요약"]');
+  assert.equal(score.querySelector('dd').textContent, '60점');
+  const groups = [...score.querySelectorAll('li')];
+  assert.equal(groups.length, 2);
+  assert.match(groups[0].textContent, /작은 입력.*예선/);
+  assert.match(groups[1].textContent, /작은 입력.*본선/);
+  assert.ok(summary.contains(panel.querySelector('.solution-judge-agent')));
+  assert.match(summary.textContent, /zoj-agent-01.*v0.3.0/);
+  assert.match(
+    summary.querySelector('.solution-judge-metrics').textContent,
+    /0ms/,
+  );
+  assert.equal(panel.querySelectorAll('[aria-label="점수 요약"]').length, 1);
+  assert.equal(
+    panel.querySelector('.solution-result-body > .inline-tags'),
+    null,
+  );
+});
+
 test('Cancelled verification preserves the real percentage and labels pending solutions as interrupted', async () => {
   liveVerification('cancelled');
   await mount('verification?job=live-verification');

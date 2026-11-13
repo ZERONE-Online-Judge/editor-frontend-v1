@@ -2512,8 +2512,101 @@ svg {
 }
 .solution-judge-summary {
   display: grid;
-  gap: 8px;
+  gap: 12px;
   padding: 12px 14px;
+}
+.solution-score-summary {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 10px;
+  background: #fafbff;
+}
+.solution-score-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.solution-score-total {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+}
+.solution-score-total dt,
+.solution-score-count {
+  font-size: 11px;
+  color: var(--zoj-muted);
+}
+.solution-score-total dd {
+  margin: 0;
+  font-size: 25px;
+  font-weight: 750;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.solution-score-total dd > span {
+  margin-left: 3px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.solution-score-total dd > .solution-score-pending {
+  margin-left: 0;
+  font-size: 16px;
+  color: var(--zoj-muted);
+}
+.solution-subtasks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 132px), 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.solution-subtask {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #d5e9dc;
+  border-radius: 7px;
+  background: #f0f9f3;
+  color: #247745;
+}
+.solution-subtask.pending {
+  border-color: #eedfc2;
+  background: #fffbf1;
+  color: #946019;
+}
+.solution-subtask-name {
+  min-width: 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.solution-subtask-score {
+  white-space: nowrap;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.solution-subtask-score > span {
+  margin-left: 2px;
+  font-size: 10px;
+  font-weight: 500;
+}
+.solution-subtask-set,
+.solution-subtask-note {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.solution-subtask-set {
+  color: var(--zoj-muted);
 }
 .solution-judge-note {
   font-size: 11px;
