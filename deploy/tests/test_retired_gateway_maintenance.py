@@ -50,6 +50,7 @@ def containers():
                                      "api-green", "frontend-green", "api-blue"]):
         entries[service] = {"id": str(index) * 64, "pid": 1000 + index,
                             "image_reference": "unused", "image_id": "sha256:" + "b" * 64,
+                            "image_manifest_digest": None,
                             "running": True, "status": "running", "health": "healthy",
                             "project": tool.PROJECT, "service": service}
     entries["frontend"].update(id=tool.CONTAINER, pid=tool.MASTER_HOST)
@@ -304,13 +305,106 @@ class ReleaseTests(unittest.TestCase):
                     patch.object(tool, "snapshot", side_effect=containers), \
                     patch.object(tool, "public_health", return_value={"ok": True}), \
                     patch.object(tool, "validate_processes", return_value=True), \
+                    patch.object(tool, "resolve_helper_runtime", return_value={
+                        "image_id": "sha256:" + "b" * 64, "reference": "zoj-editor-api:" + tool.API_SHA}), \
                     patch.object(tool, "namespace_check", return_value={"outcome": "namespace_inspect_passed", "signal_sent": False}) as namespace, \
                     patch.object(tool, "run") as command:
                 result = tool.maintenance()
             self.assertEqual(result["outcome"], "inspect_only")
             self.assertFalse(result["signal_sent"])
-            namespace.assert_called_once_with("sha256:" + "b" * 64)
+            namespace.assert_called_once_with("sha256:" + "b" * 64,
+                                             reference="zoj-editor-api:" + tool.API_SHA,
+                                             active_image="sha256:" + "b" * 64)
             command.assert_not_called()
+
+
+class RuntimeImageTests(unittest.TestCase):
+    def test_active_manifest_selects_same_bytes_without_rebuilt_release_tag(self):
+        image, manifest = 'sha256:' + 'a' * 64, 'sha256:' + 'c' * 64
+        with patch.object(tool, 'run', return_value=json.dumps({'id': image})) as run:
+            self.assertEqual(tool.resolve_helper_reference(image, manifest), manifest)
+        self.assertEqual(run.call_args.args[0], ['docker', 'image', 'inspect', '--format',
+                                               tool.IMAGE_FORMAT, manifest])
+
+    def test_unresolved_manifest_uses_only_locally_matching_config_or_tag(self):
+        image, manifest = 'sha256:' + 'a' * 64, 'sha256:' + 'c' * 64
+        missing = tool.Refused('docker_image_missing', stage='helper_image_resolution')
+        for successful_index, expected in [(1, 'zoj-editor-api@' + manifest),
+                                            (2, image), (3, 'zoj-editor-api:' + tool.API_SHA)]:
+            with self.subTest(successful_index=successful_index), \
+                    patch.object(tool, 'run', side_effect=[missing] * successful_index
+                                 + [json.dumps({'id': image})]) as run:
+                self.assertEqual(tool.resolve_helper_reference(image, manifest), expected)
+                self.assertEqual(len(run.call_args_list), successful_index + 1)
+
+    def test_rebuilt_tag_never_authorizes_different_runtime_bytes(self):
+        image, manifest, rebuilt = ('sha256:' + x * 64 for x in 'acd')
+        missing = tool.Refused('docker_image_missing', stage='helper_image_resolution')
+        with patch.object(tool, 'run', side_effect=[missing] * 3 + [json.dumps({'id': rebuilt})]):
+            with self.assertRaisesRegex(tool.Refused, 'active_api_runtime_unavailable') as error:
+                tool.resolve_helper_reference(image, manifest)
+        self.assertEqual(error.exception.stage, 'helper_image_resolution')
+        self.assertEqual(error.exception.diagnostic['expected_image_id'], image)
+        self.assertEqual(error.exception.diagnostic['candidates'][-1],
+                         {'kind': 'release_tag', 'available': True, 'image_id': rebuilt})
+
+    def test_missing_optional_manifest_preserves_classic_image_lookup(self):
+        image = 'sha256:' + 'a' * 64
+        with patch.object(tool, 'run', return_value=json.dumps({'id': image})) as run:
+            self.assertEqual(tool.resolve_helper_reference(image), image)
+        self.assertEqual(run.call_args.args[0][-1], image)
+
+    def test_invalid_manifest_or_lookup_failure_does_not_fall_back(self):
+        image = 'sha256:' + 'a' * 64
+        for invalid in ['other', {}, ['sha256:' + 'c' * 64], 'sha256:' + 'c' * 63]:
+            with self.subTest(invalid=invalid), patch.object(tool, 'run') as run:
+                with self.assertRaisesRegex(tool.Refused, 'active_api_manifest_invalid'):
+                    tool.resolve_helper_reference(image, invalid)
+                run.assert_not_called()
+        with patch.object(tool, 'run', side_effect=tool.Refused('docker_permission_denied')) as run:
+            with self.assertRaisesRegex(tool.Refused, 'docker_permission_denied'):
+                tool.resolve_helper_reference(image, 'sha256:' + 'c' * 64)
+            self.assertEqual(len(run.call_args_list), 1)
+
+    def test_reviewed_runtime_is_used_only_after_exact_serving_image_unavailable(self):
+        active = 'sha256:' + 'a' * 64
+        missing = tool.Refused('active_api_runtime_unavailable', stage='helper_image_resolution',
+                               diagnostic={'expected_image_id': active, 'candidates': []})
+        with patch.object(tool, 'resolve_helper_reference', side_effect=[missing, tool.REVIEWED_RUNTIME_IMAGE]) as resolve:
+            runtime = tool.resolve_helper_runtime(active)
+        self.assertEqual(runtime['image_id'], tool.REVIEWED_RUNTIME_IMAGE)
+        self.assertEqual(runtime['active_image_id'], active)
+        self.assertFalse(runtime['matches_active_api'])
+        self.assertEqual(runtime['provenance']['workflow_run'], 43456015638)
+        self.assertEqual(resolve.call_args.args, (tool.REVIEWED_RUNTIME_IMAGE, tool.REVIEWED_RUNTIME_MANIFEST))
+        self.assertEqual(resolve.call_args.kwargs, {'index_digest': tool.REVIEWED_RUNTIME_INDEX})
+        with patch.object(tool, 'resolve_helper_reference', return_value=active) as resolve:
+            runtime = tool.resolve_helper_runtime(active)
+        self.assertTrue(runtime['matches_active_api'])
+        self.assertEqual(resolve.call_count, 1)
+
+    def test_other_available_tag_cannot_replace_explicit_reviewed_pin(self):
+        active, other = 'sha256:' + 'a' * 64, 'sha256:' + 'f' * 64
+        missing = tool.Refused('docker_image_missing', stage='helper_image_resolution')
+        # Four lookups for the serving image, then five for the reviewed image.
+        # Both release-tag lookups resolve an unrelated rebuilt image.
+        with patch.object(tool, 'run', side_effect=[missing] * 3 + [json.dumps({'id': other})]
+                + [missing] * 4 + [json.dumps({'id': other})]) as run:
+            with self.assertRaisesRegex(tool.Refused, 'reviewed_tool_runtime_unavailable') as error:
+                tool.resolve_helper_runtime(active, 'sha256:' + 'b' * 64)
+        self.assertEqual(run.call_count, 9)
+        self.assertEqual(error.exception.diagnostic['reviewed_image_id'], tool.REVIEWED_RUNTIME_IMAGE)
+        self.assertEqual(error.exception.diagnostic['active_lookup']['candidates'][-1]['image_id'], other)
+
+    def test_metadata_diagnostics_cannot_emit_arbitrary_label_text(self):
+        active, other = 'sha256:' + 'a' * 64, 'sha256:' + 'f' * 64
+        with patch.object(tool, 'run', return_value=json.dumps({'id': other,
+                'created_at': '2026-11-13T15:49:38.123456789Z', 'oci_revision': 'private-user-text'})):
+            with self.assertRaises(tool.Refused) as error:
+                tool.resolve_helper_reference(active)
+        self.assertNotIn('private-user-text', json.dumps(error.exception.diagnostic))
+        self.assertEqual(error.exception.diagnostic['candidates'][-1]['created_at'],
+                         '2026-11-13T15:49:38.123456789Z')
 
 
 class CommandDiagnosticsTests(unittest.TestCase):
@@ -347,6 +441,37 @@ class CommandDiagnosticsTests(unittest.TestCase):
                 self.assertNotIn('retired_worker_namespace_inspect',
                     [x.kwargs['stage'] for x in run.call_args_list])
                 self.assertEqual(run.call_args_list[-1].args[0], ['docker', 'rm', '-f', helper])
+
+    def test_manifest_created_helper_still_requires_same_active_image(self):
+        image, reference, helper = 'sha256:' + 'a' * 64, 'sha256:' + 'c' * 64, 'b' * 64
+        valid = {'id': helper, 'image_id': image, 'image_reference': reference,
+                 'running': False, 'pid': 0, 'pid_mode': 'container:' + tool.CONTAINER,
+                 'marker': tool.CONTAINER}
+        with patch.object(tool, 'run', side_effect=['', helper, json.dumps(valid),
+                json.dumps({'outcome': 'namespace_inspect_passed', 'signal_sent': False}),
+                json.dumps({'running': False, 'exit_code': 0}), '']) as run:
+            self.assertTrue(tool.namespace_check(image, reference=reference)['runtime_image_matches_active_api'])
+            self.assertIn(reference, run.call_args_list[1].args[0])
+        for changed in [{'image_id': 'sha256:' + 'd' * 64}, {'image_reference': image}]:
+            with self.subTest(changed=changed), \
+                    patch.object(tool, 'run', side_effect=['', helper, json.dumps({**valid, **changed}), '']) as run:
+                with self.assertRaises(tool.Refused):
+                    tool.namespace_check(image, reference=reference)
+                self.assertFalse(any(call.kwargs['stage'] == 'retired_worker_namespace_inspect'
+                                     for call in run.call_args_list))
+
+    def test_reviewed_fallback_reports_actual_identity_without_claiming_active_match(self):
+        image, active, helper = tool.REVIEWED_RUNTIME_IMAGE, 'sha256:' + 'a' * 64, 'b' * 64
+        row = {'id': helper, 'image_id': image, 'image_reference': image,
+               'running': False, 'pid': 0, 'pid_mode': 'container:' + tool.CONTAINER,
+               'marker': tool.CONTAINER}
+        with patch.object(tool, 'run', side_effect=['', helper, json.dumps(row),
+                json.dumps({'outcome': 'namespace_inspect_passed', 'signal_sent': False}),
+                json.dumps({'running': False, 'exit_code': 0}), '']):
+            result = tool.namespace_check(image, reference=image, active_image=active)
+        self.assertFalse(result['runtime_image_matches_active_api'])
+        self.assertTrue(result['runtime_image_matches_reviewed_runtime'])
+        self.assertEqual(result['created_helper_image_id'], tool.REVIEWED_RUNTIME_IMAGE)
 
     def test_zero_cli_exit_still_propagates_known_inner_refusal_and_container_exit(self):
         image, helper = 'sha256:' + 'a' * 64, 'b' * 64
@@ -416,6 +541,8 @@ class CommandDiagnosticsTests(unittest.TestCase):
     def test_inspection_template_uses_optional_health_map_index(self):
         self.assertNotIn(".State.Health", tool.INSPECT_FORMAT)
         self.assertIn('with (index .State "Health")', tool.INSPECT_FORMAT)
+        self.assertIn('with (index . "ImageManifestDescriptor")', tool.INSPECT_FORMAT)
+        self.assertNotIn('.ImageManifestDescriptor', tool.INSPECT_FORMAT)
 
     def test_static_error_class_and_stage_without_raw_stderr(self):
         cases = [

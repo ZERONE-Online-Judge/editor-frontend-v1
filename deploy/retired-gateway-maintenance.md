@@ -45,12 +45,38 @@ after `2026-11-13T15:51:25.346143Z`. Process age is not used as a substitute for
 this observed retirement grace.
 
 For namespace inspection and apply, a stopped Python maintenance container is
-created from the exact healthy API release's canonical tag, with pulls disabled.
-Before starting it, the helper's actual image ID must equal the healthy API
-container's pinned image ID, and its PID namespace, marker, stopped state and
-container ID must also match. This handles containerd stores that do not resolve
-a container's config digest as a runnable image reference. A retagged image is
-refused before any process starts. The helper shares only the gateway's PID
+created with pulls disabled. Optional `ImageManifestDescriptor.digest` metadata
+is read through safe map indices. Local manifest, repository digest, config
+digest and release-tag references are inspected to find the serving API's exact
+image bytes; no image is pulled. Before starting, the helper's actual image ID
+must equal the selected pinned runtime ID. Its exact reference, PID namespace,
+marker, stopped state and container ID must also match. A retag between image
+lookup and container creation therefore refuses before any process starts.
+
+If the serving image no longer has a resolvable local reference, only this
+operator-reviewed alternative is permitted:
+
+| Runtime provenance | Exact value |
+| --- | --- |
+| Reviewed frontend deployment run | `43456015638`, source `1f2007ef211a0df932d50f1f3d81fb110285c028` |
+| API source rebuilt by that run | `0e2f678fcbc02d3c56570229743150de6f8f53bc` |
+| Server build completion | `2026-11-13T15:49:38Z` |
+| Pinned runtime config image | `sha256:8592e9058b033fd5ba7989ec3549bc474a0a9da6036df23c4255af4364b6847f` |
+| Platform manifest | `sha256:3715375e62683a666605eb54fc0633b52553977222d058e4ef9085778c3bd340` |
+| Image index | `sha256:410ab8c98914a6453122fb31f0712995a1de7eb8eed4ac021a981dd6a2dd32b1` |
+
+The release operator reviewed those config/manifest/index digests in the
+cancelled deployment's server build output before approving this alternative.
+The serving API still has to pass the original release/health/container guards;
+it is never replaced. This alternative is used only as a Python stdlib runtime,
+with the exact reviewed config digest checked both during local resolution and
+again on the stopped helper. Any different available image is refused. Results
+explicitly state whether the runtime matches the serving API, with the active
+image/manifest, selected image, created helper image and provenance. Failed
+resolution reports only whitelisted image hashes, build times and SHA labels.
+This is an explicit fixed alternative, not automatic approval of a mutable tag.
+
+The helper shares only the gateway's PID
 namespace, has no network, environment injection or mounts, runs on a read-only
 filesystem, drops all capabilities except `KILL`, and runs no application
 entrypoint. It opens a pidfd for PID 408, validates identities again, and sends
@@ -58,7 +84,7 @@ SIGTERM through that descriptor only. A reused numeric PID can never redirect
 the signal to its replacement. It waits up to ten seconds, with no SIGKILL
 fallback. It neither restarts any gateway nor signals a job/API/DB process.
 
-The immutable API image is used only as an already-installed Python runtime;
+The pinned API image is used only as an already-installed Python runtime;
 the maintenance process does not import application code or have credentials.
 No connection payloads, session tokens, environment values or user logs are
 read. Results contain only fixed identity checks, health and refusal codes.

@@ -23,6 +23,15 @@ import urllib.request
 CONTAINER = "76a3a69e6ab595f50e8c41834ac9ae857e43828bdb5a43801cef066f6cb2a414"
 API_SHA = "0e2f678fcbc02d3c56570229743150de6f8f53bc"
 UI_SHA = "21d0ffe651ded2f28f780baa026a0d9174ba907a"
+# Explicitly reviewed by the release operator: run 43456015638 rebuilt this
+# same API source at 2026-11-13T15:49:38Z. This is only a stdlib Python tool
+# runtime, never an application replacement or an automatically trusted tag.
+REVIEWED_RUNTIME_IMAGE = "sha256:8592e9058b033fd5ba7989ec3549bc474a0a9da6036df23c4255af4364b6847f"
+REVIEWED_RUNTIME_MANIFEST = "sha256:3715375e62683a666605eb54fc0633b52553977222d058e4ef9085778c3bd340"
+REVIEWED_RUNTIME_INDEX = "sha256:410ab8c98914a6453122fb31f0712995a1de7eb8eed4ac021a981dd6a2dd32b1"
+RUNTIME_PROVENANCE = {"workflow_run": 43456015638, "backend_sha": API_SHA,
+                      "build_completed_at": "2026-11-13T15:49:38Z",
+                      "frontend_sha": "1f2007ef211a0df932d50f1f3d81fb110285c028"}
 CONFIRMATION = "terminate-retired-editor-gateway-worker-408"
 FIRST_RETIRED_OBSERVATION = 1794583185.346143  # 2026-11-13T15:19:45.346143Z
 MINIMUM_RETIRED_SECONDS = 1900
@@ -75,6 +84,8 @@ def command_error(stderr):
         return "docker_daemon_unavailable"
     if "no such object" in text or "no such container" in text:
         return "docker_container_missing"
+    if "no such image" in text:
+        return "docker_image_missing"
     if "operation not permitted" in text:
         return "docker_operation_not_permitted"
     if "apparmor" in text:
@@ -269,6 +280,7 @@ def namespace_inspect(*, read=process, open_pidfd=os.pidfd_open, close=os.close)
 INSPECT_FORMAT = (
     '{"id":{{json .Id}},"image_reference":{{json .Config.Image}},'
     '"image_id":{{json .Image}},"pid":{{json .State.Pid}},'
+    '"image_manifest_digest":{{with (index . "ImageManifestDescriptor")}}{{json (index . "digest")}}{{else}}null{{end}},'
     '"running":{{json .State.Running}},"status":{{json .State.Status}},'
     '"health":{{with (index .State "Health")}}{{json (index . "Status")}}{{else}}"none"{{end}},'
     '"project":{{json (index .Config.Labels "com.docker.compose.project")}},'
@@ -354,8 +366,94 @@ def public_health():
     return {"api_status": "ok", "api_release": API_SHA, "frontend_release": UI_SHA}
 
 
-def helper_command(image, *, apply=False):
+def resolve_helper_reference(image, manifest_digest=None, *, index_digest=None):
+    """Resolve only locally installed bytes equal to the serving API image."""
     require(bool(re.fullmatch(r"sha256:[a-f0-9]{64}", image)), "helper_image_invalid")
+    require(manifest_digest is None or isinstance(manifest_digest, str)
+            and bool(re.fullmatch(r"sha256:[a-f0-9]{64}", manifest_digest)),
+            "active_api_manifest_invalid")
+    require(index_digest is None or isinstance(index_digest, str)
+            and bool(re.fullmatch(r"sha256:[a-f0-9]{64}", index_digest)),
+            "reviewed_index_digest_invalid")
+    candidates = []
+    if manifest_digest:
+        candidates += [("manifest", manifest_digest),
+                       ("repository_manifest", "zoj-editor-api@" + manifest_digest)]
+    if index_digest:
+        candidates.append(("reviewed_index", index_digest))
+    candidates += [("config_digest", image), ("release_tag", "zoj-editor-api:" + API_SHA)]
+    observed = []
+    for kind, reference in candidates:
+        try:
+            raw = run(["docker", "image", "inspect", "--format", IMAGE_FORMAT, reference],
+                      stage="helper_image_resolution")
+        except Refused as error:
+            if str(error) != "docker_image_missing":
+                raise
+            observed.append({"kind": kind, "available": False})
+            continue
+        value = json.loads(raw)
+        resolved = value.get("id") if isinstance(value, dict) else None
+        require(isinstance(resolved, str) and bool(re.fullmatch(r"sha256:[a-f0-9]{64}", resolved)),
+                "resolved_helper_image_invalid")
+        metadata = {"kind": kind, "available": True, "image_id": resolved}
+        created = value.get("created_at")
+        revision = value.get("oci_revision")
+        if isinstance(created, str) and re.fullmatch(r"[0-9T:.Z+-]{20,40}", created):
+            metadata["created_at"] = created
+        if isinstance(revision, str) and re.fullmatch(r"[a-f0-9]{40}", revision):
+            metadata["oci_revision"] = revision
+        observed.append(metadata)
+        if resolved == image:
+            return reference
+    raise Refused("active_api_runtime_unavailable", stage="helper_image_resolution",
+                  diagnostic={"expected_image_id": image, "active_manifest_digest": manifest_digest,
+                              "candidates": observed})
+
+
+IMAGE_FORMAT = (
+    '{"id":{{json .Id}},"created_at":{{json .Created}},'
+    '"oci_revision":{{json (index .Config.Labels "org.opencontainers.image.revision")}}}'
+)
+
+
+def resolve_helper_runtime(image, manifest_digest=None):
+    try:
+        reference = resolve_helper_reference(image, manifest_digest)
+        return {"image_id": image, "reference": reference, "active_image_id": image,
+                "active_manifest_digest": manifest_digest, "matches_active_api": True,
+                "provenance": "serving_api_image"}
+    except Refused as error:
+        if str(error) != "active_api_runtime_unavailable":
+            raise
+        active_lookup = error.diagnostic
+    # An operator reviewed these exact build bytes before adding this fallback.
+    # An arbitrary replacement under the release tag never satisfies the pin.
+    try:
+        reference = resolve_helper_reference(REVIEWED_RUNTIME_IMAGE, REVIEWED_RUNTIME_MANIFEST,
+                                             index_digest=REVIEWED_RUNTIME_INDEX)
+    except Refused as error:
+        if str(error) != "active_api_runtime_unavailable":
+            raise
+        raise Refused("reviewed_tool_runtime_unavailable", stage="helper_image_resolution",
+                      diagnostic={"active_lookup": active_lookup,
+                                  "reviewed_image_id": REVIEWED_RUNTIME_IMAGE,
+                                  "reviewed_index_digest": REVIEWED_RUNTIME_INDEX,
+                                  "reviewed_lookup": error.diagnostic,
+                                  "provenance": RUNTIME_PROVENANCE}) from None
+    return {"image_id": REVIEWED_RUNTIME_IMAGE, "reference": reference,
+            "active_image_id": image, "active_manifest_digest": manifest_digest,
+            "matches_active_api": False, "active_lookup": active_lookup,
+            "reviewed_index_digest": REVIEWED_RUNTIME_INDEX,
+            "provenance": RUNTIME_PROVENANCE}
+
+
+def helper_command(image, *, reference=None, apply=False):
+    require(bool(re.fullmatch(r"sha256:[a-f0-9]{64}", image)), "helper_image_invalid")
+    reference = reference or "zoj-editor-api:" + API_SHA
+    require(reference == "zoj-editor-api:" + API_SHA
+            or bool(re.fullmatch(r"(?:zoj-editor-api@)?sha256:[a-f0-9]{64}", reference)),
+            "helper_reference_invalid")
     return [
         "docker", "create", "-i", "--pull", "never", "--name", HELPER_NAME,
         "--label", "zoj.maintenance.retired-gateway=" + CONTAINER,
@@ -363,10 +461,9 @@ def helper_command(image, *, apply=False):
         "--read-only", "--cap-drop", "ALL", "--cap-add", "KILL",
         "--security-opt", "no-new-privileges=true", "--user", "0:0",
         "--memory", "64m", "--cpus", "0.25", "--pids-limit", "16",
-        # Some containerd stores do not resolve a container's config digest as
-        # an image reference. Create by the exact release tag, verify .Image
-        # against the serving container, and only then allow start.
-        "--entrypoint", "python", "zoj-editor-api:" + API_SHA, "-",
+        # The local reference was resolved against the serving image. Recheck
+        # the created container's .Image before permitting any process start.
+        "--entrypoint", "python", reference, "-",
         "--namespace-apply" if apply else "--namespace-inspect",
     ]
 
@@ -379,10 +476,16 @@ CREATED_HELPER_FORMAT = (
 )
 
 
-def validate_created_helper(row, helper_id, image):
+def validate_created_helper(row, helper_id, image, reference=None, active_image=None):
     require(row.get("id") == helper_id, "created_helper_id_changed")
-    require(row.get("image_id") == image, "helper_runtime_image_mismatch")
-    require(row.get("image_reference") == "zoj-editor-api:" + API_SHA,
+    if row.get("image_id") != image:
+        actual = row.get("image_id")
+        raise Refused("helper_runtime_image_mismatch", stage="created_helper_identity",
+                      diagnostic={"expected_image_id": image, "active_image_id": active_image or image,
+                                  "created_helper_image_id": actual if isinstance(actual, str)
+                                  and re.fullmatch(r"sha256:[a-f0-9]{64}", actual) else None,
+                                  "reviewed_runtime_provenance": RUNTIME_PROVENANCE})
+    require(row.get("image_reference") == (reference or "zoj-editor-api:" + API_SHA),
             "helper_runtime_reference_changed")
     require(row.get("running") is False and row.get("pid") == 0,
             "helper_started_before_validation")
@@ -391,19 +494,19 @@ def validate_created_helper(row, helper_id, image):
     require(row.get("marker") == CONTAINER, "helper_marker_changed")
 
 
-def namespace_check(image, *, apply=False):
+def namespace_check(image, *, reference=None, active_image=None, apply=False):
     require(not run(["docker", "ps", "-a", "-q", "--filter",
                      "name=^/" + HELPER_NAME + "$"],
                     stage="helper_duplicate_check").strip(),
             "maintenance_helper_already_exists")
-    helper_id = run(helper_command(image, apply=apply), stage="namespace_helper_create").strip()
+    helper_id = run(helper_command(image, reference=reference, apply=apply), stage="namespace_helper_create").strip()
     require(bool(re.fullmatch(r"[a-f0-9]{64}", helper_id)), "created_helper_id_invalid")
     def remove():
         run(["docker", "rm", "-f", helper_id], stage="namespace_helper_remove")
     try:
         row = json.loads(run(["docker", "inspect", "--format", CREATED_HELPER_FORMAT, helper_id],
                              stage="created_helper_identity"))
-        validate_created_helper(row, helper_id, image)
+        validate_created_helper(row, helper_id, image, reference, active_image)
         raw = run(["docker", "start", "-a", "-i", helper_id],
                   input=Path(__file__).read_text(), timeout=45,
                   stage="retired_worker_namespace_helper" if apply else "retired_worker_namespace_inspect")
@@ -427,7 +530,9 @@ def namespace_check(image, *, apply=False):
             pass
         raise
     remove()
-    result["runtime_image_matches_active_api"] = True
+    result["runtime_image_matches_reviewed_runtime"] = True
+    result["runtime_image_matches_active_api"] = image == (active_image or image)
+    result["created_helper_image_id"] = row["image_id"]
     return result
 
 
@@ -456,7 +561,11 @@ def maintenance(apply=False, confirmation=""):
             "risk": "Retired worker connections are not proven to be SSE-only.",
         }
         if target_present:
-            report["namespace_inspection"] = namespace_check(image)
+            api = before["api-" + release["EDITOR_ACTIVE_SLOT"]]
+            runtime = resolve_helper_runtime(image, api.get("image_manifest_digest"))
+            report["tool_runtime"] = runtime
+            report["namespace_inspection"] = namespace_check(runtime["image_id"],
+                reference=runtime["reference"], active_image=image)
         if apply and target_present:
             # Recheck all containers, routes and identities immediately before
             # creating a short-lived helper in this gateway's PID namespace.
@@ -464,7 +573,8 @@ def maintenance(apply=False, confirmation=""):
             require(read_release() == release, "release_metadata_changed")
             public_health()
             validate_processes()
-            result = namespace_check(image, apply=True)
+            result = namespace_check(runtime["image_id"], reference=runtime["reference"],
+                                     active_image=image, apply=True)
             report.update(result)
         else:
             report["outcome"] = "inspect_only" if target_present else "already_gone"
