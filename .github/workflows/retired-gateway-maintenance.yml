@@ -1,0 +1,54 @@
+name: Inspect one retired Editor gateway worker
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Inspect by default; termination closes this retired worker's remaining HTTP connections.
+        required: true
+        default: inspect
+        type: choice
+        options:
+          - inspect
+          - terminate-retired-worker
+      confirmation:
+        description: Apply requires terminate-retired-editor-gateway-worker-344
+        required: false
+        type: string
+permissions:
+  contents: read
+jobs:
+  check:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test maintenance guards without accessing production
+        run: python3 -m unittest discover -s deploy/tests -p 'test_retired_gateway_maintenance.py'
+  maintenance:
+    needs: check
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, zoj-editor, editor-frontend]
+    environment: production
+    timeout-minutes: 5
+    concurrency:
+      group: editor-frontend-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect or terminate only the pinned retired worker
+        env:
+          MAINTENANCE_ACTION: ${{ inputs.action }}
+          MAINTENANCE_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = ZERONE-Online-Judge/editor-frontend-v1
+          test "$GITHUB_REF" = refs/heads/main
+          arguments=()
+          if [[ "$MAINTENANCE_ACTION" == terminate-retired-worker ]]; then
+            arguments+=(--apply --confirmation "$MAINTENANCE_CONFIRMATION")
+          else
+            test "$MAINTENANCE_ACTION" = inspect
+          fi
+          python3 deploy/retired-gateway-maintenance.py "${arguments[@]}" \
+            --output "$RUNNER_TEMP/retired-gateway-maintenance.json"

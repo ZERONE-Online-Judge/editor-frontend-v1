@@ -1,0 +1,332 @@
+#!/usr/bin/env python3
+"""One-time, default-inspect cleanup of one pinned retired Nginx worker.
+
+This is an operational workaround, not an SSE-only drain. The retired worker
+can still own HTTP connections; this tool cannot prove they are all SSE.
+It never revokes a login, restarts a gateway, or signals an application worker.
+"""
+
+import argparse
+import datetime
+import fcntl
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import socket
+import subprocess
+import sys
+import time
+import urllib.request
+
+CONTAINER = "76a3a69e6ab595f50e8c41834ac9ae857e43828bdb5a43801cef066f6cb2a414"
+API_SHA = "9b57b66da43f6dd95c162df989c843e69f8c231a"
+UI_SHA = "c7881c73fe27fa9faafb21a7865c3f2699a17bf1"
+CONFIRMATION = "terminate-retired-editor-gateway-worker-344"
+FIRST_RETIRED_OBSERVATION = 1794574092  # 2026-11-13T12:48:12Z
+MINIMUM_RETIRED_SECONDS = 1900
+HELPER_NAME = "editor-retired-gateway-20261113"
+PROJECT = "zoj-editor"
+MASTER_HOST = 3602572
+MASTER_START = 225755805
+TARGET_HOST = 3620554
+TARGET_NS = 344
+TARGET_START = 225793692
+CURRENT_START = 243953669
+CURRENT_HOST = tuple(range(3698865, 3698871))
+CURRENT_NS = tuple(range(405, 411))
+CONFIG = Path("/srv/zoj-editor/config")
+
+
+class Refused(Exception):
+    """Only constant, non-sensitive refusal codes reach logs."""
+
+
+def require(condition, code):
+    if not condition:
+        raise Refused(code)
+
+
+def run(args, *, input=None, timeout=30):
+    try:
+        result = subprocess.run(
+            args, input=input, text=True, capture_output=True, timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        raise Refused("command_unavailable_or_timed_out") from None
+    require(result.returncode == 0, "docker_command_failed")
+    return result.stdout
+
+
+def process(pid, root=Path("/proc")):
+    path = root / str(pid)
+    try:
+        raw = (path / "stat").read_text()
+        tail = raw[raw.rfind(")") + 2:].split()
+        cmd = (path / "cmdline").read_bytes().replace(b"\0", b" ").strip()
+        status = (path / "status").read_text().splitlines()
+        ns = next(row.split(":", 1)[1].split() for row in status if row.startswith("NSpid:"))
+        cgroup = (path / "cgroup").read_text()
+    except FileNotFoundError:
+        return None
+    except (PermissionError, StopIteration, ValueError, IndexError):
+        raise Refused("process_metadata_unavailable") from None
+    kind = "unexpected"
+    if cmd == b"nginx: worker process is shutting down":
+        kind = "retired"
+    elif cmd == b"nginx: worker process":
+        kind = "current"
+    elif cmd.startswith(b"nginx: master process "):
+        kind = "master"
+    return {
+        "pid": pid, "ppid": int(tail[1]), "start_ticks": int(tail[19]),
+        "nspid": [int(value) for value in ns], "kind": kind,
+        "expected_container": "docker-" + CONTAINER + ".scope" in cgroup,
+    }
+
+
+def validate_processes(read=process, *, namespace=False):
+    master_id = 1 if namespace else MASTER_HOST
+    target_id = TARGET_NS if namespace else TARGET_HOST
+    master = read(master_id)
+    require(master is not None, "master_missing")
+    require(master["kind"] == "master" and master["start_ticks"] == MASTER_START,
+            "master_identity_changed")
+    require(master["nspid"] == ([1] if namespace else [MASTER_HOST, 1]),
+            "master_namespace_changed")
+    if not namespace:
+        require(master["expected_container"], "master_container_changed")
+    for host_pid, ns_pid in zip(CURRENT_HOST, CURRENT_NS):
+        row = read(ns_pid if namespace else host_pid)
+        require(row is not None, "current_worker_missing")
+        require(row["kind"] == "current" and row["ppid"] == master_id
+                and row["start_ticks"] == CURRENT_START,
+                "current_worker_identity_changed")
+        require(row["nspid"] == ([ns_pid] if namespace else [host_pid, ns_pid]),
+                "current_worker_namespace_changed")
+        if not namespace:
+            require(row["expected_container"], "current_worker_container_changed")
+    target = read(target_id)
+    if target is None:
+        return False
+    require(target["kind"] == "retired" and target["ppid"] == master_id
+            and target["start_ticks"] == TARGET_START,
+            "retired_worker_identity_changed")
+    require(target["nspid"] == ([TARGET_NS] if namespace else [TARGET_HOST, TARGET_NS]),
+            "retired_worker_namespace_changed")
+    if not namespace:
+        require(target["expected_container"], "retired_worker_container_changed")
+    require(TARGET_START < CURRENT_START, "worker_generation_order_changed")
+    return True
+
+
+def namespace_action(*, read=process, open_pidfd=os.pidfd_open,
+                     send=signal.pidfd_send_signal, close=os.close,
+                     monotonic=time.monotonic, sleep=time.sleep):
+    """pidfd binds the signal to this process, never a reused numeric PID."""
+    require(os.getuid() == 0, "namespace_helper_not_root")
+    if not validate_processes(read, namespace=True):
+        return {"outcome": "already_gone", "signal_sent": False}
+    try:
+        fd = open_pidfd(TARGET_NS, 0)
+    except ProcessLookupError:
+        return {"outcome": "already_gone", "signal_sent": False}
+    try:
+        # Validate again after pidfd_open. A different/reused /proc PID refuses;
+        # an exited original pidfd cannot ever point at its replacement.
+        if not validate_processes(read, namespace=True):
+            return {"outcome": "already_gone", "signal_sent": False}
+        try:
+            send(fd, signal.SIGTERM, None, 0)
+        except ProcessLookupError:
+            return {"outcome": "already_gone", "signal_sent": False}
+        deadline = monotonic() + 10
+        while read(TARGET_NS) is not None:
+            require(monotonic() < deadline, "retired_worker_did_not_exit")
+            sleep(0.1)
+        validate_processes(read, namespace=True)
+        return {"outcome": "retired_worker_terminated", "signal_sent": True,
+                "target_namespace_pid": TARGET_NS, "signal": "SIGTERM"}
+    finally:
+        close(fd)
+
+
+INSPECT_FORMAT = (
+    '{"id":{{json .Id}},"image_reference":{{json .Config.Image}},'
+    '"image_id":{{json .Image}},"pid":{{json .State.Pid}},'
+    '"running":{{json .State.Running}},"status":{{json .State.Status}},'
+    '"health":{{if .State.Health}}{{json .State.Health.Status}}{{else}}"none"{{end}},'
+    '"project":{{json (index .Config.Labels "com.docker.compose.project")}},'
+    '"service":{{json (index .Config.Labels "com.docker.compose.service")}}}'
+)
+
+
+def snapshot():
+    ids = run(["docker", "ps", "-a", "-q", "--no-trunc", "--filter",
+               "label=com.docker.compose.project=" + PROJECT]).split()
+    require(bool(ids), "editor_containers_missing")
+    rows = [json.loads(line) for line in run(
+        ["docker", "inspect", "--format", INSPECT_FORMAT, *ids],
+    ).splitlines()]
+    require(len(rows) == len(ids), "container_snapshot_incomplete")
+    require(all(row["project"] == PROJECT for row in rows), "unexpected_project")
+    require(len({row["service"] for row in rows}) == len(rows), "duplicate_service")
+    return {row["service"]: row for row in rows}
+
+
+def read_release():
+    require(not (CONFIG / "recovery-required").exists(), "recovery_required")
+    values = {}
+    for line in (CONFIG / "release.env").read_text().splitlines():
+        if not line or line.startswith("#"):
+            continue
+        key, separator, value = line.partition("=")
+        require(bool(separator) and key not in values, "invalid_release_metadata")
+        values[key] = value
+    return values
+
+
+def validate_release(values, rows):
+    require(values.get("EDITOR_DEPLOY_MODE") == "blue-green", "deployment_mode_changed")
+    slot = values.get("EDITOR_ACTIVE_SLOT")
+    worker = values.get("EDITOR_WORKER_SERVICE")
+    require(slot in {"blue", "green"}, "active_slot_invalid")
+    require(worker in {"worker-blue", "worker-green"}, "worker_slot_invalid")
+    require(values.get("EDITOR_API_IMAGE") == "zoj-editor-api:" + API_SHA,
+            "api_release_changed")
+    require(values.get("EDITOR_FRONTEND_IMAGE") == "zoj-editor-frontend:" + UI_SHA,
+            "frontend_release_changed")
+    expected = {"frontend", "internal-gateway", "db", worker,
+                "api-" + slot, "frontend-" + slot}
+    require(expected <= rows.keys(), "required_service_missing")
+    gateway = rows["frontend"]
+    require(gateway["id"] == CONTAINER and gateway["pid"] == MASTER_HOST
+            and gateway["running"], "gateway_container_changed")
+    for name in expected:
+        require(rows[name]["running"], "required_service_not_running")
+        require(rows[name]["health"] in {"healthy", "none"}, "required_service_unhealthy")
+    api = rows["api-" + slot]
+    require(api["image_reference"] == "zoj-editor-api:" + API_SHA,
+            "active_api_image_changed")
+    require(rows["frontend-" + slot]["image_reference"] == "zoj-editor-frontend:" + UI_SHA,
+            "active_frontend_image_changed")
+    require(bool(re.fullmatch(r"sha256:[a-f0-9]{64}", api["image_id"])),
+            "api_image_id_invalid")
+    return api["image_id"]
+
+
+def check_unchanged(before, after):
+    require(before == after, "editor_container_state_changed")
+
+
+def public_health():
+    query = "?retired-worker-check=" + str(time.time_ns())
+    values = {}
+    for path in ["/api/health", "/release.txt"]:
+        req = urllib.request.Request(
+            "https://editor.zoj.kr" + path + query,
+            headers={"Connection": "close", "Cache-Control": "no-cache"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            body = response.read(4096)
+        values[path] = json.loads(body) if path == "/api/health" else body.decode().strip()
+    require(values["/api/health"].get("status") == "ok"
+            and values["/api/health"].get("release") == API_SHA,
+            "public_api_health_changed")
+    require(values["/release.txt"] == UI_SHA, "public_frontend_release_changed")
+    return {"api_status": "ok", "api_release": API_SHA, "frontend_release": UI_SHA}
+
+
+def helper_command(image):
+    require(bool(re.fullmatch(r"sha256:[a-f0-9]{64}", image)), "helper_image_invalid")
+    return [
+        "docker", "run", "--rm", "-i", "--pull", "never", "--name", HELPER_NAME,
+        "--network", "none", "--pid", "container:" + CONTAINER,
+        "--read-only", "--cap-drop", "ALL", "--cap-add", "KILL",
+        "--security-opt", "no-new-privileges=true", "--user", "0:0",
+        "--memory", "64m", "--cpus", "0.25", "--pids-limit", "16",
+        "--entrypoint", "python", image, "-", "--namespace-apply",
+    ]
+
+
+def maintenance(apply=False, confirmation=""):
+    require(socket.gethostname() == "zoj-editor", "unexpected_host")
+    require(time.time() - FIRST_RETIRED_OBSERVATION > MINIMUM_RETIRED_SECONDS,
+            "minimum_retirement_grace_not_elapsed")
+    require(not apply or confirmation == CONFIRMATION, "explicit_confirmation_required")
+    with (CONFIG / "deploy.lock").open("r+") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Refused("deployment_or_backup_in_progress") from None
+        release = read_release()
+        before = snapshot()
+        image = validate_release(release, before)
+        health_before = public_health()
+        target_present = validate_processes()
+        report = {
+            "mode": "apply" if apply else "inspect",
+            "checked_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "gateway_container": CONTAINER, "target_host_pid": TARGET_HOST,
+            "target_namespace_pid": TARGET_NS, "target_start_ticks": TARGET_START,
+            "retired_target_present": target_present,
+            "health_before": health_before, "signal_sent": False,
+            "risk": "Retired worker connections are not proven to be SSE-only.",
+        }
+        if apply and target_present:
+            # Recheck all containers, routes and identities immediately before
+            # creating a short-lived helper in this gateway's PID namespace.
+            check_unchanged(before, snapshot())
+            require(read_release() == release, "release_metadata_changed")
+            public_health()
+            validate_processes()
+            require(not run(["docker", "ps", "-a", "-q", "--filter",
+                             "name=^/" + HELPER_NAME + "$"]).strip(),
+                    "maintenance_helper_already_exists")
+            raw = run(helper_command(image), input=Path(__file__).read_text(), timeout=45)
+            result = json.loads(raw)
+            require(result.get("outcome") in {"already_gone", "retired_worker_terminated"},
+                    "namespace_helper_refused")
+            report.update(result)
+        else:
+            report["outcome"] = "inspect_only" if target_present else "already_gone"
+        check_unchanged(before, snapshot())
+        require(read_release() == release, "release_metadata_changed")
+        report["health_after"] = public_health()
+        report["all_editor_containers_unchanged"] = True
+        report["non_front_container_ids"] = sorted(
+            row["id"] for service, row in before.items() if service != "frontend"
+        )
+        return report
+
+
+def main():
+    if sys.argv[1:] == ["--namespace-apply"]:
+        # No environment, application imports, network, mounts or user data.
+        print(json.dumps(namespace_action(), sort_keys=True))
+        return
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--confirmation", default="")
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args()
+    result = maintenance(args.apply, args.confirmation)
+    if args.output:
+        with args.output.open("w") as stream:
+            os.chmod(args.output, 0o600)
+            json.dump(result, stream, indent=2)
+            stream.write("\n")
+    print(json.dumps(result, sort_keys=True))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Refused as exc:
+        print(json.dumps({"outcome": "refused", "code": str(exc)}))
+        sys.exit(1)
+    except Exception:
+        # Never echo Docker stderr, environment values or private file contents.
+        print(json.dumps({"outcome": "refused", "code": "unexpected_maintenance_error"}))
+        sys.exit(1)
