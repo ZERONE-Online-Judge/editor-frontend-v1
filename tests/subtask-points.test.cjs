@@ -40,7 +40,7 @@ test('a group budget preserves all required cases and other subtask weights', ()
 
 test('invalid and empty group allocations leave the document untouched', () => {
   const tests = { one: { index: 1, group: 'small', points: 30 } };
-  const original = structuredClone(tests);
+  const original = globalThis.structuredClone(tests);
   for (const points of [-1, 30.5, 101, NaN, Infinity])
     assert.equal(allocateGroupPoints(tests, 'small', points), false);
   assert.equal(allocateGroupPoints(tests, 'missing', 100), false);
