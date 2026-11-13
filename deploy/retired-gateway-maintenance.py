@@ -37,6 +37,15 @@ CURRENT_START = 243953669
 CURRENT_HOST = tuple(range(3698865, 3698871))
 CURRENT_NS = tuple(range(405, 411))
 CONFIG = Path("/srv/zoj-editor/config")
+NAMESPACE_REFUSALS = frozenset({
+    "process_metadata_unavailable", "master_missing", "master_identity_changed",
+    "master_namespace_changed", "current_worker_missing", "current_worker_identity_changed",
+    "current_worker_namespace_changed", "retired_worker_identity_changed",
+    "retired_worker_namespace_changed", "worker_generation_order_changed",
+    "namespace_helper_not_root", "pidfd_open_permission_denied", "pidfd_open_failed",
+    "pidfd_signal_permission_denied", "pidfd_signal_failed", "retired_worker_did_not_exit",
+    "unexpected_namespace_error",
+})
 
 
 class Refused(Exception):
@@ -75,6 +84,13 @@ def run(args, *, input=None, timeout=30, stage="docker_operation"):
     except subprocess.TimeoutExpired:
         raise Refused("command_timed_out", stage=stage) from None
     if result.returncode != 0:
+        if stage in {"retired_worker_namespace_helper", "retired_worker_namespace_inspect"}:
+            try:
+                inner = json.loads(result.stdout)
+            except (ValueError, TypeError):
+                inner = {}
+            if isinstance(inner, dict) and inner.get("outcome") == "refused" and inner.get("code") in NAMESPACE_REFUSALS:
+                raise Refused(inner["code"], stage=stage)
         raise Refused(command_error(result.stderr), stage=stage)
     return result.stdout
 
@@ -152,6 +168,10 @@ def namespace_action(*, read=process, open_pidfd=os.pidfd_open,
         fd = open_pidfd(TARGET_NS, 0)
     except ProcessLookupError:
         return {"outcome": "already_gone", "signal_sent": False}
+    except PermissionError:
+        raise Refused("pidfd_open_permission_denied") from None
+    except OSError:
+        raise Refused("pidfd_open_failed") from None
     try:
         # Validate again after pidfd_open. A different/reused /proc PID refuses;
         # an exited original pidfd cannot ever point at its replacement.
@@ -161,6 +181,10 @@ def namespace_action(*, read=process, open_pidfd=os.pidfd_open,
             send(fd, signal.SIGTERM, None, 0)
         except ProcessLookupError:
             return {"outcome": "already_gone", "signal_sent": False}
+        except PermissionError:
+            raise Refused("pidfd_signal_permission_denied") from None
+        except OSError:
+            raise Refused("pidfd_signal_failed") from None
         deadline = monotonic() + 10
         while read(TARGET_NS) is not None:
             require(monotonic() < deadline, "retired_worker_did_not_exit")
@@ -168,6 +192,27 @@ def namespace_action(*, read=process, open_pidfd=os.pidfd_open,
         validate_processes(read, namespace=True)
         return {"outcome": "retired_worker_terminated", "signal_sent": True,
                 "target_namespace_pid": TARGET_NS, "signal": "SIGTERM"}
+    finally:
+        close(fd)
+
+
+def namespace_inspect(*, read=process, open_pidfd=os.pidfd_open, close=os.close):
+    """Check the real restricted namespace profile; never send a signal."""
+    require(os.getuid() == 0, "namespace_helper_not_root")
+    if not validate_processes(read, namespace=True):
+        return {"outcome": "already_gone", "signal_sent": False}
+    try:
+        fd = open_pidfd(TARGET_NS, 0)
+    except ProcessLookupError:
+        return {"outcome": "already_gone", "signal_sent": False}
+    except PermissionError:
+        raise Refused("pidfd_open_permission_denied") from None
+    except OSError:
+        raise Refused("pidfd_open_failed") from None
+    try:
+        validate_processes(read, namespace=True)
+        return {"outcome": "namespace_inspect_passed", "signal_sent": False,
+                "pidfd_open_passed": True}
     finally:
         close(fd)
 
@@ -260,7 +305,7 @@ def public_health():
     return {"api_status": "ok", "api_release": API_SHA, "frontend_release": UI_SHA}
 
 
-def helper_command(image):
+def helper_command(image, *, apply=False):
     require(bool(re.fullmatch(r"sha256:[a-f0-9]{64}", image)), "helper_image_invalid")
     return [
         "docker", "run", "--rm", "-i", "--pull", "never", "--name", HELPER_NAME,
@@ -268,8 +313,23 @@ def helper_command(image):
         "--read-only", "--cap-drop", "ALL", "--cap-add", "KILL",
         "--security-opt", "no-new-privileges=true", "--user", "0:0",
         "--memory", "64m", "--cpus", "0.25", "--pids-limit", "16",
-        "--entrypoint", "python", image, "-", "--namespace-apply",
+        "--entrypoint", "python", image, "-",
+        "--namespace-apply" if apply else "--namespace-inspect",
     ]
+
+
+def namespace_check(image, *, apply=False):
+    require(not run(["docker", "ps", "-a", "-q", "--filter",
+                     "name=^/" + HELPER_NAME + "$"],
+                    stage="helper_duplicate_check").strip(),
+            "maintenance_helper_already_exists")
+    raw = run(helper_command(image, apply=apply), input=Path(__file__).read_text(), timeout=45,
+              stage="retired_worker_namespace_helper" if apply else "retired_worker_namespace_inspect")
+    result = json.loads(raw)
+    allowed = {"already_gone", "retired_worker_terminated"} if apply else {"already_gone", "namespace_inspect_passed"}
+    require(result.get("outcome") in allowed, "namespace_helper_refused")
+    require(apply or result.get("signal_sent") is False, "namespace_inspect_reported_signal")
+    return result
 
 
 def maintenance(apply=False, confirmation=""):
@@ -296,6 +356,8 @@ def maintenance(apply=False, confirmation=""):
             "health_before": health_before, "signal_sent": False,
             "risk": "Retired worker connections are not proven to be SSE-only.",
         }
+        if target_present:
+            report["namespace_inspection"] = namespace_check(image)
         if apply and target_present:
             # Recheck all containers, routes and identities immediately before
             # creating a short-lived helper in this gateway's PID namespace.
@@ -303,15 +365,7 @@ def maintenance(apply=False, confirmation=""):
             require(read_release() == release, "release_metadata_changed")
             public_health()
             validate_processes()
-            require(not run(["docker", "ps", "-a", "-q", "--filter",
-                             "name=^/" + HELPER_NAME + "$"],
-                            stage="helper_duplicate_check").strip(),
-                    "maintenance_helper_already_exists")
-            raw = run(helper_command(image), input=Path(__file__).read_text(), timeout=45,
-                      stage="retired_worker_namespace_helper")
-            result = json.loads(raw)
-            require(result.get("outcome") in {"already_gone", "retired_worker_terminated"},
-                    "namespace_helper_refused")
+            result = namespace_check(image, apply=True)
             report.update(result)
         else:
             report["outcome"] = "inspect_only" if target_present else "already_gone"
@@ -326,9 +380,15 @@ def maintenance(apply=False, confirmation=""):
 
 
 def main():
-    if sys.argv[1:] == ["--namespace-apply"]:
+    if sys.argv[1:] in (["--namespace-apply"], ["--namespace-inspect"]):
         # No environment, application imports, network, mounts or user data.
-        print(json.dumps(namespace_action(), sort_keys=True))
+        try:
+            result = namespace_action() if sys.argv[1:] == ["--namespace-apply"] else namespace_inspect()
+        except Refused:
+            raise
+        except Exception:
+            raise Refused("unexpected_namespace_error") from None
+        print(json.dumps(result, sort_keys=True))
         return
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true")

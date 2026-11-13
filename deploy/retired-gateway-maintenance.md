@@ -2,8 +2,7 @@
 
 This manual workflow is a one-time operational workaround for the exact
 retired public gateway worker observed on November 13, 2026. It is separate
-from normal product deployment. No push, dispatch or production invocation
-has been performed while preparing this change.
+from normal product deployment. Local guard tests do not invoke production.
 
 **It is not an SSE-only drain.** Existing process metadata cannot prove that
 all connections held by this retired worker are SSE. Applying the operation
@@ -11,7 +10,10 @@ can interrupt an old HTTP request still attached to that worker, including
 an upload. Session EventSource clients reconnect without revoking their login;
 this does not guarantee that every other interrupted request is retried.
 
-The default workflow action is `inspect`. The apply action requires the exact
+The default workflow action is `inspect`. It validates the actual restricted
+Docker/PID namespace and pidfd access in a short-lived helper without sending
+any signal. Apply repeats this namespace inspection before termination. The
+apply action requires the exact
 confirmation `terminate-retired-editor-gateway-worker-344`. Root must review
 this remaining HTTP-request risk before dispatching apply.
 
@@ -39,7 +41,7 @@ All worker titles, parents, namespace mappings, start ticks and host cgroups
 are checked. The exact retired title must remain `nginx: worker process is
 shutting down`. The first observed retirement must be over 1,900 seconds old.
 
-For apply, a short-lived Python maintenance container uses the immutable image
+For namespace inspection and apply, a short-lived Python maintenance container uses the immutable image
 ID of the exact healthy API release. It shares only the pinned gateway's PID
 namespace, has no network, environment injection or mounts, runs on a read-only
 filesystem, drops all capabilities except `KILL`, and runs no application
@@ -55,6 +57,7 @@ read. Results contain only fixed identity checks, health and refusal codes.
 Docker's optional health map is read with `index`, so containers without a
 healthcheck report `none`. Failed Docker commands report a fixed operation
 stage and error category; raw stderr and command arguments are never echoed.
+Inner namespace guard refusals propagate only through a fixed code allowlist.
 
 Local guard tests:
 

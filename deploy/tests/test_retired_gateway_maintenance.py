@@ -288,7 +288,7 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(tool.Refused):
             tool.helper_command("zoj-editor-api:latest")
 
-    def test_default_inspect_never_creates_helper_or_sends_signal(self):
+    def test_default_inspect_uses_only_no_signal_namespace_check(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "deploy.lock").touch()
@@ -298,14 +298,42 @@ class ReleaseTests(unittest.TestCase):
                     patch.object(tool, "snapshot", side_effect=containers), \
                     patch.object(tool, "public_health", return_value={"ok": True}), \
                     patch.object(tool, "validate_processes", return_value=True), \
+                    patch.object(tool, "namespace_check", return_value={"outcome": "namespace_inspect_passed", "signal_sent": False}) as namespace, \
                     patch.object(tool, "run") as command:
                 result = tool.maintenance()
             self.assertEqual(result["outcome"], "inspect_only")
             self.assertFalse(result["signal_sent"])
+            namespace.assert_called_once_with("sha256:" + "b" * 64)
             command.assert_not_called()
 
 
 class CommandDiagnosticsTests(unittest.TestCase):
+    def test_namespace_inspection_command_cannot_select_apply(self):
+        self.assertEqual(tool.helper_command('sha256:' + 'a' * 64)[-1], '--namespace-inspect')
+        self.assertEqual(tool.helper_command('sha256:' + 'a' * 64, apply=True)[-1], '--namespace-apply')
+
+    def test_only_whitelisted_inner_refusal_codes_propagate(self):
+        for code, expected in [('master_namespace_changed', 'master_namespace_changed'),
+                               ('private-secret-value', 'docker_command_failed')]:
+            result = subprocess.CompletedProcess(['docker'], 1,
+                json.dumps({'outcome': 'refused', 'code': code}), 'private-stderr')
+            with patch.object(tool.subprocess, 'run', return_value=result):
+                with self.assertRaises(tool.Refused) as error:
+                    tool.run(['docker'], stage='retired_worker_namespace_inspect')
+            self.assertEqual(str(error.exception), expected)
+
+    def test_real_namespace_inspect_opens_and_closes_pidfd_without_sending_signal(self):
+        rows = processes(True)
+        opened, closed = [], []
+        with patch.object(tool.os, 'getuid', return_value=0):
+            result = tool.namespace_inspect(read=rows.get,
+                open_pidfd=lambda pid, flags: opened.append((pid, flags)) or 77,
+                close=closed.append)
+        self.assertEqual(opened, [(tool.TARGET_NS, 0)])
+        self.assertEqual(closed, [77])
+        self.assertFalse(result['signal_sent'])
+        self.assertEqual(result['outcome'], 'namespace_inspect_passed')
+
     def test_inspection_template_uses_optional_health_map_index(self):
         self.assertNotIn(".State.Health", tool.INSPECT_FORMAT)
         self.assertIn('with (index .State "Health")', tool.INSPECT_FORMAT)
