@@ -123,3 +123,12 @@ release. The new Editor API already limits new session-event streams to 120
 seconds. This does not retroactively end an existing stream held by the legacy
 9b57 generation. This exact legacy profile is a one-time bootstrap operation;
 the normal connection-drain guard remains enabled for all releases.
+
+## Completed operation
+
+Inspection run `43459353401` passed without a signal. After reviewing that
+proof and the remaining old-request risk, apply run `43459476692` terminated
+only the pinned retired worker at `2026-11-13T16:07:38Z`. The master, current
+worker generation and all Editor containers remained unchanged; the public
+API and UI health checks passed before and after. This profile is complete
+and must not be generalized to another worker or reused after release changes.
