@@ -52,3 +52,11 @@ jobs:
           fi
           python3 deploy/retired-gateway-maintenance.py "${arguments[@]}" \
             --output "$RUNNER_TEMP/retired-gateway-maintenance.json"
+      - name: Preserve private namespace failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retired-gateway-namespace-diagnostic
+          path: ${{ runner.temp }}/retired-gateway-namespace-diagnostic.json
+          if-no-files-found: ignore
+          retention-days: 1

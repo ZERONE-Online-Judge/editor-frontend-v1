@@ -308,6 +308,21 @@ class ReleaseTests(unittest.TestCase):
 
 
 class CommandDiagnosticsTests(unittest.TestCase):
+    def test_namespace_stderr_is_private_and_logs_only_static_summary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.CompletedProcess(['docker'], 1, 'scoped-output',
+                'AttributeError: scoped-private-details')
+            with patch.dict(os.environ, {'RUNNER_TEMP': directory}), \
+                    patch.object(tool.subprocess, 'run', return_value=result):
+                with self.assertRaises(tool.Refused) as error:
+                    tool.run(['docker'], stage='retired_worker_namespace_inspect')
+            self.assertEqual(str(error.exception), 'namespace_python_attribute_error')
+            self.assertEqual(error.exception.diagnostic['docker_exit_code'], 1)
+            self.assertNotIn('scoped-private-details', str(error.exception.diagnostic))
+            path = Path(directory) / 'retired-gateway-namespace-diagnostic.json'
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(json.loads(path.read_text())['stderr'], result.stderr)
+
     def test_namespace_inspection_command_cannot_select_apply(self):
         self.assertEqual(tool.helper_command('sha256:' + 'a' * 64)[-1], '--namespace-inspect')
         self.assertEqual(tool.helper_command('sha256:' + 'a' * 64, apply=True)[-1], '--namespace-apply')

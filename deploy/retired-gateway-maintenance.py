@@ -51,9 +51,10 @@ NAMESPACE_REFUSALS = frozenset({
 class Refused(Exception):
     """Only constant, non-sensitive refusal codes reach logs."""
 
-    def __init__(self, code, *, stage="guard"):
+    def __init__(self, code, *, stage="guard", diagnostic=None):
         super().__init__(code)
         self.stage = stage
+        self.diagnostic = diagnostic
 
 
 def require(condition, code):
@@ -71,7 +72,49 @@ def command_error(stderr):
         return "docker_daemon_unavailable"
     if "no such object" in text or "no such container" in text:
         return "docker_container_missing"
+    if "operation not permitted" in text:
+        return "docker_operation_not_permitted"
+    if "apparmor" in text:
+        return "docker_apparmor_error"
+    if "seccomp" in text:
+        return "docker_seccomp_error"
+    if "executable file not found" in text:
+        return "docker_executable_missing"
+    if "oci runtime" in text or "failed to create task" in text:
+        return "docker_oci_runtime_failed"
+    if "out of memory" in text:
+        return "docker_memory_error"
+    for exception, code in [
+        ("AttributeError:", "namespace_python_attribute_error"),
+        ("ModuleNotFoundError:", "namespace_python_module_missing"),
+        ("ImportError:", "namespace_python_import_error"),
+        ("SyntaxError:", "namespace_python_syntax_error"),
+        ("PermissionError:", "namespace_python_permission_error"),
+        ("TypeError:", "namespace_python_type_error"),
+    ]:
+        if exception in stderr:
+            return code
     return "docker_command_failed"
+
+
+def private_namespace_diagnostic(result, stage):
+    """Persist only this fixed, credential-free helper's failure privately."""
+    summary = {"docker_exit_code": result.returncode,
+               "stdout_bytes": len(result.stdout.encode()),
+               "stderr_bytes": len(result.stderr.encode())}
+    root = os.environ.get("RUNNER_TEMP")
+    if root:
+        path = Path(root) / "retired-gateway-namespace-diagnostic.json"
+        data = {"stage": stage, **summary,
+                "stdout": result.stdout[-16384:], "stderr": result.stderr[-16384:]}
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(fd, "w") as stream:
+                json.dump(data, stream)
+            summary["private_diagnostic_saved"] = True
+        except OSError:
+            summary["private_diagnostic_saved"] = False
+    return summary
 
 
 def run(args, *, input=None, timeout=30, stage="docker_operation"):
@@ -84,14 +127,17 @@ def run(args, *, input=None, timeout=30, stage="docker_operation"):
     except subprocess.TimeoutExpired:
         raise Refused("command_timed_out", stage=stage) from None
     if result.returncode != 0:
+        diagnostic = None
         if stage in {"retired_worker_namespace_helper", "retired_worker_namespace_inspect"}:
+            diagnostic = private_namespace_diagnostic(result, stage)
             try:
                 inner = json.loads(result.stdout)
             except (ValueError, TypeError):
                 inner = {}
             if isinstance(inner, dict) and inner.get("outcome") == "refused" and inner.get("code") in NAMESPACE_REFUSALS:
-                raise Refused(inner["code"], stage=stage)
-        raise Refused(command_error(result.stderr), stage=stage)
+                raise Refused(inner["code"], stage=stage, diagnostic=diagnostic)
+        code = "docker_process_killed" if result.returncode == 137 else command_error(result.stderr)
+        raise Refused(code, stage=stage, diagnostic=diagnostic)
     return result.stdout
 
 
@@ -408,7 +454,10 @@ if __name__ == "__main__":
     try:
         main()
     except Refused as exc:
-        print(json.dumps({"outcome": "refused", "stage": exc.stage, "code": str(exc)}))
+        result = {"outcome": "refused", "stage": exc.stage, "code": str(exc)}
+        if exc.diagnostic is not None:
+            result["diagnostic"] = exc.diagnostic
+        print(json.dumps(result))
         sys.exit(1)
     except Exception:
         # Never echo Docker stderr, environment values or private file contents.

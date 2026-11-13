@@ -58,6 +58,11 @@ Docker's optional health map is read with `index`, so containers without a
 healthcheck report `none`. Failed Docker commands report a fixed operation
 stage and error category; raw stderr and command arguments are never echoed.
 Inner namespace guard refusals propagate only through a fixed code allowlist.
+If this exact credential-free namespace command fails before producing its
+JSON response, its bounded stdout/stderr is saved with mode 0600 and uploaded
+as a private workflow artifact retained for one day. Logs contain only the
+exit code, byte counts and fixed error class. This diagnostic never reads
+connection contents, environment values or unrelated application logs.
 
 Local guard tests:
 
