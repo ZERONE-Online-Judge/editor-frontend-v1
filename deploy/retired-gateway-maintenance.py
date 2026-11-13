@@ -24,14 +24,19 @@ CONTAINER = "76a3a69e6ab595f50e8c41834ac9ae857e43828bdb5a43801cef066f6cb2a414"
 API_SHA = "0e2f678fcbc02d3c56570229743150de6f8f53bc"
 UI_SHA = "21d0ffe651ded2f28f780baa026a0d9174ba907a"
 # Explicitly reviewed by the release operator: run 43456015638 rebuilt this
-# same API source at 2026-11-13T15:49:38Z. This is only a stdlib Python tool
-# runtime, never an application replacement or an automatically trusted tag.
-REVIEWED_RUNTIME_IMAGE = "sha256:8592e9058b033fd5ba7989ec3549bc474a0a9da6036df23c4255af4364b6847f"
+# same API source at 2026-11-13T15:49:38Z. Read-only inspect 43458637712 proved
+# this containerd store exposes the index digest as image .Id, rather than
+# the config blob digest. The stopped helper must prove the same .Image.
+# This is only a stdlib tool runtime, never an application replacement.
+REVIEWED_RUNTIME_CONFIG = "sha256:8592e9058b033fd5ba7989ec3549bc474a0a9da6036df23c4255af4364b6847f"
+REVIEWED_RUNTIME_IMAGE = "sha256:410ab8c98914a6453122fb31f0712995a1de7eb8eed4ac021a981dd6a2dd32b1"
 REVIEWED_RUNTIME_MANIFEST = "sha256:3715375e62683a666605eb54fc0633b52553977222d058e4ef9085778c3bd340"
 REVIEWED_RUNTIME_INDEX = "sha256:410ab8c98914a6453122fb31f0712995a1de7eb8eed4ac021a981dd6a2dd32b1"
 RUNTIME_PROVENANCE = {"workflow_run": 43456015638, "backend_sha": API_SHA,
                       "build_completed_at": "2026-11-13T15:49:38Z",
-                      "frontend_sha": "1f2007ef211a0df932d50f1f3d81fb110285c028"}
+                      "frontend_sha": "1f2007ef211a0df932d50f1f3d81fb110285c028",
+                      "config_digest": REVIEWED_RUNTIME_CONFIG,
+                      "identity_verified_by_inspect_run": 43458637712}
 CONFIRMATION = "terminate-retired-editor-gateway-worker-408"
 FIRST_RETIRED_OBSERVATION = 1794583185.346143  # 2026-11-13T15:19:45.346143Z
 MINIMUM_RETIRED_SECONDS = 1900

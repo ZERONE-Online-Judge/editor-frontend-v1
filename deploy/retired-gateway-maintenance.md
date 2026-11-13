@@ -61,15 +61,21 @@ operator-reviewed alternative is permitted:
 | Reviewed frontend deployment run | `43456015638`, source `1f2007ef211a0df932d50f1f3d81fb110285c028` |
 | API source rebuilt by that run | `0e2f678fcbc02d3c56570229743150de6f8f53bc` |
 | Server build completion | `2026-11-13T15:49:38Z` |
-| Pinned runtime config image | `sha256:8592e9058b033fd5ba7989ec3549bc474a0a9da6036df23c4255af4364b6847f` |
+| Config blob digest | `sha256:8592e9058b033fd5ba7989ec3549bc474a0a9da6036df23c4255af4364b6847f` |
 | Platform manifest | `sha256:3715375e62683a666605eb54fc0633b52553977222d058e4ef9085778c3bd340` |
-| Image index | `sha256:410ab8c98914a6453122fb31f0712995a1de7eb8eed4ac021a981dd6a2dd32b1` |
+| Pinned image identity / index | `sha256:410ab8c98914a6453122fb31f0712995a1de7eb8eed4ac021a981dd6a2dd32b1` |
 
 The release operator reviewed those config/manifest/index digests in the
 cancelled deployment's server build output before approving this alternative.
+Read-only inspection `43458637712` then proved that the Editor's containerd
+store returns the index digest as image `.Id`; the config digest is a blob,
+not a resolvable image identity. The release operator explicitly approved the
+observed index as the runtime image pin. A stopped helper's actual `.Image`
+must equal that exact index before any process can start; the config blob is
+retained as provenance and is never silently treated as an equivalent ID.
 The serving API still has to pass the original release/health/container guards;
 it is never replaced. This alternative is used only as a Python stdlib runtime,
-with the exact reviewed config digest checked both during local resolution and
+with the exact reviewed image identity checked during local resolution and
 again on the stopped helper. Any different available image is refused. Results
 explicitly state whether the runtime matches the serving API, with the active
 image/manifest, selected image, created helper image and provenance. Failed

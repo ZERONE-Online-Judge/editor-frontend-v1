@@ -319,6 +319,17 @@ class ReleaseTests(unittest.TestCase):
 
 
 class RuntimeImageTests(unittest.TestCase):
+    def test_containerd_reviewed_index_is_identity_not_config_blob(self):
+        self.assertEqual(tool.REVIEWED_RUNTIME_IMAGE, tool.REVIEWED_RUNTIME_INDEX)
+        self.assertNotEqual(tool.REVIEWED_RUNTIME_IMAGE, tool.REVIEWED_RUNTIME_CONFIG)
+        missing = tool.Refused('docker_image_missing', stage='helper_image_resolution')
+        with patch.object(tool, 'run', side_effect=[missing, missing,
+                json.dumps({'id': tool.REVIEWED_RUNTIME_INDEX})]) as run:
+            reference = tool.resolve_helper_reference(tool.REVIEWED_RUNTIME_IMAGE,
+                tool.REVIEWED_RUNTIME_MANIFEST, index_digest=tool.REVIEWED_RUNTIME_INDEX)
+        self.assertEqual(reference, tool.REVIEWED_RUNTIME_INDEX)
+        self.assertEqual(run.call_args.args[0][-1], tool.REVIEWED_RUNTIME_INDEX)
+
     def test_active_manifest_selects_same_bytes_without_rebuilt_release_tag(self):
         image, manifest = 'sha256:' + 'a' * 64, 'sha256:' + 'c' * 64
         with patch.object(tool, 'run', return_value=json.dumps({'id': image})) as run:
@@ -408,6 +419,19 @@ class RuntimeImageTests(unittest.TestCase):
 
 
 class CommandDiagnosticsTests(unittest.TestCase):
+    def test_config_blob_cannot_replace_reviewed_containerd_image_identity(self):
+        image, helper = tool.REVIEWED_RUNTIME_INDEX, 'b' * 64
+        row = {'id': helper, 'image_id': tool.REVIEWED_RUNTIME_CONFIG, 'image_reference': image,
+               'running': False, 'pid': 0, 'pid_mode': 'container:' + tool.CONTAINER,
+               'marker': tool.CONTAINER}
+        with patch.object(tool, 'run', side_effect=['', helper, json.dumps(row), '']) as run:
+            with self.assertRaisesRegex(tool.Refused, 'helper_runtime_image_mismatch') as error:
+                tool.namespace_check(image, reference=image)
+        self.assertEqual(error.exception.diagnostic['expected_image_id'], tool.REVIEWED_RUNTIME_INDEX)
+        self.assertEqual(error.exception.diagnostic['created_helper_image_id'], tool.REVIEWED_RUNTIME_CONFIG)
+        self.assertFalse(any(call.kwargs['stage'] == 'retired_worker_namespace_inspect'
+                             for call in run.call_args_list))
+
     def test_canonical_tag_helper_is_not_started_until_image_and_namespace_match(self):
         image = 'sha256:' + 'a' * 64
         helper = 'b' * 64
