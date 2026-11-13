@@ -2,6 +2,7 @@ import copy
 import fcntl
 import importlib.util
 import itertools
+import json
 import os
 from pathlib import Path
 import signal
@@ -303,6 +304,48 @@ class ReleaseTests(unittest.TestCase):
             self.assertFalse(result["signal_sent"])
             command.assert_not_called()
 
+
+class CommandDiagnosticsTests(unittest.TestCase):
+    def test_inspection_template_uses_optional_health_map_index(self):
+        self.assertNotIn(".State.Health", tool.INSPECT_FORMAT)
+        self.assertIn('with (index .State "Health")', tool.INSPECT_FORMAT)
+
+    def test_static_error_class_and_stage_without_raw_stderr(self):
+        cases = [
+            ('template parsing error: map has no entry for key "Health"', 'docker_template_error'),
+            ('permission denied: private-secret-value', 'docker_permission_denied'),
+            ('Cannot connect to the Docker daemon: private-secret-value', 'docker_daemon_unavailable'),
+            ('No such object: private-secret-value', 'docker_container_missing'),
+            ('unspecified failure private-secret-value', 'docker_command_failed'),
+        ]
+        for stderr, expected in cases:
+            with self.subTest(expected=expected):
+                result = subprocess.CompletedProcess(['docker'], 1, 'private-output', stderr)
+                with patch.object(tool.subprocess, 'run', return_value=result):
+                    with self.assertRaises(tool.Refused) as error:
+                        tool.run(['docker'], stage='container_inspect')
+                self.assertEqual(str(error.exception), expected)
+                self.assertEqual(error.exception.stage, 'container_inspect')
+                self.assertNotIn('private', str(error.exception))
+
+    def test_container_snapshot_passes_the_inspection_stage(self):
+        rows = containers()
+        outputs = [' '.join(row['id'] for row in rows.values()),
+                   '\n'.join(json.dumps(row) for row in rows.values())]
+        with patch.object(tool, 'run', side_effect=outputs) as run:
+            self.assertEqual(tool.snapshot(), rows)
+        self.assertEqual(run.call_args_list[0].kwargs['stage'], 'container_list')
+        self.assertEqual(run.call_args_list[1].kwargs['stage'], 'container_inspect')
+
+    def test_timeout_reports_static_stage_without_command_arguments(self):
+        with patch.object(tool.subprocess, 'run', side_effect=subprocess.TimeoutExpired('private-command', 1)):
+            with self.assertRaises(tool.Refused) as error:
+                tool.run(['docker'], stage='retired_worker_namespace_helper')
+        self.assertEqual(str(error.exception), 'command_timed_out')
+        self.assertEqual(error.exception.stage, 'retired_worker_namespace_helper')
+
+
+class ReleasePreflightTests(unittest.TestCase):
     def test_apply_requires_exact_confirmation_before_lock_or_docker(self):
         with patch.object(tool.socket, "gethostname", return_value="zoj-editor"), \
                 patch.object(tool, "run") as command:

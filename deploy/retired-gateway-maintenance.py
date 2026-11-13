@@ -42,20 +42,40 @@ CONFIG = Path("/srv/zoj-editor/config")
 class Refused(Exception):
     """Only constant, non-sensitive refusal codes reach logs."""
 
+    def __init__(self, code, *, stage="guard"):
+        super().__init__(code)
+        self.stage = stage
+
 
 def require(condition, code):
     if not condition:
         raise Refused(code)
 
 
-def run(args, *, input=None, timeout=30):
+def command_error(stderr):
+    text = stderr.lower()
+    if "template parsing error" in text or "map has no entry for key" in text:
+        return "docker_template_error"
+    if "permission denied" in text:
+        return "docker_permission_denied"
+    if "cannot connect to the docker daemon" in text:
+        return "docker_daemon_unavailable"
+    if "no such object" in text or "no such container" in text:
+        return "docker_container_missing"
+    return "docker_command_failed"
+
+
+def run(args, *, input=None, timeout=30, stage="docker_operation"):
     try:
         result = subprocess.run(
             args, input=input, text=True, capture_output=True, timeout=timeout,
         )
-    except (OSError, subprocess.TimeoutExpired):
-        raise Refused("command_unavailable_or_timed_out") from None
-    require(result.returncode == 0, "docker_command_failed")
+    except OSError:
+        raise Refused("command_unavailable", stage=stage) from None
+    except subprocess.TimeoutExpired:
+        raise Refused("command_timed_out", stage=stage) from None
+    if result.returncode != 0:
+        raise Refused(command_error(result.stderr), stage=stage)
     return result.stdout
 
 
@@ -156,7 +176,7 @@ INSPECT_FORMAT = (
     '{"id":{{json .Id}},"image_reference":{{json .Config.Image}},'
     '"image_id":{{json .Image}},"pid":{{json .State.Pid}},'
     '"running":{{json .State.Running}},"status":{{json .State.Status}},'
-    '"health":{{if .State.Health}}{{json .State.Health.Status}}{{else}}"none"{{end}},'
+    '"health":{{with (index .State "Health")}}{{json (index . "Status")}}{{else}}"none"{{end}},'
     '"project":{{json (index .Config.Labels "com.docker.compose.project")}},'
     '"service":{{json (index .Config.Labels "com.docker.compose.service")}}}'
 )
@@ -164,10 +184,12 @@ INSPECT_FORMAT = (
 
 def snapshot():
     ids = run(["docker", "ps", "-a", "-q", "--no-trunc", "--filter",
-               "label=com.docker.compose.project=" + PROJECT]).split()
+               "label=com.docker.compose.project=" + PROJECT],
+              stage="container_list").split()
     require(bool(ids), "editor_containers_missing")
     rows = [json.loads(line) for line in run(
         ["docker", "inspect", "--format", INSPECT_FORMAT, *ids],
+        stage="container_inspect",
     ).splitlines()]
     require(len(rows) == len(ids), "container_snapshot_incomplete")
     require(all(row["project"] == PROJECT for row in rows), "unexpected_project")
@@ -282,9 +304,11 @@ def maintenance(apply=False, confirmation=""):
             public_health()
             validate_processes()
             require(not run(["docker", "ps", "-a", "-q", "--filter",
-                             "name=^/" + HELPER_NAME + "$"]).strip(),
+                             "name=^/" + HELPER_NAME + "$"],
+                            stage="helper_duplicate_check").strip(),
                     "maintenance_helper_already_exists")
-            raw = run(helper_command(image), input=Path(__file__).read_text(), timeout=45)
+            raw = run(helper_command(image), input=Path(__file__).read_text(), timeout=45,
+                      stage="retired_worker_namespace_helper")
             result = json.loads(raw)
             require(result.get("outcome") in {"already_gone", "retired_worker_terminated"},
                     "namespace_helper_refused")
@@ -324,7 +348,7 @@ if __name__ == "__main__":
     try:
         main()
     except Refused as exc:
-        print(json.dumps({"outcome": "refused", "code": str(exc)}))
+        print(json.dumps({"outcome": "refused", "stage": exc.stage, "code": str(exc)}))
         sys.exit(1)
     except Exception:
         # Never echo Docker stderr, environment values or private file contents.

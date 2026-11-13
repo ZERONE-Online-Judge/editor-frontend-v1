@@ -52,6 +52,9 @@ The immutable API image is used only as an already-installed Python runtime;
 the maintenance process does not import application code or have credentials.
 No connection payloads, session tokens, environment values or user logs are
 read. Results contain only fixed identity checks, health and refusal codes.
+Docker's optional health map is read with `index`, so containers without a
+healthcheck report `none`. Failed Docker commands report a fixed operation
+stage and error category; raw stderr and command arguments are never echoed.
 
 Local guard tests:
 
