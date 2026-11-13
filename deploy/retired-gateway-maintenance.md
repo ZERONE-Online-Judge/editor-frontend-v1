@@ -41,8 +41,13 @@ All worker titles, parents, namespace mappings, start ticks and host cgroups
 are checked. The exact retired title must remain `nginx: worker process is
 shutting down`. The first observed retirement must be over 1,900 seconds old.
 
-For namespace inspection and apply, a short-lived Python maintenance container uses the immutable image
-ID of the exact healthy API release. It shares only the pinned gateway's PID
+For namespace inspection and apply, a stopped Python maintenance container is
+created from the exact healthy API release's canonical tag, with pulls disabled.
+Before starting it, the helper's actual image ID must equal the healthy API
+container's pinned image ID, and its PID namespace, marker, stopped state and
+container ID must also match. This handles containerd stores that do not resolve
+a container's config digest as a runnable image reference. A retagged image is
+refused before any process starts. The helper shares only the gateway's PID
 namespace, has no network, environment injection or mounts, runs on a read-only
 filesystem, drops all capabilities except `KILL`, and runs no application
 entrypoint. It opens a pidfd for PID 344, validates identities again, and sends

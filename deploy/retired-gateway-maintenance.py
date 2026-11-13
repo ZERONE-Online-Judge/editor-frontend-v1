@@ -354,14 +354,38 @@ def public_health():
 def helper_command(image, *, apply=False):
     require(bool(re.fullmatch(r"sha256:[a-f0-9]{64}", image)), "helper_image_invalid")
     return [
-        "docker", "run", "--rm", "-i", "--pull", "never", "--name", HELPER_NAME,
+        "docker", "create", "-i", "--pull", "never", "--name", HELPER_NAME,
+        "--label", "zoj.maintenance.retired-gateway=" + CONTAINER,
         "--network", "none", "--pid", "container:" + CONTAINER,
         "--read-only", "--cap-drop", "ALL", "--cap-add", "KILL",
         "--security-opt", "no-new-privileges=true", "--user", "0:0",
         "--memory", "64m", "--cpus", "0.25", "--pids-limit", "16",
-        "--entrypoint", "python", image, "-",
+        # Some containerd stores do not resolve a container's config digest as
+        # an image reference. Create by the exact release tag, verify .Image
+        # against the serving container, and only then allow start.
+        "--entrypoint", "python", "zoj-editor-api:" + API_SHA, "-",
         "--namespace-apply" if apply else "--namespace-inspect",
     ]
+
+
+CREATED_HELPER_FORMAT = (
+    '{"id":{{json .Id}},"image_id":{{json .Image}},'
+    '"image_reference":{{json .Config.Image}},"running":{{json .State.Running}},'
+    '"pid":{{json .State.Pid}},"pid_mode":{{json .HostConfig.PidMode}},'
+    '"marker":{{json (index .Config.Labels "zoj.maintenance.retired-gateway")}}}'
+)
+
+
+def validate_created_helper(row, helper_id, image):
+    require(row.get("id") == helper_id, "created_helper_id_changed")
+    require(row.get("image_id") == image, "helper_runtime_image_mismatch")
+    require(row.get("image_reference") == "zoj-editor-api:" + API_SHA,
+            "helper_runtime_reference_changed")
+    require(row.get("running") is False and row.get("pid") == 0,
+            "helper_started_before_validation")
+    require(row.get("pid_mode") == "container:" + CONTAINER,
+            "helper_pid_namespace_changed")
+    require(row.get("marker") == CONTAINER, "helper_marker_changed")
 
 
 def namespace_check(image, *, apply=False):
@@ -369,12 +393,29 @@ def namespace_check(image, *, apply=False):
                      "name=^/" + HELPER_NAME + "$"],
                     stage="helper_duplicate_check").strip(),
             "maintenance_helper_already_exists")
-    raw = run(helper_command(image, apply=apply), input=Path(__file__).read_text(), timeout=45,
-              stage="retired_worker_namespace_helper" if apply else "retired_worker_namespace_inspect")
-    result = json.loads(raw)
-    allowed = {"already_gone", "retired_worker_terminated"} if apply else {"already_gone", "namespace_inspect_passed"}
-    require(result.get("outcome") in allowed, "namespace_helper_refused")
-    require(apply or result.get("signal_sent") is False, "namespace_inspect_reported_signal")
+    helper_id = run(helper_command(image, apply=apply), stage="namespace_helper_create").strip()
+    require(bool(re.fullmatch(r"[a-f0-9]{64}", helper_id)), "created_helper_id_invalid")
+    def remove():
+        run(["docker", "rm", "-f", helper_id], stage="namespace_helper_remove")
+    try:
+        row = json.loads(run(["docker", "inspect", "--format", CREATED_HELPER_FORMAT, helper_id],
+                             stage="created_helper_identity"))
+        validate_created_helper(row, helper_id, image)
+        raw = run(["docker", "start", "-a", "-i", helper_id],
+                  input=Path(__file__).read_text(), timeout=45,
+                  stage="retired_worker_namespace_helper" if apply else "retired_worker_namespace_inspect")
+        result = json.loads(raw)
+        allowed = {"already_gone", "retired_worker_terminated"} if apply else {"already_gone", "namespace_inspect_passed"}
+        require(result.get("outcome") in allowed, "namespace_helper_refused")
+        require(apply or result.get("signal_sent") is False, "namespace_inspect_reported_signal")
+    except BaseException:
+        try:
+            remove()
+        except Refused:
+            pass
+        raise
+    remove()
+    result["runtime_image_matches_active_api"] = True
     return result
 
 

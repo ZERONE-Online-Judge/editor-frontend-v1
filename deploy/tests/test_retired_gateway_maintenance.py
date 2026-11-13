@@ -308,6 +308,39 @@ class ReleaseTests(unittest.TestCase):
 
 
 class CommandDiagnosticsTests(unittest.TestCase):
+    def test_canonical_tag_helper_is_not_started_until_image_and_namespace_match(self):
+        image = 'sha256:' + 'a' * 64
+        helper = 'b' * 64
+        row = {'id': helper, 'image_id': image, 'image_reference': 'zoj-editor-api:' + tool.API_SHA,
+               'running': False, 'pid': 0, 'pid_mode': 'container:' + tool.CONTAINER,
+               'marker': tool.CONTAINER}
+        with patch.object(tool, 'run', side_effect=['', helper, json.dumps(row),
+                json.dumps({'outcome': 'namespace_inspect_passed', 'signal_sent': False}), '']) as run:
+            result = tool.namespace_check(image)
+        self.assertTrue(result['runtime_image_matches_active_api'])
+        self.assertEqual([x.kwargs['stage'] for x in run.call_args_list],
+            ['helper_duplicate_check', 'namespace_helper_create', 'created_helper_identity',
+             'retired_worker_namespace_inspect', 'namespace_helper_remove'])
+        self.assertEqual(run.call_args_list[1].args[0][1], 'create')
+        self.assertEqual(run.call_args_list[3].args[0][:4], ['docker', 'start', '-a', '-i'])
+
+    def test_retagged_image_or_started_helper_is_removed_without_start(self):
+        image, helper = 'sha256:' + 'a' * 64, 'b' * 64
+        valid = {'id': helper, 'image_id': image, 'image_reference': 'zoj-editor-api:' + tool.API_SHA,
+                 'running': False, 'pid': 0, 'pid_mode': 'container:' + tool.CONTAINER,
+                 'marker': tool.CONTAINER}
+        for key, value in [('image_id', 'sha256:' + 'c' * 64), ('running', True),
+                           ('pid_mode', 'host'), ('marker', 'other'), ('id', 'c' * 64),
+                           ('image_reference', 'other'), ('pid', 23)]:
+            with self.subTest(key=key):
+                row = {**valid, key: value}
+                with patch.object(tool, 'run', side_effect=['', helper, json.dumps(row), '']) as run:
+                    with self.assertRaises(tool.Refused):
+                        tool.namespace_check(image)
+                self.assertNotIn('retired_worker_namespace_inspect',
+                    [x.kwargs['stage'] for x in run.call_args_list])
+                self.assertEqual(run.call_args_list[-1].args[0], ['docker', 'rm', '-f', helper])
+
     def test_namespace_stderr_is_private_and_logs_only_static_summary(self):
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.CompletedProcess(['docker'], 1, 'scoped-output',
