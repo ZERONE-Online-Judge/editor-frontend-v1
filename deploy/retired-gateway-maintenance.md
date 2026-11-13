@@ -58,16 +58,16 @@ operator-reviewed alternative is permitted:
 
 | Runtime provenance | Exact value |
 | --- | --- |
-| Reviewed frontend deployment run | `43456015638`, source `1f2007ef211a0df932d50f1f3d81fb110285c028` |
+| Reviewed frontend deployment run | `43458320468`, source `50de9ac1fdf4be3390ac0264a245b83d6c0a918d` |
 | API source rebuilt by that run | `0e2f678fcbc02d3c56570229743150de6f8f53bc` |
-| Server build completion | `2026-11-13T15:49:38Z` |
+| Server build completion | `2026-11-13T16:03:30Z` |
 | Config blob digest | `sha256:8592e9058b033fd5ba7989ec3549bc474a0a9da6036df23c4255af4364b6847f` |
 | Platform manifest | `sha256:3715375e62683a666605eb54fc0633b52553977222d058e4ef9085778c3bd340` |
-| Pinned image identity / index | `sha256:410ab8c98914a6453122fb31f0712995a1de7eb8eed4ac021a981dd6a2dd32b1` |
+| Pinned image identity / index | `sha256:b6f0e4499504c44e8b01b919c7467b5304d9a146da2908d38cf35245e76bdb13` |
 
 The release operator reviewed those config/manifest/index digests in the
 cancelled deployment's server build output before approving this alternative.
-Read-only inspection `43458637712` then proved that the Editor's containerd
+Read-only inspection `43458996796` then proved that the Editor's containerd
 store returns the index digest as image `.Id`; the config digest is a blob,
 not a resolvable image identity. The release operator explicitly approved the
 observed index as the runtime image pin. A stopped helper's actual `.Image`

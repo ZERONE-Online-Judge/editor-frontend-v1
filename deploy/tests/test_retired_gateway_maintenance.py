@@ -386,7 +386,7 @@ class RuntimeImageTests(unittest.TestCase):
         self.assertEqual(runtime['image_id'], tool.REVIEWED_RUNTIME_IMAGE)
         self.assertEqual(runtime['active_image_id'], active)
         self.assertFalse(runtime['matches_active_api'])
-        self.assertEqual(runtime['provenance']['workflow_run'], 43456015638)
+        self.assertEqual(runtime['provenance']['workflow_run'], 43458320468)
         self.assertEqual(resolve.call_args.args, (tool.REVIEWED_RUNTIME_IMAGE, tool.REVIEWED_RUNTIME_MANIFEST))
         self.assertEqual(resolve.call_args.kwargs, {'index_digest': tool.REVIEWED_RUNTIME_INDEX})
         with patch.object(tool, 'resolve_helper_reference', return_value=active) as resolve:

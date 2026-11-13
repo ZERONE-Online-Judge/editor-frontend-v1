@@ -23,20 +23,20 @@ import urllib.request
 CONTAINER = "76a3a69e6ab595f50e8c41834ac9ae857e43828bdb5a43801cef066f6cb2a414"
 API_SHA = "0e2f678fcbc02d3c56570229743150de6f8f53bc"
 UI_SHA = "21d0ffe651ded2f28f780baa026a0d9174ba907a"
-# Explicitly reviewed by the release operator: run 43456015638 rebuilt this
-# same API source at 2026-11-13T15:49:38Z. Read-only inspect 43458637712 proved
+# Explicitly reviewed by the release operator: run 43458320468 rebuilt this
+# same API source at 2026-11-13T16:03:30Z. Read-only inspect 43458996796 proved
 # this containerd store exposes the index digest as image .Id, rather than
 # the config blob digest. The stopped helper must prove the same .Image.
 # This is only a stdlib tool runtime, never an application replacement.
 REVIEWED_RUNTIME_CONFIG = "sha256:8592e9058b033fd5ba7989ec3549bc474a0a9da6036df23c4255af4364b6847f"
-REVIEWED_RUNTIME_IMAGE = "sha256:410ab8c98914a6453122fb31f0712995a1de7eb8eed4ac021a981dd6a2dd32b1"
+REVIEWED_RUNTIME_IMAGE = "sha256:b6f0e4499504c44e8b01b919c7467b5304d9a146da2908d38cf35245e76bdb13"
 REVIEWED_RUNTIME_MANIFEST = "sha256:3715375e62683a666605eb54fc0633b52553977222d058e4ef9085778c3bd340"
-REVIEWED_RUNTIME_INDEX = "sha256:410ab8c98914a6453122fb31f0712995a1de7eb8eed4ac021a981dd6a2dd32b1"
-RUNTIME_PROVENANCE = {"workflow_run": 43456015638, "backend_sha": API_SHA,
-                      "build_completed_at": "2026-11-13T15:49:38Z",
-                      "frontend_sha": "1f2007ef211a0df932d50f1f3d81fb110285c028",
+REVIEWED_RUNTIME_INDEX = "sha256:b6f0e4499504c44e8b01b919c7467b5304d9a146da2908d38cf35245e76bdb13"
+RUNTIME_PROVENANCE = {"workflow_run": 43458320468, "backend_sha": API_SHA,
+                      "build_completed_at": "2026-11-13T16:03:30Z",
+                      "frontend_sha": "50de9ac1fdf4be3390ac0264a245b83d6c0a918d",
                       "config_digest": REVIEWED_RUNTIME_CONFIG,
-                      "identity_verified_by_inspect_run": 43458637712}
+                      "identity_verified_by_inspect_run": 43458996796}
 CONFIRMATION = "terminate-retired-editor-gateway-worker-408"
 FIRST_RETIRED_OBSERVATION = 1794583185.346143  # 2026-11-13T15:19:45.346143Z
 MINIMUM_RETIRED_SECONDS = 1900
