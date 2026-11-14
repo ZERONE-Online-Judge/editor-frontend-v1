@@ -12,6 +12,11 @@ import { PaginatedList } from './Pagination';
 import Select from './Select';
 import { Badge, Icon, Modal, Notice } from './ui';
 import './FolderPackageExport.css';
+import {
+  MotionNumber,
+  MotionProgress,
+  ResultTransition,
+} from './ProgressMotion';
 
 type ExportFormat = 'zoj' | 'editor' | 'linux';
 type ExportStatus = 'queued' | 'running' | 'completed' | 'partial' | 'failed';
@@ -449,7 +454,13 @@ export default function FolderPackageExport({
             <>
               <div className="folder-export-heading">
                 <div>
-                  <h3>{statuses[detail.status]}</h3>
+                  <h3>
+                    <ResultTransition
+                      stateKey={`${detail.id}/${detail.status}`}
+                    >
+                      {statuses[detail.status]}
+                    </ResultTransition>
+                  </h3>
                   <p className="muted">
                     {formats[detail.options.export_format]} ·{' '}
                     {policy(detail.options)} ·{' '}
@@ -459,11 +470,23 @@ export default function FolderPackageExport({
                   </p>
                 </div>
                 <span role="status">
-                  완료 {detail.ready} / {detail.total}개 · 실패 {detail.failed}
+                  완료{' '}
+                  <MotionNumber
+                    value={detail.ready}
+                    max={detail.total}
+                    scope={`${detail.id}/ready`}
+                  />{' '}
+                  / {detail.total}개 · 실패{' '}
+                  <MotionNumber
+                    value={detail.failed}
+                    max={detail.total}
+                    scope={`${detail.id}/failed`}
+                  />
                   개
                 </span>
               </div>
-              <progress
+              <MotionProgress
+                scope={detail.id}
                 max={100}
                 value={detail.progress}
                 aria-label="폴더 패키지 준비 진행률"
@@ -501,19 +524,23 @@ export default function FolderPackageExport({
                             {item.name}{' '}
                             <span className="muted">· r{item.revision}</span>
                           </strong>
-                          <Badge
-                            tone={
-                              item.status === 'failed'
-                                ? 'danger'
-                                : item.status === 'ready'
-                                  ? 'success'
-                                  : 'neutral'
-                            }
+                          <ResultTransition
+                            stateKey={`${detail.id}/${item.problem_id}/${item.status}`}
                           >
-                            {item.reused && item.status === 'ready'
-                              ? '기존 패키지 재사용'
-                              : itemStatuses[item.status]}
-                          </Badge>
+                            <Badge
+                              tone={
+                                item.status === 'failed'
+                                  ? 'danger'
+                                  : item.status === 'ready'
+                                    ? 'success'
+                                    : 'neutral'
+                              }
+                            >
+                              {item.reused && item.status === 'ready'
+                                ? '기존 패키지 재사용'
+                                : itemStatuses[item.status]}
+                            </Badge>
+                          </ResultTransition>
                         </div>
                         <p className="subtext">
                           {item.folder_path.join(' / ')} · {item.slug}

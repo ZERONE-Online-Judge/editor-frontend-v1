@@ -1,6 +1,7 @@
 import type { Job } from '../lib/types';
 import { jobOutcomePresentation } from '../lib/jobOutcomes';
 import { Badge } from './ui';
+import { MotionCountText, ResultTransition } from './ProgressMotion';
 
 export default function JobOutcome({
   job,
@@ -24,15 +25,26 @@ export default function JobOutcome({
         <div>
           <dt>{compact ? '실행' : '실행 상태'}</dt>
           <dd>
-            <Badge tone={execution.tone}>{execution.label}</Badge>
+            <ResultTransition stateKey={`${job.id}/${execution.label}`}>
+              <Badge tone={execution.tone}>{execution.label}</Badge>
+            </ResultTransition>
           </dd>
         </div>
         <div>
           <dt>{compact ? '결과' : '결과 확인'}</dt>
           <dd>
-            <Badge tone={assessment.tone}>
-              {compact ? assessment.compactLabel : assessment.label}
-            </Badge>
+            <ResultTransition stateKey={`${job.id}/${assessment.label}`}>
+              <Badge tone={assessment.tone}>
+                {compact ? (
+                  <MotionCountText
+                    value={assessment.compactLabel}
+                    scope={`${job.id}/${assessment.label}/compact`}
+                  />
+                ) : (
+                  assessment.label
+                )}
+              </Badge>
+            </ResultTransition>
           </dd>
         </div>
       </dl>
@@ -40,7 +52,12 @@ export default function JobOutcome({
         <p className="job-outcome-partial">일부 결과 · 전체 확인 미완료</p>
       )}
       {!compact && assessment.counts && (
-        <p className="job-outcome-counts">{assessment.counts}</p>
+        <p className="job-outcome-counts">
+          <MotionCountText
+            value={assessment.counts}
+            scope={`${job.id}/${assessment.label}/counts`}
+          />
+        </p>
       )}
       {!compact && (
         <p className="job-outcome-description">{assessment.description}</p>

@@ -1171,7 +1171,13 @@ test('Polling adds later solution outcomes without waiting for the first solutio
     };
     await act(async () => poll());
     await flush();
-    assert.equal(host.querySelector('[aria-label="전체 풀이 검증"]').value, 50);
+    const liveProgress = host.querySelector('[aria-label="전체 풀이 검증"]');
+    assert.equal(liveProgress.getAttribute('aria-valuenow'), '50');
+    assert.ok(liveProgress.value >= 37 && liveProgress.value <= 50);
+    await act(
+      async () => new Promise((resolve) => window.setTimeout(resolve, 470)),
+    );
+    assert.equal(liveProgress.value, 50);
     assert.match(
       host.querySelectorAll('.solution-result')[2].textContent,
       /TLE/,

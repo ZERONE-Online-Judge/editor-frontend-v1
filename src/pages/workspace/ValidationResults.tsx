@@ -3,6 +3,10 @@ import { Link } from 'react-router-dom';
 import { Badge, Icon, Notice } from '../../components/ui';
 import type { Job } from '../../lib/types';
 import {
+  MotionNumber,
+  ResultTransition,
+} from '../../components/ProgressMotion';
+import {
   isInputCheck,
   validationExplanation,
   validationVerdict,
@@ -68,7 +72,11 @@ export default function ValidationResults({ job }: { job: Job }) {
           name={success ? 'check' : failed || mismatch ? 'issue' : 'clock'}
         />
         <div>
-          <strong>{title}</strong>
+          <strong>
+            <ResultTransition stateKey={`${job.id}/${title}`}>
+              {title}
+            </ResultTransition>
+          </strong>
           <p>
             {success
               ? inputs
@@ -88,8 +96,10 @@ export default function ValidationResults({ job }: { job: Job }) {
           </p>
           {total > 0 && (
             <p className="validation-totals">
-              {completed ? '전체' : '확인된 결과'} {total}개 ·{' '}
-              {inputs ? '입력 조건 통과' : '예상대로 동작'} {passed}개 ·{' '}
+              {completed ? '전체' : '확인된 결과'}{' '}
+              <MotionNumber value={total} scope={`${job.id}/confirmed`} />개 ·{' '}
+              {inputs ? '입력 조건 통과' : '예상대로 동작'}{' '}
+              <MotionNumber value={passed} scope={`${job.id}/passed`} />개 ·{' '}
               {inputs ? (
                 <>
                   {invalid > 0 && <>입력 조건 위반 {invalid}개 · </>}
@@ -146,23 +156,29 @@ export default function ValidationResults({ job }: { job: Job }) {
                       <td>{test.setName}</td>
                       <td>#{test.index}</td>
                       <td>
-                        <Badge
-                          tone={
-                            test.validator === 'VALID'
-                              ? 'success'
-                              : ['INVALID', 'CRASHED'].includes(test.validator)
-                                ? 'danger'
-                                : 'warning'
-                          }
+                        <ResultTransition
+                          stateKey={`${job.id}/${test.setName}/${test.index}/${test.validator}`}
                         >
-                          {test.validator === 'VALID'
-                            ? '입력 조건 통과'
-                            : test.validator === 'INVALID'
-                              ? '입력 조건 위반'
-                              : test.validator === 'CRASHED'
-                                ? 'Validator 실행 오류'
-                                : '검사 결과 미확인'}
-                        </Badge>
+                          <Badge
+                            tone={
+                              test.validator === 'VALID'
+                                ? 'success'
+                                : ['INVALID', 'CRASHED'].includes(
+                                      test.validator,
+                                    )
+                                  ? 'danger'
+                                  : 'warning'
+                            }
+                          >
+                            {test.validator === 'VALID'
+                              ? '입력 조건 통과'
+                              : test.validator === 'INVALID'
+                                ? '입력 조건 위반'
+                                : test.validator === 'CRASHED'
+                                  ? 'Validator 실행 오류'
+                                  : '검사 결과 미확인'}
+                          </Badge>
+                        </ResultTransition>
                       </td>
                     </tr>
                   ))}
@@ -191,9 +207,13 @@ export default function ValidationResults({ job }: { job: Job }) {
                       <td>{validationVerdict(test.expected)}</td>
                       <td>{validationVerdict(test.actual)}</td>
                       <td>
-                        <Badge tone={test.matched ? 'success' : 'danger'}>
-                          {test.matched ? '예상대로 동작' : '예상과 다름'}
-                        </Badge>
+                        <ResultTransition
+                          stateKey={`${job.id}/${test.id}/${test.matched}`}
+                        >
+                          <Badge tone={test.matched ? 'success' : 'danger'}>
+                            {test.matched ? '예상대로 동작' : '예상과 다름'}
+                          </Badge>
+                        </ResultTransition>
                         <p className="subtext">{validationExplanation(test)}</p>
                         {test.comment && (
                           <details className="validation-diagnostic">

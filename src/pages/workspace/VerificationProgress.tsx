@@ -1,5 +1,10 @@
 import type { Job } from '../../lib/types';
 import { Badge } from '../../components/ui';
+import {
+  MotionNumber,
+  MotionProgress,
+  ResultTransition,
+} from '../../components/ProgressMotion';
 
 type Solution = NonNullable<Job['result']['solutions']>[number];
 
@@ -27,14 +32,18 @@ export function SolutionRunStatus({
 }) {
   const label = solutionRunLabel(solution, jobStatus);
   return (
-    <Badge tone={label ? 'neutral' : solution.matched ? 'success' : 'danger'}>
-      {label ||
-        (solution.matched
-          ? solution.expectations_complete === false
-            ? '일부 범위 미확인'
-            : '기대 판정 일치'
-          : '기대 판정 불일치')}
-    </Badge>
+    <ResultTransition
+      stateKey={`${solution.name}/${label}/${solution.matched}/${solution.expectations_complete}`}
+    >
+      <Badge tone={label ? 'neutral' : solution.matched ? 'success' : 'danger'}>
+        {label ||
+          (solution.matched
+            ? solution.expectations_complete === false
+              ? '일부 범위 미확인'
+              : '기대 판정 일치'
+            : '기대 판정 불일치')}
+      </Badge>
+    </ResultTransition>
   );
 }
 
@@ -104,8 +113,15 @@ function PreparationSummary({ job }: { job: Job }) {
 
 export default function VerificationProgress({ job }: { job: Job }) {
   const progress = job.result.verification_progress;
-  if (!progress) return <PreparationSummary job={job} />;
+  if (!progress)
+    return (
+      <>
+        <JobProgress job={job} />
+        <PreparationSummary job={job} />
+      </>
+    );
   const percent = Math.max(0, Math.min(100, progress.percent));
+  const scope = `${job.id}/verification/${progress.total}`;
   const active = job.status === 'running' || job.status === 'queued';
   const label =
     progress.phase === 'preparing' && active
@@ -122,10 +138,20 @@ export default function VerificationProgress({ job }: { job: Job }) {
         aria-label="전체 풀이 검증 진행률"
       >
         <div className="section-heading">
-          <strong>{label}</strong>
-          <strong className="verification-percent">{percent}%</strong>
+          <strong>
+            <ResultTransition stateKey={`${job.id}/${label}`}>
+              {label}
+            </ResultTransition>
+          </strong>
+          <strong className="verification-percent">
+            <MotionNumber value={percent} max={100} scope={scope} />%
+          </strong>
         </div>
-        <progress aria-label="전체 풀이 검증" value={percent} max={100} />
+        <MotionProgress
+          aria-label="전체 풀이 검증"
+          value={percent}
+          scope={scope}
+        />
         {progress.preparation && progress.judging && (
           <ul
             className="verification-phases"
@@ -142,11 +168,16 @@ export default function VerificationProgress({ job }: { job: Job }) {
               <li key={title}>
                 <span>{title}</span>
                 <strong>
-                  {count.current.toLocaleString()} /{' '}
-                  {count.total.toLocaleString()}
+                  <MotionNumber
+                    value={count.current}
+                    max={count.total}
+                    scope={`${job.id}/${title}`}
+                  />{' '}
+                  / {count.total.toLocaleString()}
                   {unit}
                 </strong>
-                <progress
+                <MotionProgress
+                  scope={`${job.id}/${title}`}
                   aria-label={title}
                   value={count.current}
                   max={count.total || 1}
@@ -162,18 +193,36 @@ export default function VerificationProgress({ job }: { job: Job }) {
               .map(([stage, count]) => (
                 <span key={stage}>
                   {preparationStages[stage] || stage}{' '}
-                  {count.current.toLocaleString()} /{' '}
-                  {count.total.toLocaleString()}
+                  <MotionNumber
+                    value={count.current}
+                    max={count.total}
+                    scope={`${job.id}/${stage}`}
+                  />{' '}
+                  / {count.total.toLocaleString()}
                 </span>
               ))}
           </p>
         )}
         <p className="muted small">
           {progress.preparation && progress.judging ? '전체 처리' : '판정 확인'}{' '}
-          {progress.current.toLocaleString()} /{' '}
-          {progress.total.toLocaleString()}개
-          {progress.total_solutions != null &&
-            ` · 풀이 ${progress.completed_solutions ?? 0} / ${progress.total_solutions}개 종료`}
+          <MotionNumber
+            value={progress.current}
+            max={progress.total}
+            scope={scope}
+          />{' '}
+          / {progress.total.toLocaleString()}개
+          {progress.total_solutions != null && (
+            <>
+              {' '}
+              · 풀이{' '}
+              <MotionNumber
+                value={progress.completed_solutions ?? 0}
+                max={progress.total_solutions}
+                scope={`${job.id}/completed-solutions`}
+              />{' '}
+              / {progress.total_solutions}개 종료
+            </>
+          )}
         </p>
         <p className="muted small">
           {progress.preparation && progress.judging
@@ -188,9 +237,24 @@ export default function VerificationProgress({ job }: { job: Job }) {
               <li key={name}>
                 <strong>{name}</strong>
                 <span>
-                  {scoped.total > 0
-                    ? `${scoped.current.toLocaleString()} / ${scoped.total.toLocaleString()} · ${scoped.percent}%`
-                    : '실행 대상 없음'}
+                  {scoped.total > 0 ? (
+                    <>
+                      <MotionNumber
+                        value={scoped.current}
+                        max={scoped.total}
+                        scope={`${job.id}/${name}`}
+                      />{' '}
+                      / {scoped.total.toLocaleString()} ·{' '}
+                      <MotionNumber
+                        value={scoped.percent}
+                        max={100}
+                        scope={`${job.id}/${name}/${scoped.total}`}
+                      />
+                      %
+                    </>
+                  ) : (
+                    '실행 대상 없음'
+                  )}
                 </span>
               </li>
             ))}
@@ -202,12 +266,39 @@ export default function VerificationProgress({ job }: { job: Job }) {
   );
 }
 
+function JobProgress({ job }: { job: Job }) {
+  if (typeof job.result.progress !== 'number') return null;
+  const percent = Math.max(0, Math.min(100, job.result.progress));
+  const label =
+    job.result.summary ||
+    (job.status === 'running' || job.status === 'queued'
+      ? '작업 진행 중'
+      : '작업 종료');
+  return (
+    <section className="verification-progress" aria-label="작업 진행률">
+      <div className="section-heading">
+        <strong>
+          <ResultTransition stateKey={`${job.id}/${job.status}/${label}`}>
+            {label}
+          </ResultTransition>
+        </strong>
+        <strong className="verification-percent">
+          <MotionNumber value={percent} max={100} scope={job.id} />%
+        </strong>
+      </div>
+      <MotionProgress aria-label="작업 진행률" value={percent} scope={job.id} />
+    </section>
+  );
+}
+
 export function SolutionRunProgress({
   solution,
   jobStatus,
+  jobId,
 }: {
   solution: Solution;
   jobStatus: Job['status'];
+  jobId: string;
 }) {
   if (solution.total_tests == null || solution.skipped) return null;
   const current = solution.completed_tests ?? 0;
@@ -216,19 +307,28 @@ export function SolutionRunProgress({
     total > 0
       ? Math.max(0, Math.min(100, Math.floor((current / total) * 100)))
       : 0;
+  const scope = `${jobId}/${solution.name}/${total}`;
   return (
     <div className="solution-run-progress">
       <div className="solution-run-progress-heading">
         <span className="muted small">
-          {solutionRunLabel(solution, jobStatus) || '검증 종료'} · 판정 확인{' '}
-          {current} / {total}개
+          <ResultTransition
+            stateKey={`${scope}/${jobStatus}/${solution.state}`}
+          >
+            {solutionRunLabel(solution, jobStatus) || '검증 종료'}
+          </ResultTransition>{' '}
+          · 판정 확인 <MotionNumber value={current} max={total} scope={scope} />{' '}
+          / {total}개
         </span>
         {total > 0 && (
-          <strong className="solution-run-percent">{percent}%</strong>
+          <strong className="solution-run-percent">
+            <MotionNumber value={percent} max={100} scope={scope} />%
+          </strong>
         )}
       </div>
       {total > 0 && (
-        <progress
+        <MotionProgress
+          scope={scope}
           aria-label={`${solution.name} 테스트 진행률`}
           value={current}
           max={total}

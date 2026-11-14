@@ -1,6 +1,7 @@
 import { BoundedText } from '../../components/ui';
 import type { Job, StressConfiguration } from '../../lib/types';
 import { tags } from '../../lib/api';
+import { MotionNumber } from '../../components/ProgressMotion';
 
 function conditions(job: Job): Partial<StressConfiguration> {
   const saved =
@@ -200,7 +201,12 @@ export default function StressRunConditions({ job }: { job: Job }) {
               : stats.iterations_scheduled
                 ? `${stats.iterations_scheduled}회 병렬 배정`
                 : '생성 요청 전'}{' '}
-            · {stats.iterations_completed}회 완료
+            ·{' '}
+            <MotionNumber
+              value={stats.iterations_completed}
+              scope={`${job.id}/stress-completed`}
+            />
+            회 완료
           </strong>
           {stats.parallelism && stats.parallelism > 1 && (
             <p className="muted small">

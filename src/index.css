@@ -6276,3 +6276,54 @@ svg {
     gap: 0.5rem;
   }
 }
+
+/* Progress follows received values; result motion never shifts nearby controls. */
+.motion-number {
+  font-variant-numeric: tabular-nums;
+}
+.motion-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.motion-number-visual::after {
+  content: attr(data-motion-value);
+}
+.motion-result {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: baseline;
+  animation: execution-result-enter 240ms ease-out both;
+}
+.execution-result-summary,
+.verification-summary,
+.case-chip,
+.solution-judge-summary {
+  animation: execution-result-enter 240ms ease-out both;
+}
+@keyframes execution-result-enter {
+  from {
+    opacity: 0.45;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-result,
+  .execution-result-summary,
+  .verification-summary,
+  .case-chip,
+  .solution-judge-summary {
+    animation: none;
+  }
+}

@@ -1212,6 +1212,7 @@ export default function Executions({
                           key={`${job.id}/${solution.name}`}
                           solution={solution}
                           jobStatus={job.status}
+                          jobId={job.id}
                         >
                           {solution.expectations?.length ? (
                             <div className="table-scroll">

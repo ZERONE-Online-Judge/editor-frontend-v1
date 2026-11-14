@@ -1,6 +1,7 @@
 import Pagination from '../../components/Pagination';
 import { usePagination } from '../../lib/pagination';
 import type { CaseResult } from '../../lib/types';
+import { ResultTransition } from '../../components/ProgressMotion';
 
 export default function CaseResultGrid({
   cases,
@@ -29,7 +30,13 @@ export default function CaseResultGrid({
             onClick={() => onSelect(result)}
           >
             <span>{result.index ? `#${result.index}` : '환경'}</span>
-            <strong>{result.verdict}</strong>
+            <strong>
+              <ResultTransition
+                stateKey={`${result.testset}/${result.index}/${result.verdict}`}
+              >
+                {result.verdict}
+              </ResultTransition>
+            </strong>
             <small>
               {result.cpu_ms == null ? '시간 미제공' : `${result.cpu_ms}ms`}
             </small>

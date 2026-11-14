@@ -4,6 +4,7 @@ import type { CaseResult, Job, StressSolutionResult } from '../../lib/types';
 import { bytes, tags } from '../../lib/api';
 import { Badge, Icon } from '../../components/ui';
 import CaseResultGrid from './CaseResultGrid';
+import { MotionNumber } from '../../components/ProgressMotion';
 
 const pageSize = 100;
 const cpu = (value: number | null) => (value == null ? '미제공' : `${value}ms`);
@@ -35,9 +36,11 @@ function SolutionCases({
   solution,
   onSelect,
   active,
+  jobId,
 }: {
   solution: StressSolutionResult;
   active: boolean;
+  jobId: string;
   onSelect: (row: CaseResult, name: string) => void;
 }) {
   const [requestedPage, setPage] = useState(0);
@@ -58,7 +61,12 @@ function SolutionCases({
               : `기대 ${solution.tag} · ${tags[solution.tag as keyof typeof tags] || solution.tag}`}
           </Badge>
           <Badge tone="neutral">
-            실행 {solution.cases.length.toLocaleString()}개
+            실행{' '}
+            <MotionNumber
+              value={solution.cases.length}
+              scope={`${jobId}/${solution.name}/cases`}
+            />
+            개
           </Badge>
         </span>
       </summary>
@@ -160,8 +168,16 @@ export default function StressTestResults({
         >
           <strong>
             {active ? '현재까지' : '저장된 실행 범위'} · 생성 테스트{' '}
-            {summary.testcase_count.toLocaleString()}개 · 풀이 실행{' '}
-            {summary.executions.toLocaleString()}회
+            <MotionNumber
+              value={summary.testcase_count}
+              scope={`${job.id}/stress-tests`}
+            />
+            개 · 풀이 실행{' '}
+            <MotionNumber
+              value={summary.executions}
+              scope={`${job.id}/stress-executions`}
+            />
+            회
           </strong>
           <Metrics
             cpuMs={summary.max_cpu_ms}
@@ -192,6 +208,7 @@ export default function StressTestResults({
               solution={solution}
               onSelect={onSelect}
               active={active}
+              jobId={job.id}
             />
           ))
         }

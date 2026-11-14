@@ -6,6 +6,7 @@ import { Badge, Notice } from '../components/ui';
 import Select from '../components/Select';
 import ZojPublishing from './workspace/ZojPublishing';
 import './ZojTransfer.css';
+import { MotionProgress, ResultTransition } from '../components/ProgressMotion';
 
 type Project = {
   id: string;
@@ -325,7 +326,8 @@ export default function ZojTransfer() {
                   </Link>
                 </div>
                 {active && (
-                  <progress
+                  <MotionProgress
+                    scope={job?.id || selected.id}
                     aria-label="검증 패키지 준비 진행률"
                     max={100}
                     value={job?.result.progress || 0}
@@ -343,23 +345,25 @@ export default function ZojTransfer() {
                 )}
                 {job && (
                   <p role="status">
-                    <Badge
-                      tone={
-                        job.status === 'completed'
-                          ? 'success'
+                    <ResultTransition stateKey={`${job.id}/${job.status}`}>
+                      <Badge
+                        tone={
+                          job.status === 'completed'
+                            ? 'success'
+                            : job.status === 'failed'
+                              ? 'danger'
+                              : 'neutral'
+                        }
+                      >
+                        {job.status === 'completed'
+                          ? '패키지 준비 완료'
                           : job.status === 'failed'
-                            ? 'danger'
-                            : 'neutral'
-                      }
-                    >
-                      {job.status === 'completed'
-                        ? '패키지 준비 완료'
-                        : job.status === 'failed'
-                          ? '검증 실패'
-                          : job.status === 'cancelled'
-                            ? '작업 취소'
-                            : '검증 진행 중'}
-                    </Badge>{' '}
+                            ? '검증 실패'
+                            : job.status === 'cancelled'
+                              ? '작업 취소'
+                              : '검증 진행 중'}
+                      </Badge>
+                    </ResultTransition>{' '}
                     {job.result.error || job.result.summary || ''}
                   </p>
                 )}

@@ -9,10 +9,12 @@ type Solution = NonNullable<Job['result']['solutions']>[number];
 export default function SolutionResultPanel({
   solution,
   jobStatus,
+  jobId,
   children,
 }: {
   solution: Solution;
   jobStatus: Job['status'];
+  jobId: string;
   children: ReactNode;
 }) {
   return (
@@ -30,7 +32,11 @@ export default function SolutionResultPanel({
         </span>
       </summary>
       <div className="solution-result-body">
-        <SolutionRunProgress solution={solution} jobStatus={jobStatus} />
+        <SolutionRunProgress
+          solution={solution}
+          jobStatus={jobStatus}
+          jobId={jobId}
+        />
         {children}
       </div>
     </details>
