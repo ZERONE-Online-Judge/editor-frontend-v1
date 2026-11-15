@@ -1,3 +1,4 @@
+import { ExecutionCancelledError } from '../../lib/executionHeaderCase';
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError, languages, tags } from '../../lib/api';
 import { can, canEdit } from '../../lib/permissions';
@@ -178,6 +179,7 @@ function SingleVerificationForm() {
         temporary_solutions: [{ name: filename, language, tag, content: code }],
       });
     } catch (error) {
+      if (error instanceof ExecutionCancelledError) return;
       if (scope.active)
         setStartError(
           error instanceof Error

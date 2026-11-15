@@ -11,7 +11,13 @@ import {
   Suspense,
 } from 'react';
 import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
-import { api, post, put, ApiError } from '../lib/api';
+import { api, post, put, ApiError, blobPreview } from '../lib/api';
+import {
+  executionHeaderSources,
+  ExecutionCancelledError,
+} from '../lib/executionHeaderCase';
+import { useCHeaderCaseWarning } from '../lib/useCHeaderCaseWarning';
+import CHeaderCaseWarning from '../components/CHeaderCaseWarning';
 import { executionTitle } from '../lib/executionTitles';
 import type {
   Job,
@@ -46,6 +52,14 @@ export default function ProblemWorkspace() {
   const navigate = useNavigate();
   const [data, setData] = useState<WorkspaceData | null>(null);
   const [doc, setDoc] = useState<ProblemDocument | null>(null);
+  const activeRoute = useRef({ problemId, tab, active: true });
+  useLayoutEffect(() => {
+    const route = { problemId, tab, active: true };
+    activeRoute.current = route;
+    return () => {
+      route.active = false;
+    };
+  }, [problemId, tab]);
   const revisionHead = useRevisionUpdates(
     problemId,
     data?.problem.id === problemId ? data.problem.revision : null,
@@ -54,6 +68,18 @@ export default function ProblemWorkspace() {
     data?.problem.revision ?? 0,
     revisionHead?.revision ?? 0,
   );
+  const executionScope = JSON.stringify([
+    problemId,
+    tab,
+    data?.version,
+    data?.problem.revision,
+    data?.problem.permissions,
+    data?.problem.role,
+    sharedRevision,
+    doc,
+  ]);
+  const headerCase = useCHeaderCaseWarning(executionScope);
+  const checkHeaderCase = headerCase.check;
   const displayedRevision =
     data && !canEdit(data.problem)
       ? data.problem.revision
@@ -248,20 +274,56 @@ export default function ProblemWorkspace() {
         return requestInFlight.current.promise;
       setRequesting(true);
       const submission = (async () => {
+        const route = activeRoute.current;
+        const requestedOptions = structuredClone(options);
+        if (!data || !doc) throw new Error('자료를 불러오고 있습니다.');
         const committed =
-          options.snapshot === 'committed' ||
+          requestedOptions.snapshot === 'committed' ||
           (data &&
             (!canEdit(data.problem) ||
               (kind === 'render' &&
                 !can(data.problem, 'edit_statements') &&
                 !can(data.problem, 'translate'))));
+        const committedSource = kind === 'package' || committed;
+        const sourceDocument =
+          committedSource &&
+          kind !== 'render' &&
+          !(kind === 'package' && requestedOptions.verify === false)
+            ? await api<ProblemDocument>(
+                `/problems/${problemId}/revisions/${data.problem.revision}`,
+              )
+            : doc;
+        await checkHeaderCase(
+          executionHeaderSources(kind, sourceDocument, {
+            ...requestedOptions,
+            ...(committedSource ? { snapshot: 'committed' } : {}),
+          }),
+          async (sha256, signal) => {
+            const source = await blobPreview(
+              problemId,
+              sha256,
+              signal,
+              16 * 1024 * 1024,
+              false,
+            );
+            if (source.truncated || source.binary)
+              throw new Error(
+                '소스의 헤더를 확인하지 못했습니다. 원본 파일을 확인한 뒤 다시 실행하세요.',
+              );
+            return source.text;
+          },
+        );
+        if (!route.active || activeRoute.current !== route)
+          throw new ExecutionCancelledError();
         const version = committed ? data!.version : await save();
+        if (!route.active || activeRoute.current !== route)
+          throw new ExecutionCancelledError();
         const result = await post<Job>(`/problems/${problemId}/jobs`, {
           kind,
           version,
-          ...(committed ? { revision: data!.problem.revision } : {}),
+          ...(committedSource ? { revision: data!.problem.revision } : {}),
           options: {
-            ...options,
+            ...requestedOptions,
             ...(committed ? { snapshot: 'committed' } : {}),
           },
           reuse: kind === 'package' && requestOptions.reuse !== false,
@@ -287,7 +349,7 @@ export default function ProblemWorkspace() {
       requestInFlight.current = { problemId, promise: request };
       return request;
     },
-    [problemId, save, notify, data, navigate],
+    [problemId, save, notify, data, doc, navigate, checkHeaderCase],
   );
   async function openResolution() {
     try {
@@ -416,6 +478,13 @@ export default function ProblemWorkspace() {
   };
   return (
     <WorkspaceContext.Provider value={context}>
+      {headerCase.files && (
+        <CHeaderCaseWarning
+          files={headerCase.files}
+          confirm={headerCase.confirm}
+          cancel={headerCase.cancel}
+        />
+      )}
       <div className="workspace-page">
         <div className="problem-heading">
           <div>

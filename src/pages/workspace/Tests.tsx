@@ -1,3 +1,4 @@
+import { ExecutionCancelledError } from '../../lib/executionHeaderCase';
 import Pagination from '../../components/Pagination';
 import RecentExecutions from '../../components/RecentExecutions';
 import { usePagination } from '../../lib/pagination';
@@ -276,6 +277,7 @@ export default function Tests() {
         name: `${mode === 'full' ? '입력·정답 생성' : '입력 생성·검사'} · ${runAllSets ? '모든 세트' : selected}`,
       });
     } catch (e) {
+      if (e instanceof ExecutionCancelledError) return;
       notify((e as Error).message, true);
     } finally {
       setBusy(false);

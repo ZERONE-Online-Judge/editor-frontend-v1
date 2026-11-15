@@ -75,13 +75,14 @@ export async function blobPreview(
   sha: string,
   signal?: AbortSignal,
   limit = 262144,
+  clipLines = true,
 ): Promise<{ text: string; truncated: boolean; binary: boolean }> {
   const response = await fetch(`/api/problems/${problemId}/blobs/${sha}`, {
     credentials: 'same-origin',
     headers: { Range: `bytes=0-${limit}` },
     signal,
   });
-  return responsePreview(response, limit);
+  return responsePreview(response, limit, clipLines);
 }
 
 export const languages = {

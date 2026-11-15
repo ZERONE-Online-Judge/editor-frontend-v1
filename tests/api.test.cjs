@@ -97,3 +97,25 @@ test('Conflict details are retained for explicit resolution', async () => {
     global.fetch = previous;
   }
 });
+
+test('Header inspection reads full bounded source without visual line clipping', async () => {
+  const previous = global.fetch;
+  const text =
+    '//'.padEnd(20000, 'x') + '\n'.repeat(6000) + '#include <String>\n';
+  global.fetch = async () => new Response(text);
+  try {
+    const clipped = await loaded.exports.blobPreview('p', 'source');
+    assert.equal(clipped.truncated, true);
+    const full = await loaded.exports.blobPreview(
+      'p',
+      'source',
+      undefined,
+      1024 * 1024,
+      false,
+    );
+    assert.equal(full.truncated, false);
+    assert.equal(full.text, text);
+  } finally {
+    global.fetch = previous;
+  }
+});

@@ -1,3 +1,4 @@
+import { ExecutionCancelledError } from '../../lib/executionHeaderCase';
 import Select from '../../components/Select';
 import { useState } from 'react';
 import { Modal } from '../../components/ui';
@@ -59,6 +60,7 @@ export default function BulkTests({
         name: `${executionCategories.find((category) => category.id === `prepare-${mode}`)?.label} · 선택 ${indices.length}개`,
       });
     } catch (e) {
+      if (e instanceof ExecutionCancelledError) return;
       notify((e as Error).message, true);
     } finally {
       setBusy(false);

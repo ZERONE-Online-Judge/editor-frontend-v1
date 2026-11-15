@@ -1,4 +1,5 @@
 import { can } from '../../lib/permissions';
+import { ExecutionCancelledError } from '../../lib/executionHeaderCase';
 import RecentExecutions from '../../components/RecentExecutions';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -56,7 +57,10 @@ export default function Statements() {
               className="button"
               disabled={!can(data.problem, 'render') || busy}
               onClick={() =>
-                void run('render').catch((e) => notify(e.message, true))
+                void run('render').catch((e) => {
+                  if (!(e instanceof ExecutionCancelledError))
+                    notify(e.message, true);
+                })
               }
             >
               <Icon name="download" />

@@ -1,3 +1,4 @@
+import { ExecutionCancelledError } from '../../lib/executionHeaderCase';
 import Pagination from '../../components/Pagination';
 import RecentExecutions from '../../components/RecentExecutions';
 import { usePagination } from '../../lib/pagination';
@@ -149,6 +150,7 @@ function ComponentTestsPage({
     try {
       await run(kind === 'checker' ? 'checker-tests' : 'validator-tests');
     } catch (error) {
+      if (error instanceof ExecutionCancelledError) return;
       if (active.current) {
         setActionError((error as Error).message);
         notify((error as Error).message, true);

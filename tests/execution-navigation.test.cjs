@@ -35,6 +35,7 @@ let state,
   advancedLimits,
   historyGate,
   environmentGate;
+let headerRevisionDocument;
 let revisionRequests,
   historyReads,
   workspaceReads,
@@ -205,7 +206,7 @@ async function get(url, options = {}) {
     return JSON.parse(JSON.stringify(state));
   }
   if (url.startsWith('/problems/p/revisions/'))
-    return JSON.parse(JSON.stringify(state.document));
+    return JSON.parse(JSON.stringify(headerRevisionDocument ?? state.document));
   if (url.endsWith('/preparation-status'))
     return { version: state.version, pending_preparations: [] };
   if (url.startsWith('/problems/p/jobs?')) {
@@ -374,6 +375,7 @@ async function putWorking(url, body) {
 }
 let root, host;
 beforeEach(() => {
+  headerRevisionDocument = null;
   unitBlobs = new Map();
   unitBlobFailure = null;
   unitUploads = [];
@@ -5198,4 +5200,60 @@ test('Workspace breadcrumbs use the current document title instead of the proble
     host.querySelector('nav[aria-label="문제 위치"] a').getAttribute('href'),
     '/problems',
   );
+});
+
+test('C header warning prevents autosave and job creation until explicit override', async () => {
+  saveEnabled = true;
+  addValidatorSource('selected.cpp');
+  unitBlobs.set('validator', '#include <String>\nint main() {}\n');
+  await mount('validator');
+  await setControl('사용할 Validator 프로그램', 'selected.cpp');
+  await click('테스트 실행');
+  assert.match(host.querySelector('dialog').textContent, /selected.cpp/);
+  assert.match(host.querySelector('dialog').textContent, /1행/);
+  assert.deepEqual(requests, []);
+  await click('그대로 실행');
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].url, '/problems/p/working-copy');
+  assert.equal(requests[1].body.kind, 'validator-tests');
+  assert.equal(requests[1].body.version, 2);
+});
+
+test('C header warning cancel leaves code untouched and displays no error', async () => {
+  unitBlobs.set('validator', '#include <String>\r\n');
+  await mount('validator');
+  await click('테스트 실행');
+  await click('코드 수정');
+  assert.equal(requests.length, 0);
+  assert.equal(unitBlobs.get('validator'), '#include <String>\r\n');
+  assert.equal(host.querySelector('.notice.error'), null);
+  assert.equal(host.querySelector('dialog'), null);
+});
+
+test('C header package check uses committed revision instead of a different working copy', async () => {
+  headerRevisionDocument = global.structuredClone(state.document);
+  headerRevisionDocument.files['validator.cpp'].sha256 = 'committed-validator';
+  unitBlobs.set('committed-validator', '#include <String>\n');
+  unitBlobs.set('validator', '#include <string>\n');
+  await mount('packages');
+  await click('패키지 준비');
+  assert.match(host.querySelector('dialog').textContent, /String/);
+  assert.deepEqual(requests, []);
+  await click('그대로 실행');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.revision, 1);
+});
+
+test('C header warning is invalidated by a changed working copy without saving or error', async () => {
+  addValidatorSource('safe.cpp');
+  state.document.files['safe.cpp'].sha256 = 'safe';
+  unitBlobs.set('safe', '#include <string>\n');
+  unitBlobs.set('validator', '#include <String>\n');
+  await mount('validator');
+  await click('테스트 실행');
+  assert.ok(host.querySelector('dialog'));
+  await setControl('사용할 Validator 프로그램', 'safe.cpp');
+  assert.equal(host.querySelector('dialog'), null);
+  assert.deepEqual(requests, []);
+  assert.equal(host.querySelector('.notice.error'), null);
 });

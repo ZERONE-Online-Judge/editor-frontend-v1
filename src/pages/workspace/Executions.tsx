@@ -1,3 +1,4 @@
+import { ExecutionCancelledError } from '../../lib/executionHeaderCase';
 import {
   executionPresentation,
   executionTitle,
@@ -321,6 +322,7 @@ export default function Executions({
         kind === 'package' ? { reuse: !rebuildPackage } : undefined,
       );
     } catch (e) {
+      if (e instanceof ExecutionCancelledError) return;
       if (!scope.active || generation !== scope.generation) return;
       if (
         e instanceof ApiError &&
