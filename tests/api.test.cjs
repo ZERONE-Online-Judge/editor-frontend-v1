@@ -102,7 +102,7 @@ test('Header inspection reads full bounded source without visual line clipping',
   const previous = global.fetch;
   const text =
     '//'.padEnd(20000, 'x') + '\n'.repeat(6000) + '#include <String>\n';
-  global.fetch = async () => new Response(text);
+  global.fetch = async () => new global.Response(text);
   try {
     const clipped = await loaded.exports.blobPreview('p', 'source');
     assert.equal(clipped.truncated, true);

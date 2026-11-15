@@ -1,5 +1,6 @@
-.c-header-case-warning {
-  max-width: 620px;
+.editor-modal.c-header-case-warning {
+  width: min(620px, calc(100vw - 20px));
+  max-width: calc(100vw - 20px);
 }
 .c-header-case-warning .modal-body > p:first-child {
   margin-top: 0;

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const Module = require('node:module');
 const ts = require('typescript');
+const { performance } = require('node:perf_hooks');
 
 const file = path.resolve(__dirname, '../src/lib/cHeaderCase.ts');
 const loaded = new Module(file, module);
@@ -174,7 +175,7 @@ test('line and block comments cannot supply an include, including spliced commen
 
 test('normal strings, escaped quotes and character literals cannot supply includes', () => {
   const source = [
-    'const char* a = "\\\" #include <String>";',
+    'const char* a = "\\" #include <String>";',
     'const char* b = "first\\',
     '#include <Vector>";',
     "char c = '\\'';",
