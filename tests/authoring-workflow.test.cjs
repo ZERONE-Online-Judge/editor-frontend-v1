@@ -763,47 +763,116 @@ test('preparation readiness includes scoped wrong tags but excludes globally ski
   );
 });
 
-test('Language limit controls preserve overrides while toggling correction and following base changes', async () => {
+test('Language time controls require manual mode, apply base time when blank, and preserve memory on automatic return', async () => {
   const Card = source('components/LanguageResourceLimits.tsx').default;
   const { effectiveLimits } = source('lib/languageLimits.ts');
-  let saved;
+  let saved, setDocument;
+  let changes = 0;
   const original = {
     info: { time_limit_ms: 1000, memory_limit_mb: 256 },
-    language_resource_limits: { pypy3: { time_limit_ms: 700 } },
+    language_resource_limits: {
+      pypy3: { time_limit_ms: 700, memory_limit_mb: 384 },
+    },
   };
   function Form() {
     const [doc, setDoc] = React.useState(original);
     saved = doc;
+    setDocument = setDoc;
     return React.createElement(Card, {
       document: doc,
-      onChange: (value) => setDoc({ ...doc, language_resource_limits: value }),
+      onChange: (value) => {
+        changes++;
+        setDoc({ ...doc, language_resource_limits: value });
+      },
     });
   }
   const { host, close } = await mount(Form);
-  assert.equal(host.querySelectorAll('input[type=checkbox]').length, 4);
-  const row = [...host.querySelectorAll('.language-limit-row')].find((r) =>
-    r.textContent.includes('PyPy'),
-  );
-  assert.match(row.textContent, /640MiB/);
-  await act(async () => row.querySelector('input[type=checkbox]').click());
-  assert.deepEqual(saved.language_resource_limits.pypy3, {
-    time_limit_ms: 700,
-    disable_auto_adjustment: true,
-  });
-  assert.match(row.textContent, /256MiB/);
-  assert.deepEqual(
-    effectiveLimits(
-      { ...saved, info: { time_limit_ms: 2000, memory_limit_mb: 512 } },
-      'pypy3',
-    ),
-    { time_limit_ms: 700, memory_limit_mb: 512 },
-  );
-  await act(async () => row.querySelector('input[type=checkbox]').click());
-  assert.deepEqual(saved.language_resource_limits.pypy3, {
-    time_limit_ms: 700,
-  });
-  assert.match(row.textContent, /640MiB/);
-  await close();
+  const input = (label) => host.querySelector(`[aria-label="${label}"]`);
+  const time = input('PyPy 3.11 시간 제한 (ms)');
+  const memory = input('PyPy 3.11 메모리 제한 (MiB)');
+  const manual = input('PyPy 3.11 자동 보정 끄기');
+  async function enter(element, value) {
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      ).set.call(element, value);
+      element.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+  }
+  try {
+    assert.equal(host.querySelectorAll('input[type=checkbox]').length, 4);
+    assert.equal(changes, 0, 'loading legacy overrides must not rewrite them');
+    assert.deepEqual(saved, original);
+    assert.equal(manual.checked, false);
+    assert.equal(time.disabled, true);
+    assert.equal(time.value, '700', 'a legacy explicit value remains visible');
+    assert.equal(
+      memory.disabled,
+      false,
+      'memory keeps its existing editing policy',
+    );
+    assert.deepEqual(effectiveLimits(saved, 'pypy3'), {
+      time_limit_ms: 700,
+      memory_limit_mb: 384,
+    });
+    for (const label of ['Python 3.11', 'Java 8', 'Kotlin'])
+      assert.equal(input(`${label} 시간 제한 (ms)`).disabled, true);
+    for (const label of ['C++17', 'C99'])
+      assert.equal(input(`${label} 시간 제한 (ms)`).disabled, false);
+
+    await act(async () => manual.click());
+    assert.equal(time.disabled, false);
+    assert.deepEqual(saved.language_resource_limits.pypy3, {
+      time_limit_ms: 700,
+      memory_limit_mb: 384,
+      disable_auto_adjustment: true,
+    });
+    await enter(time, '950');
+    assert.deepEqual(effectiveLimits(saved, 'pypy3'), {
+      time_limit_ms: 950,
+      memory_limit_mb: 384,
+    });
+
+    await enter(time, '');
+    assert.deepEqual(saved.language_resource_limits.pypy3, {
+      memory_limit_mb: 384,
+      disable_auto_adjustment: true,
+    });
+    assert.equal(time.placeholder, '1000');
+    assert.deepEqual(effectiveLimits(saved, 'pypy3'), {
+      time_limit_ms: 1000,
+      memory_limit_mb: 384,
+    });
+    await act(async () =>
+      setDocument((doc) => ({
+        ...doc,
+        info: { time_limit_ms: 2000, memory_limit_mb: 512 },
+      })),
+    );
+    assert.equal(time.placeholder, '2000');
+    assert.deepEqual(effectiveLimits(saved, 'pypy3'), {
+      time_limit_ms: 2000,
+      memory_limit_mb: 384,
+    });
+
+    await enter(time, '900');
+    await act(async () => manual.click());
+    assert.equal(time.disabled, true);
+    assert.equal(time.value, '');
+    assert.deepEqual(saved.language_resource_limits.pypy3, {
+      memory_limit_mb: 384,
+    });
+    assert.equal(memory.disabled, false);
+    assert.equal(memory.value, '384');
+    assert.equal(time.placeholder, '8000');
+    assert.deepEqual(effectiveLimits(saved, 'pypy3'), {
+      time_limit_ms: 8000,
+      memory_limit_mb: 384,
+    });
+  } finally {
+    await close();
+  }
 });
 
 test('Read-only language limits expose policy without granting editing or changing a document', async () => {

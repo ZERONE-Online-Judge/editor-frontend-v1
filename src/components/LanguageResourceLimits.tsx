@@ -39,13 +39,13 @@ export default function LanguageLimits({
       <div className="section-heading">
         <div>
           <p>
-            입력·정답 생성과 모든 검증에서 함께 사용하는 설정입니다. 빈칸은 ZOJ
-            자동 보정을 적용합니다. 직접 입력한 값은 보정 없이 그대로
-            사용합니다.
+            입력·정답 생성과 모든 검증에서 함께 사용하는 설정입니다. 설정은
+            ZOJ로 문제를 가져갈 때도 유지됩니다.
           </p>
           <p>
-            ‘자동 보정 끄기’를 체크하면 빈칸에는 문제 기본 제한을 적용합니다.
-            설정은 ZOJ로 문제를 가져갈 때도 유지됩니다.
+            보정 언어의 시간을 수정하려면 ‘자동 보정 끄기’를 체크하세요. 시간
+            칸을 비우면 문제 기본 시간을 사용합니다. 체크를 해제하면 직접 지정한
+            시간을 지우고 자동 보정 시간을 사용합니다.
           </p>
         </div>
       </div>
@@ -66,6 +66,9 @@ export default function LanguageLimits({
                       onChange={(e) =>
                         update(key, {
                           disable_auto_adjustment: e.target.checked,
+                          ...(!e.target.checked
+                            ? { time_limit_ms: undefined }
+                            : {}),
                         })
                       }
                     />
@@ -81,6 +84,7 @@ export default function LanguageLimits({
                   min={100}
                   max={10000}
                   step={1}
+                  disabled={corrected && !limits.disable_auto_adjustment}
                   value={limits.time_limit_ms ?? ''}
                   placeholder={String(effective.time_limit_ms)}
                   onChange={(e) =>
