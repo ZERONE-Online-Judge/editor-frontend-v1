@@ -84,6 +84,15 @@ function Layout() {
             <NavLink to="/service-master/problems">제작 현황</NavLink>
           )}
           <NavLink to="/help">도움말</NavLink>
+          <a
+            className="zoj-shortcut"
+            href="https://zoj.kr"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="ZOJ 바로가기 (새 탭)"
+          >
+            ZOJ 바로가기 <span aria-hidden="true">↗</span>
+          </a>
         </nav>
         <div className="account-controls">
           {user ? (

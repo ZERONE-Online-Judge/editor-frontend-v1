@@ -29,6 +29,10 @@
   padding: 8px 14px;
   border-radius: 7px;
 }
+.editor-app .app-header nav .zoj-shortcut {
+  gap: 4px;
+  white-space: nowrap;
+}
 .editor-app .app-header nav a.active {
   background: #f0effb;
   color: #4f46c9;
